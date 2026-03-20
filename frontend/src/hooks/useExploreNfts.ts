@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatEther } from "viem";
-import { createPublicClient, http } from "viem";
+import { formatEther, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 
@@ -9,6 +8,7 @@ export interface NFTItem {
   name: string;
   description: string;
   image: string;
+  nftContract: string;
 }
 
 export interface NFTItemWithMarket extends NFTItem {
@@ -16,7 +16,7 @@ export interface NFTItemWithMarket extends NFTItem {
   topOffer: string | null;
 }
 
-interface AlchemyNFT {
+export interface AlchemyNFT {
   tokenId: string;
   name?: string;
   description?: string;
@@ -27,8 +27,9 @@ interface AlchemyNFT {
   };
 }
 
-const CONTRACT_ADDRESS = process.env
-  .NEXT_PUBLIC_MARKETPLACE_CONTRACT_ADDRESS as `0x${string}`;
+const MARKETPLACE_ADDRESS = process.env
+  .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
+
 const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 
 const publicClient = createPublicClient({
@@ -43,14 +44,16 @@ const resolveIpfsUrl = (url: string) => {
   return url;
 };
 
-async function fetchTopOffer(tokenId: string): Promise<string | null> {
+async function fetchTopOffer(
+  nftContract: `0x${string}`,
+  tokenId: string,
+): Promise<string | null> {
   try {
-    // ✅ Busca compradores direto do contrato — sem getLogs
     const buyers = (await publicClient.readContract({
-      address: CONTRACT_ADDRESS,
+      address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "getOfferBuyers",
-      args: [BigInt(tokenId)],
+      args: [nftContract, BigInt(tokenId)],
     })) as `0x${string}`[];
 
     if (buyers.length === 0) return null;
@@ -62,10 +65,10 @@ async function fetchTopOffer(tokenId: string): Promise<string | null> {
       uniqueBuyers.map(async (buyer) => {
         try {
           const offer = (await publicClient.readContract({
-            address: CONTRACT_ADDRESS,
+            address: MARKETPLACE_ADDRESS,
             abi: NFT_MARKETPLACE_ABI,
             functionName: "getOffer",
-            args: [BigInt(tokenId), buyer],
+            args: [nftContract, BigInt(tokenId), buyer],
           })) as {
             buyer: string;
             amount: bigint;
@@ -94,17 +97,38 @@ async function fetchTopOffer(tokenId: string): Promise<string | null> {
   }
 }
 
-export function useExploreNFTs() {
+// ─────────────────────────────────────────────
+// useExploreNFTs
+// Aceita collectionAddress para buscar NFTs de uma coleção específica.
+// Na Opção A, sempre passa o endereço da coleção — não há "coleção padrão".
+// ─────────────────────────────────────────────
+
+export function useExploreNFTs(collectionAddress?: string) {
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // ✅ collectionAddress é obrigatório na Opção A
+  // Se não vier, retorna vazio — o Explorer deve passar o endereço da coleção
+  const nftContract = collectionAddress as `0x${string}` | undefined;
+
   useEffect(() => {
+    if (!nftContract) {
+      setNfts([]);
+      setIsLoading(false);
+      return;
+    }
+
     const fetchNFTs = async () => {
       try {
         const res = await fetch(
-          `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${CONTRACT_ADDRESS}&withMetadata=true`,
+          `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${nftContract}&withMetadata=true&refreshCache=false`,
         );
         const data = await res.json();
+
+        if (!data.nfts || data.nfts.length === 0) {
+          setNfts([]);
+          return;
+        }
 
         const items: NFTItemWithMarket[] = await Promise.all(
           data.nfts.map(async (nft: AlchemyNFT) => {
@@ -122,10 +146,10 @@ export function useExploreNFTs() {
             let listingPrice: string | null = null;
             try {
               const listing = (await publicClient.readContract({
-                address: CONTRACT_ADDRESS,
+                address: MARKETPLACE_ADDRESS,
                 abi: NFT_MARKETPLACE_ABI,
                 functionName: "getListing",
-                args: [BigInt(nft.tokenId)],
+                args: [nftContract, BigInt(nft.tokenId)],
               })) as { seller: string; price: bigint; active: boolean };
 
               if (listing.active) listingPrice = formatEther(listing.price);
@@ -133,13 +157,14 @@ export function useExploreNFTs() {
               listingPrice = null;
             }
 
-            const topOffer = await fetchTopOffer(nft.tokenId);
+            const topOffer = await fetchTopOffer(nftContract, nft.tokenId);
 
             return {
               tokenId: nft.tokenId,
               name: nft.name ?? `NFT #${nft.tokenId}`,
               description: nft.description ?? "",
               image,
+              nftContract,
               listingPrice,
               topOffer,
             };
@@ -155,7 +180,7 @@ export function useExploreNFTs() {
     };
 
     fetchNFTs();
-  }, []);
+  }, [nftContract]);
 
   return { nfts, isLoading };
 }

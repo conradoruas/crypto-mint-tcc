@@ -2,14 +2,14 @@
 pragma solidity ^0.8.20;
 
 import {Script} from "forge-std/Script.sol";
-import {NFTMarketplace} from "../src/NFTMarketplace.sol";
+import {NFTCollectionFactory} from "../src/NFTCollectionFactory.sol";
 
-contract DeployMarketplace is Script {
+contract DeployFactory is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
-        new NFTMarketplace();
+        new NFTCollectionFactory();
 
         vm.stopBroadcast();
     }

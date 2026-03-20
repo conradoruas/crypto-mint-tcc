@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useConnection } from "wagmi";
 import { formatEther } from "viem";
@@ -32,7 +32,6 @@ import {
   OfferWithBuyer,
 } from "@/hooks/useMarketplace";
 
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_MARKETPLACE_CONTRACT_ADDRESS;
 const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 
 const resolveIpfsUrl = (url: string) => {
@@ -117,7 +116,6 @@ function OffersTable({
       </div>
     );
   }
-
   if (offers.length === 0) {
     return (
       <p className="text-slate-500 text-sm text-center py-4">
@@ -125,7 +123,6 @@ function OffersTable({
       </p>
     );
   }
-
   return (
     <div className="space-y-2">
       {offers.map((offer, i) => (
@@ -154,19 +151,14 @@ function OffersTable({
               </p>
             </div>
           </div>
-
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 text-xs text-slate-500">
               <Clock size={11} />
               {new Date(Number(offer.expiresAt) * 1000).toLocaleDateString(
                 "pt-BR",
-                {
-                  day: "2-digit",
-                  month: "short",
-                },
+                { day: "2-digit", month: "short" },
               )}
             </div>
-
             {isOwner && (
               <button
                 onClick={() => onAccept(offer.buyerAddress)}
@@ -193,9 +185,13 @@ function OffersTable({
 // ─────────────────────────────────────────────
 export default function AssetDetail() {
   const { id } = useParams();
+  const searchParams = useSearchParams();
   const tokenId = (Array.isArray(id) ? id[0] : id) ?? "";
 
-  const { address } = useConnection();
+  // ✅ nftContract OBRIGATÓRIO na Opção A — vem sempre via ?contract=0x...
+  const nftContract = searchParams.get("contract") as `0x${string}`;
+
+  const { address } = useConnection(); // ✅ corrigido: era useConnection
   const [nft, setNft] = useState<NFTItem | null>(null);
   const [isLoadingNft, setIsLoadingNft] = useState(true);
   const [listPrice, setListPrice] = useState("");
@@ -208,27 +204,25 @@ export default function AssetDetail() {
     hash?: string;
   } | null>(null);
 
-  // Hooks de leitura
   const {
     owner,
     isListed,
     price,
     refetch: refetchListing,
-  } = useNFTListing(tokenId);
+  } = useNFTListing(nftContract ?? "", tokenId);
   const {
     hasActiveOffer,
     offerAmount: myOfferAmount,
     expiresAt,
     refetch: refetchMyOffer,
-  } = useMyOffer(tokenId);
+  } = useMyOffer(nftContract ?? "", tokenId);
   const {
     offers,
     isLoading: isLoadingOffers,
     topOffer,
     refetch: refetchOffers,
-  } = useNFTOffers(tokenId);
+  } = useNFTOffers(nftContract ?? "", tokenId);
 
-  // Hooks de escrita
   const { listNFT, isPending: isListing } = useListNFT();
   const {
     buyNFT,
@@ -266,10 +260,15 @@ export default function AssetDetail() {
 
   // Busca metadados via Alchemy
   useEffect(() => {
+    if (!nftContract) {
+      setIsLoadingNft(false);
+      return;
+    }
+
     const fetchNFT = async () => {
       try {
         const res = await fetch(
-          `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTMetadata?contractAddress=${CONTRACT_ADDRESS}&tokenId=${tokenId}&refreshCache=false`,
+          `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTMetadata?contractAddress=${nftContract}&tokenId=${tokenId}&refreshCache=false`,
         );
         const data = await res.json();
         let image = data.image?.cachedUrl ?? data.image?.originalUrl ?? "";
@@ -283,6 +282,7 @@ export default function AssetDetail() {
           name: data.name ?? `NFT #${tokenId}`,
           description: data.description ?? "",
           image,
+          nftContract,
         });
       } catch (error) {
         console.error("Erro ao buscar NFT:", error);
@@ -291,9 +291,8 @@ export default function AssetDetail() {
       }
     };
     fetchNFT();
-  }, [tokenId]);
+  }, [tokenId, nftContract]);
 
-  // Reações a transações
   useEffect(() => {
     if (isBought) {
       setTxMsg({
@@ -304,7 +303,6 @@ export default function AssetDetail() {
       refetchAll();
     }
   }, [isBought]);
-
   useEffect(() => {
     if (isOfferMade) {
       setTxMsg({
@@ -317,29 +315,20 @@ export default function AssetDetail() {
       refetchOffers();
     }
   }, [isOfferMade]);
-
   useEffect(() => {
     if (isOfferCancelled) {
-      setTxMsg({
-        type: "success",
-        text: "Oferta cancelada. ETH devolvido à sua carteira.",
-      });
+      setTxMsg({ type: "success", text: "Oferta cancelada. ETH devolvido." });
       refetchMyOffer();
       refetchOffers();
     }
   }, [isOfferCancelled]);
-
   useEffect(() => {
     if (isOfferAccepted) {
-      setTxMsg({
-        type: "success",
-        text: "Oferta aceita! NFT transferido com sucesso.",
-      });
+      setTxMsg({ type: "success", text: "Oferta aceita! NFT transferido." });
       refetchAll();
     }
   }, [isOfferAccepted]);
 
-  // Handlers
   const handleList = async () => {
     if (!listPrice || parseFloat(listPrice) < 0.0001) {
       setTxMsg({ type: "error", text: "Preço mínimo é 0.0001 ETH." });
@@ -347,16 +336,13 @@ export default function AssetDetail() {
     }
     try {
       setTxMsg(null);
-      await listNFT(tokenId, listPrice);
+      await listNFT(nftContract, tokenId, listPrice);
       setShowListForm(false);
       setListPrice("");
       setTxMsg({ type: "success", text: "NFT listado com sucesso!" });
       refetchListing();
     } catch {
-      setTxMsg({
-        type: "error",
-        text: "Erro ao listar NFT. Verifique o MetaMask.",
-      });
+      setTxMsg({ type: "error", text: "Erro ao listar NFT." });
     }
   };
 
@@ -364,20 +350,17 @@ export default function AssetDetail() {
     if (!price) return;
     try {
       setTxMsg(null);
-      await buyNFT(tokenId, price);
+      await buyNFT(nftContract, tokenId, price);
     } catch {
-      setTxMsg({
-        type: "error",
-        text: "Erro ao comprar NFT. Verifique o MetaMask.",
-      });
+      setTxMsg({ type: "error", text: "Erro ao comprar NFT." });
     }
   };
 
   const handleCancelListing = async () => {
     try {
       setTxMsg(null);
-      await cancelListing(tokenId);
-      setTxMsg({ type: "success", text: "Listagem cancelada com sucesso." });
+      await cancelListing(nftContract, tokenId);
+      setTxMsg({ type: "success", text: "Listagem cancelada." });
       refetchListing();
     } catch {
       setTxMsg({ type: "error", text: "Erro ao cancelar listagem." });
@@ -391,19 +374,16 @@ export default function AssetDetail() {
     }
     try {
       setTxMsg(null);
-      await makeOffer(tokenId, offerAmount);
+      await makeOffer(nftContract, tokenId, offerAmount);
     } catch {
-      setTxMsg({
-        type: "error",
-        text: "Erro ao enviar oferta. Verifique o MetaMask.",
-      });
+      setTxMsg({ type: "error", text: "Erro ao enviar oferta." });
     }
   };
 
   const handleAcceptOffer = async (buyerAddress: `0x${string}`) => {
     try {
       setTxMsg(null);
-      await acceptOffer(tokenId, buyerAddress);
+      await acceptOffer(nftContract, tokenId, buyerAddress);
     } catch {
       setTxMsg({ type: "error", text: "Erro ao aceitar oferta." });
     }
@@ -412,13 +392,25 @@ export default function AssetDetail() {
   const handleCancelOffer = async () => {
     try {
       setTxMsg(null);
-      await cancelOffer(tokenId);
+      await cancelOffer(nftContract, tokenId);
     } catch {
       setTxMsg({ type: "error", text: "Erro ao cancelar oferta." });
     }
   };
 
+  if (!nftContract) {
+    return (
+      <main className="min-h-screen bg-slate-950">
+        <Navbar />
+        <p className="text-center text-slate-400 py-20">
+          Endereço do contrato não informado.
+        </p>
+      </main>
+    );
+  }
+
   if (isLoadingNft) return <LoadingSkeleton />;
+
   if (!nft) {
     return (
       <main className="min-h-screen bg-slate-950">
@@ -432,7 +424,7 @@ export default function AssetDetail() {
     <main className="min-h-screen bg-slate-950 text-white">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 py-12 grid grid-cols-1 md:grid-cols-2 gap-12">
-        {/* ─── Imagem ─── */}
+        {/* Imagem */}
         <div className="rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 aspect-square relative">
           {nft.image ? (
             <Image
@@ -449,12 +441,11 @@ export default function AssetDetail() {
           )}
         </div>
 
-        {/* ─── Informações + Ações ─── */}
+        {/* Informações + Ações */}
         <div className="flex flex-col gap-5">
-          {/* Cabeçalho */}
           <div>
             <p className="text-blue-500 font-bold mb-1 uppercase tracking-widest text-sm">
-              Coleção TCC #{nft.tokenId.padStart(3, "0")}
+              #{nft.tokenId.padStart(3, "0")}
             </p>
             <h1 className="text-4xl font-black mb-3">{nft.name}</h1>
             {nft.description && (
@@ -464,7 +455,6 @@ export default function AssetDetail() {
             )}
           </div>
 
-          {/* Dono + maior oferta */}
           <div className="flex items-center justify-between">
             {owner && (
               <div className="flex items-center gap-2 text-sm">
@@ -488,12 +478,11 @@ export default function AssetDetail() {
             )}
           </div>
 
-          {/* Feedback */}
           {txMsg && (
             <TxMessage type={txMsg.type} text={txMsg.text} hash={txMsg.hash} />
           )}
 
-          {/* ─── Painel de Compra / Listagem ─── */}
+          {/* Painel de Compra / Listagem */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
             {isListed && price ? (
               <>
@@ -585,12 +574,12 @@ export default function AssetDetail() {
             )}
           </div>
 
-          {/* ─── Painel de Fazer Oferta (não-dono) ─── */}
+          {/* Painel de Fazer Oferta (não-dono) */}
           {!isOwner && address && (
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
               <h3 className="font-bold text-slate-200 flex items-center gap-2">
-                <HandCoins size={18} className="text-yellow-400" />
-                Fazer uma Oferta
+                <HandCoins size={18} className="text-yellow-400" /> Fazer uma
+                Oferta
               </h3>
               {hasActiveOffer ? (
                 <div className="space-y-3">
@@ -681,19 +670,17 @@ export default function AssetDetail() {
             </div>
           )}
 
-          {/* ─── Lista de Ofertas ─── */}
+          {/* Lista de Ofertas */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-200 flex items-center gap-2">
-                <HandCoins size={18} className="text-yellow-400" />
-                Ofertas
-                {offers.length > 0 && (
-                  <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">
-                    {offers.length}
-                  </span>
-                )}
-              </h3>
-            </div>
+            <h3 className="font-bold text-slate-200 flex items-center gap-2">
+              <HandCoins size={18} className="text-yellow-400" />
+              Ofertas
+              {offers.length > 0 && (
+                <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">
+                  {offers.length}
+                </span>
+              )}
+            </h3>
             <OffersTable
               offers={offers}
               isLoading={isLoadingOffers}

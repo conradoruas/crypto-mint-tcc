@@ -5,13 +5,20 @@ export async function POST(req: NextRequest) {
 
   try {
     const formData = await req.formData();
-
-    // Cria um novo FormData só com o arquivo para o Pinata
-    const pinataForm = new FormData();
     const file = formData.get("file") as File;
+    const name = formData.get("name") as string | null;
+    const description = formData.get("description") as string | null;
+
+    if (!file) {
+      return NextResponse.json(
+        { error: "Arquivo não enviado" },
+        { status: 400 },
+      );
+    }
+
+    const pinataForm = new FormData();
     pinataForm.append("file", file);
 
-    // Passo 1: Upload da imagem
     const imageRes = await fetch(
       "https://api.pinata.cloud/pinning/pinFileToIPFS",
       {
@@ -23,36 +30,29 @@ export async function POST(req: NextRequest) {
 
     if (!imageRes.ok) {
       const err = await imageRes.text();
-      console.error("Erro Pinata imagem:", err);
-      return NextResponse.json({ error: err }, { status: 500 });
+      return NextResponse.json(
+        { error: `Pinata Image Error: ${err}` },
+        { status: 500 },
+      );
     }
 
     const imageData = await imageRes.json();
     const imageHash = imageData.IpfsHash;
 
-    // Valida se a imagem foi salva corretamente
-    if (!imageHash) {
-      console.error("Pinata não retornou IpfsHash da imagem:", imageData);
-      return NextResponse.json(
-        { error: "Upload da imagem ao IPFS falhou" },
-        { status: 500 },
-      );
+    if (!name) {
+      return NextResponse.json({ uri: `ipfs://${imageHash}` });
     }
 
-    const name = formData.get("name") as string;
-    const description = formData.get("description") as string;
-
-    const data = JSON.stringify({
+    const metadata = JSON.stringify({
       pinataContent: {
         name,
-        description,
+        description: description || "",
         image: `ipfs://${imageHash}`,
         attributes: [{ trait_type: "Criador", value: "Usuario TCC" }],
       },
       pinataMetadata: { name: `${name}_metadata.json` },
     });
 
-    // Passo 2: Upload do JSON de metadados
     const jsonRes = await fetch(
       "https://api.pinata.cloud/pinning/pinJSONToIPFS",
       {
@@ -61,30 +61,25 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${jwt}`,
         },
-        body: data,
+        body: metadata,
       },
     );
 
     if (!jsonRes.ok) {
       const err = await jsonRes.text();
-      console.error("Erro Pinata JSON:", err);
-      return NextResponse.json({ error: err }, { status: 500 });
-    }
-
-    const jsonData = await jsonRes.json();
-
-    // Valida se o JSON foi salvo corretamente
-    if (!jsonData.IpfsHash) {
-      console.error("Pinata não retornou IpfsHash do JSON:", jsonData);
       return NextResponse.json(
-        { error: "Upload dos metadados ao IPFS falhou" },
+        { error: `Pinata JSON Error: ${err}` },
         { status: 500 },
       );
     }
 
+    const jsonData = await jsonRes.json();
     return NextResponse.json({ uri: `ipfs://${jsonData.IpfsHash}` });
   } catch (error) {
     console.error("Erro na route de upload:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro interno no servidor" },
+      { status: 500 },
+    );
   }
 }
