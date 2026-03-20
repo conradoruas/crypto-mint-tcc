@@ -60,7 +60,15 @@ export default function ExplorePage() {
                   <h3 className="font-bold mb-3">{nft.name}</h3>
                   <div className="flex justify-between items-center border-t border-slate-800 pt-3">
                     <span className="text-sm text-slate-400">Preço</span>
-                    <span className="font-bold text-white">0.0001 ETH</span>
+                    {nft.listingPrice ? (
+                      <span className="font-bold text-white">
+                        {nft.listingPrice} ETH
+                      </span>
+                    ) : (
+                      <span className="text-sm text-slate-500 italic">
+                        Não listado
+                      </span>
+                    )}
                   </div>
                 </div>
               </Link>

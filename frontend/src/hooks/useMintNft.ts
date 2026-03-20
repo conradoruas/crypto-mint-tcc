@@ -15,6 +15,7 @@ export function useMintNFT() {
       functionName: "mint",
       args: [tokenUri],
       value: parseEther("0.0001"),
+      gas: BigInt(300000),
     });
   };
 

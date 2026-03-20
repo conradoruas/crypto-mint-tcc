@@ -1,220 +1,375 @@
 export const NFT_MARKETPLACE_ABI = [
+  // ─── Mint ───
   {
-    type: "constructor",
-    inputs: [
-      { name: "_name", type: "string", internalType: "string" },
-      { name: "_symbol", type: "string", internalType: "string" },
-      { name: "_initialBaseUri", type: "string", internalType: "string" },
-    ],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "MAX_SUPPLY",
-    inputs: [],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "approve",
-    inputs: [
-      { name: "to", type: "address", internalType: "address" },
-      { name: "tokenId", type: "uint256", internalType: "uint256" },
-    ],
-    outputs: [],
-    stateMutability: "payable",
-  },
-  {
-    type: "function",
-    name: "balanceOf",
-    inputs: [{ name: "owner", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "baseURI",
-    inputs: [],
-    outputs: [{ name: "", type: "string", internalType: "string" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "getApproved",
-    inputs: [{ name: "tokenId", type: "uint256", internalType: "uint256" }],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "isApprovedForAll",
-    inputs: [
-      { name: "owner", type: "address", internalType: "address" },
-      { name: "operator", type: "address", internalType: "address" },
-    ],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
+    inputs: [{ internalType: "string", name: "tokenUri", type: "string" }],
     name: "mint",
-    inputs: [{ name: "tokenUri", type: "string", internalType: "string" }],
     outputs: [],
     stateMutability: "payable",
-  },
-  {
     type: "function",
-    name: "mintPrice",
-    inputs: [],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
-    stateMutability: "view",
   },
+
+  // ─── Listagem ───
   {
-    type: "function",
-    name: "name",
-    inputs: [],
-    outputs: [{ name: "", type: "string", internalType: "string" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "owner",
-    inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "ownerOf",
-    inputs: [{ name: "tokenId", type: "uint256", internalType: "uint256" }],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "renounceOwnership",
-    inputs: [],
+    inputs: [
+      { internalType: "uint256", name: "tokenId", type: "uint256" },
+      { internalType: "uint256", name: "price", type: "uint256" },
+    ],
+    name: "listItem",
     outputs: [],
     stateMutability: "nonpayable",
+    type: "function",
   },
   {
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "cancelListing",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
-    name: "royaltyInfo",
+  },
+
+  // ─── Compra ───
+  {
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "buyItem",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function",
+  },
+
+  // ─── Ofertas ───
+  {
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "makeOffer",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function",
+  },
+  {
     inputs: [
-      { name: "tokenId", type: "uint256", internalType: "uint256" },
-      { name: "salePrice", type: "uint256", internalType: "uint256" },
+      { internalType: "uint256", name: "tokenId", type: "uint256" },
+      { internalType: "address", name: "buyer", type: "address" },
     ],
+    name: "acceptOffer",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "cancelOffer",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "uint256", name: "tokenId", type: "uint256" },
+      { internalType: "address", name: "buyer", type: "address" },
+    ],
+    name: "reclaimExpiredOffer",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+
+  // ─── Views ───
+  {
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "getListing",
     outputs: [
-      { name: "receiver", type: "address", internalType: "address" },
-      { name: "amount", type: "uint256", internalType: "uint256" },
-    ],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "safeTransferFrom",
-    inputs: [
-      { name: "from", type: "address", internalType: "address" },
-      { name: "to", type: "address", internalType: "address" },
-      { name: "tokenId", type: "uint256", internalType: "uint256" },
-    ],
-    outputs: [],
-    stateMutability: "payable",
-  },
-  {
-    type: "function",
-    name: "setApprovalForAll",
-    inputs: [
-      { name: "operator", type: "address", internalType: "address" },
-      { name: "approved", type: "bool", internalType: "bool" },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "setBaseUri",
-    inputs: [{ name: "_newBaseUri", type: "string", internalType: "string" }],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "setRoyalties",
-    inputs: [
-      { name: "receiver", type: "address", internalType: "address" },
-      { name: "feeNumerator", type: "uint96", internalType: "uint96" },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "supportsInterface",
-    inputs: [{ name: "interfaceId", type: "bytes4", internalType: "bytes4" }],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "symbol",
-    inputs: [],
-    outputs: [{ name: "", type: "string", internalType: "string" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "tokenURI",
-    inputs: [{ name: "tokenId", type: "uint256", internalType: "uint256" }],
-    outputs: [{ name: "", type: "string", internalType: "string" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "totalSupply",
-    inputs: [],
-    outputs: [{ name: "result", type: "uint256", internalType: "uint256" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
-    name: "transferFrom",
-    inputs: [
-      { name: "from", type: "address", internalType: "address" },
-      { name: "to", type: "address", internalType: "address" },
-      { name: "tokenId", type: "uint256", internalType: "uint256" },
-    ],
-    outputs: [],
-    stateMutability: "payable",
-  },
-  {
-    type: "function",
-    name: "transferOwnership",
-    inputs: [{ name: "newOwner", type: "address", internalType: "address" }],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "withdraw",
-    inputs: [],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "event",
-    name: "Transfer",
-    inputs: [
-      { name: "from", type: "address", indexed: true, internalType: "address" },
-      { name: "to", type: "address", indexed: true, internalType: "address" },
       {
-        name: "tokenId",
-        type: "uint256",
-        indexed: true,
-        internalType: "uint256",
+        components: [
+          { internalType: "address", name: "seller", type: "address" },
+          { internalType: "uint256", name: "price", type: "uint256" },
+          { internalType: "bool", name: "active", type: "bool" },
+        ],
+        internalType: "struct NFTMarketplace.Listing",
+        name: "",
+        type: "tuple",
       },
     ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "uint256", name: "tokenId", type: "uint256" },
+      { internalType: "address", name: "buyer", type: "address" },
+    ],
+    name: "getOffer",
+    outputs: [
+      {
+        components: [
+          { internalType: "address", name: "buyer", type: "address" },
+          { internalType: "uint256", name: "amount", type: "uint256" },
+          { internalType: "uint256", name: "expiresAt", type: "uint256" },
+          { internalType: "bool", name: "active", type: "bool" },
+        ],
+        internalType: "struct NFTMarketplace.Offer",
+        name: "",
+        type: "tuple",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "ownerOf",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "tokenURI",
+    outputs: [{ internalType: "string", name: "", type: "string" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "totalSupply",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "mintPrice",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "marketplaceFee",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "OFFER_DURATION",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+
+  // ─── ERC721 Approval ───
+  {
+    inputs: [
+      { internalType: "address", name: "operator", type: "address" },
+      { internalType: "bool", name: "approved", type: "bool" },
+    ],
+    name: "setApprovalForAll",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "to", type: "address" },
+      { internalType: "uint256", name: "tokenId", type: "uint256" },
+    ],
+    name: "approve",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "owner", type: "address" },
+      { internalType: "address", name: "operator", type: "address" },
+    ],
+    name: "isApprovedForAll",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
+    name: "getApproved",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+
+  // ─── Events ───
+  {
     anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "address", name: "to", type: "address" },
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "tokenId",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "string",
+        name: "tokenUri",
+        type: "string",
+      },
+    ],
+    name: "NFTMinted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "tokenId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "seller",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "price",
+        type: "uint256",
+      },
+    ],
+    name: "ItemListed",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "tokenId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "seller",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "buyer",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "price",
+        type: "uint256",
+      },
+    ],
+    name: "ItemSold",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "tokenId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "seller",
+        type: "address",
+      },
+    ],
+    name: "ListingCancelled",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "tokenId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "buyer",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "expiresAt",
+        type: "uint256",
+      },
+    ],
+    name: "OfferMade",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "tokenId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "seller",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "buyer",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "OfferAccepted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "tokenId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "buyer",
+        type: "address",
+      },
+    ],
+    name: "OfferCancelled",
+    type: "event",
   },
 ] as const;

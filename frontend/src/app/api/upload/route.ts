@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   const jwt = process.env.PINATA_JWT;
-  console.log("ESTOU AQUI");
-  console.log("JWT:", jwt?.slice(0, 20) + "...");
+
   try {
     const formData = await req.formData();
 
