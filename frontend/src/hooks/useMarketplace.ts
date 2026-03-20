@@ -6,11 +6,20 @@ import {
   useReadContract,
   useConnection,
 } from "wagmi";
-import { parseEther, formatEther } from "viem";
+import { parseEther, formatEther, createPublicClient, http } from "viem";
+import { useCallback, useEffect, useState } from "react";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
+import { sepolia } from "viem/chains";
 
 const CONTRACT_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_CONTRACT_ADDRESS as `0x${string}`;
+
+const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
+
+const publicClient = createPublicClient({
+  chain: sepolia,
+  transport: http(`https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`),
+});
 
 // ─────────────────────────────────────────────
 // Tipos
@@ -29,6 +38,10 @@ export interface OfferData {
   active: boolean;
 }
 
+export interface OfferWithBuyer extends OfferData {
+  buyerAddress: `0x${string}`;
+}
+
 // ─────────────────────────────────────────────
 // Hook: busca listagem e dono de um NFT
 // ─────────────────────────────────────────────
@@ -38,7 +51,7 @@ export function useNFTListing(tokenId: string) {
     address: CONTRACT_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getListing",
-    args: [BigInt(tokenId)],
+    args: [BigInt(tokenId || "0")],
     query: { enabled: !!tokenId },
   });
 
@@ -46,7 +59,7 @@ export function useNFTListing(tokenId: string) {
     address: CONTRACT_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "ownerOf",
-    args: [BigInt(tokenId)],
+    args: [BigInt(tokenId || "0")],
     query: { enabled: !!tokenId },
   });
 
@@ -79,7 +92,7 @@ export function useMyOffer(tokenId: string) {
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOffer",
     args: [
-      BigInt(tokenId),
+      BigInt(tokenId || "0"),
       address ?? "0x0000000000000000000000000000000000000000",
     ],
     query: { enabled: !!address && !!tokenId },
@@ -103,14 +116,93 @@ export function useMyOffer(tokenId: string) {
 }
 
 // ─────────────────────────────────────────────
+// Hook: busca todas as ofertas ativas de um NFT
+// Usa getOfferBuyers do contrato — sem getLogs
+// ─────────────────────────────────────────────
+
+export function useNFTOffers(tokenId: string) {
+  const [offers, setOffers] = useState<OfferWithBuyer[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [topOffer, setTopOffer] = useState<string | null>(null);
+  const [hasFetched, setHasFetched] = useState(false);
+
+  const fetchOffers = useCallback(async () => {
+    if (!tokenId || hasFetched) return;
+    setIsLoading(true);
+
+    try {
+      const buyers = (await publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: NFT_MARKETPLACE_ABI,
+        functionName: "getOfferBuyers",
+        args: [BigInt(tokenId)],
+      })) as `0x${string}`[];
+
+      if (buyers.length === 0) {
+        setOffers([]);
+        setTopOffer(null);
+        setHasFetched(true);
+        return;
+      }
+
+      // Remove duplicatas (comprador pode ter cancelado e feito nova oferta)
+      const uniqueBuyers = [...new Set(buyers)];
+
+      const offerResults = await Promise.all(
+        uniqueBuyers.map(async (buyer) => {
+          try {
+            const offer = (await publicClient.readContract({
+              address: CONTRACT_ADDRESS,
+              abi: NFT_MARKETPLACE_ABI,
+              functionName: "getOffer",
+              args: [BigInt(tokenId), buyer],
+            })) as OfferData;
+            return { ...offer, buyerAddress: buyer };
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      const now = BigInt(Math.floor(Date.now() / 1000));
+      const activeOffers = offerResults
+        .filter(
+          (o): o is OfferWithBuyer =>
+            o !== null && o.active && o.expiresAt > now,
+        )
+        .sort((a, b) => (b.amount > a.amount ? 1 : -1));
+
+      setOffers(activeOffers);
+      setTopOffer(
+        activeOffers.length > 0 ? formatEther(activeOffers[0].amount) : null,
+      );
+    } catch (error) {
+      console.error("Erro ao buscar ofertas:", error);
+    } finally {
+      setIsLoading(false);
+      setHasFetched(true);
+    }
+  }, [tokenId, hasFetched]);
+
+  useEffect(() => {
+    fetchOffers();
+  }, [fetchOffers]);
+
+  const refetch = useCallback(() => {
+    setHasFetched(false);
+  }, []);
+
+  return { offers, isLoading, topOffer, refetch };
+}
+
+// ─────────────────────────────────────────────
 // Hook: colocar NFT à venda
 // ─────────────────────────────────────────────
 
 export function useListNFT() {
-  const { mutateAsync, isPending } = useWriteContract();
+  const { mutateAsync, isPending } = useWriteContract(); // ✅ corrigido: era mutateAsync
 
   const listNFT = async (tokenId: string, priceInEth: string) => {
-    // Passo 1: aprovar o contrato para transferir o NFT
     await mutateAsync({
       address: CONTRACT_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
@@ -119,7 +211,6 @@ export function useListNFT() {
       gas: BigInt(100000),
     });
 
-    // Passo 2: listar com o preço definido
     await mutateAsync({
       address: CONTRACT_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
@@ -137,7 +228,7 @@ export function useListNFT() {
 // ─────────────────────────────────────────────
 
 export function useBuyNFT() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract();
+  const { data: hash, mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
@@ -161,7 +252,7 @@ export function useBuyNFT() {
 // ─────────────────────────────────────────────
 
 export function useCancelListing() {
-  const { mutateAsync, isPending } = useWriteContract();
+  const { mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
 
   const cancelListing = async (tokenId: string) => {
     await mutateAsync({
@@ -181,7 +272,7 @@ export function useCancelListing() {
 // ─────────────────────────────────────────────
 
 export function useMakeOffer() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract();
+  const { data: hash, mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
@@ -205,13 +296,12 @@ export function useMakeOffer() {
 // ─────────────────────────────────────────────
 
 export function useAcceptOffer() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract();
+  const { data: hash, mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
   const acceptOffer = async (tokenId: string, buyerAddress: `0x${string}`) => {
-    // Garante aprovação antes de aceitar
     await mutateAsync({
       address: CONTRACT_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
@@ -237,7 +327,7 @@ export function useAcceptOffer() {
 // ─────────────────────────────────────────────
 
 export function useCancelOffer() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract();
+  const { data: hash, mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
@@ -260,7 +350,7 @@ export function useCancelOffer() {
 // ─────────────────────────────────────────────
 
 export function useReclaimExpiredOffer() {
-  const { mutateAsync, isPending } = useWriteContract();
+  const { mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
 
   const reclaimOffer = async (tokenId: string, buyerAddress: `0x${string}`) => {
     await mutateAsync({

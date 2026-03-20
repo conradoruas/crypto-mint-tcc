@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ConnectKitButton } from "connectkit";
 
 export function Navbar() {
@@ -8,17 +9,20 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-8">
           <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-            <a href="" className="hover:text-white transition-colors">
+            <Link href="/" className="hover:text-white transition-colors">
               NFT-PRO
-            </a>
+            </Link>
           </h1>
           <div className="hidden md:flex items-center gap-6 text-sm text-slate-400">
-            <a href="/explore" className="hover:text-white transition-colors">
+            <Link
+              href="/explore"
+              className="hover:text-white transition-colors"
+            >
               Marketplace
-            </a>
-            <a href="/create" className="hover:text-white transition-colors">
+            </Link>
+            <Link href="/create" className="hover:text-white transition-colors">
               Criar NFT
-            </a>
+            </Link>
           </div>
         </div>
 

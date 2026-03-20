@@ -1,8 +1,10 @@
 "use client";
+
 import { Navbar } from "@/components/NavBar";
 import { useExploreNFTs } from "@/hooks/useExploreNfts";
 import Image from "next/image";
 import Link from "next/link";
+import { TrendingUp } from "lucide-react";
 
 export default function ExplorePage() {
   const { nfts, isLoading } = useExploreNFTs();
@@ -23,6 +25,7 @@ export default function ExplorePage() {
                 <div className="p-4 space-y-2">
                   <div className="h-3 bg-slate-800 rounded animate-pulse w-1/2" />
                   <div className="h-4 bg-slate-800 rounded animate-pulse w-3/4" />
+                  <div className="h-3 bg-slate-800 rounded animate-pulse w-full mt-4" />
                 </div>
               </div>
             ))}
@@ -53,21 +56,39 @@ export default function ExplorePage() {
                     <div className="w-full h-full animate-pulse bg-slate-800" />
                   )}
                 </div>
+
                 <div className="p-4">
                   <p className="text-xs text-blue-400 font-medium mb-1">
                     Coleção TCC #{nft.tokenId.padStart(3, "0")}
                   </p>
                   <h3 className="font-bold mb-3">{nft.name}</h3>
+
                   <div className="flex justify-between items-center border-t border-slate-800 pt-3">
-                    <span className="text-sm text-slate-400">Preço</span>
-                    {nft.listingPrice ? (
-                      <span className="font-bold text-white">
-                        {nft.listingPrice} ETH
-                      </span>
-                    ) : (
-                      <span className="text-sm text-slate-500 italic">
-                        Não listado
-                      </span>
+                    <div>
+                      <p className="text-xs text-slate-500 mb-0.5">Preço</p>
+                      {nft.listingPrice ? (
+                        <span className="font-bold text-white text-sm">
+                          {nft.listingPrice} ETH
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-500 italic">
+                          Não listado
+                        </span>
+                      )}
+                    </div>
+
+                    {nft.topOffer && (
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500 mb-0.5">
+                          Maior oferta
+                        </p>
+                        <div className="flex items-center gap-1 justify-end">
+                          <TrendingUp size={11} className="text-yellow-400" />
+                          <span className="text-yellow-400 font-bold text-sm">
+                            {nft.topOffer} ETH
+                          </span>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>

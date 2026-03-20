@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useConnection } from "wagmi";
+import { formatEther } from "viem";
 import { Navbar } from "@/components/NavBar";
 import {
   ShoppingCart,
@@ -14,18 +15,21 @@ import {
   CheckCircle,
   Clock,
   ExternalLink,
+  TrendingUp,
 } from "lucide-react";
 import Image from "next/image";
 import { NFTItem } from "@/hooks/useExploreNfts";
 import {
   useNFTListing,
   useMyOffer,
+  useNFTOffers,
   useListNFT,
   useBuyNFT,
   useCancelListing,
   useMakeOffer,
   useAcceptOffer,
   useCancelOffer,
+  OfferWithBuyer,
 } from "@/hooks/useMarketplace";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_MARKETPLACE_CONTRACT_ADDRESS;
@@ -38,7 +42,7 @@ const resolveIpfsUrl = (url: string) => {
   return url;
 };
 
-// ─── Componente de feedback de transação ───
+// ─── Feedback de transação ───
 function TxMessage({
   type,
   text,
@@ -71,7 +75,7 @@ function TxMessage({
   );
 }
 
-// ─── Skeleton de loading ───
+// ─── Skeleton ───
 function LoadingSkeleton() {
   return (
     <main className="min-h-screen bg-slate-950">
@@ -90,6 +94,100 @@ function LoadingSkeleton() {
   );
 }
 
+// ─── Lista de Ofertas ───
+function OffersTable({
+  offers,
+  isLoading,
+  isOwner,
+  onAccept,
+  isAccepting,
+}: {
+  offers: OfferWithBuyer[];
+  isLoading: boolean;
+  isOwner: boolean;
+  onAccept: (buyer: `0x${string}`) => void;
+  isAccepting: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[1, 2].map((i) => (
+          <div key={i} className="h-12 bg-slate-800 rounded-xl animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (offers.length === 0) {
+    return (
+      <p className="text-slate-500 text-sm text-center py-4">
+        Nenhuma oferta ativa no momento.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {offers.map((offer, i) => (
+        <div
+          key={offer.buyerAddress}
+          className={`flex items-center justify-between p-3 rounded-xl border ${
+            i === 0
+              ? "bg-yellow-500/5 border-yellow-500/30"
+              : "bg-slate-800/50 border-slate-700/50"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            {i === 0 && <TrendingUp size={14} className="text-yellow-400" />}
+            <div>
+              <p className="font-bold text-sm">
+                {formatEther(offer.amount)} ETH
+                {i === 0 && (
+                  <span className="ml-2 text-xs text-yellow-400 font-normal">
+                    Maior oferta
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-slate-500 font-mono">
+                {offer.buyerAddress.slice(0, 6)}...
+                {offer.buyerAddress.slice(-4)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 text-xs text-slate-500">
+              <Clock size={11} />
+              {new Date(Number(offer.expiresAt) * 1000).toLocaleDateString(
+                "pt-BR",
+                {
+                  day: "2-digit",
+                  month: "short",
+                },
+              )}
+            </div>
+
+            {isOwner && (
+              <button
+                onClick={() => onAccept(offer.buyerAddress)}
+                disabled={isAccepting}
+                className="bg-yellow-500 hover:bg-yellow-400 disabled:bg-slate-700 disabled:cursor-not-allowed text-black text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all"
+              >
+                {isAccepting ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <CheckCircle size={12} />
+                )}
+                Aceitar
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────
 // Página principal
 // ─────────────────────────────────────────────
@@ -100,8 +198,6 @@ export default function AssetDetail() {
   const { address } = useConnection();
   const [nft, setNft] = useState<NFTItem | null>(null);
   const [isLoadingNft, setIsLoadingNft] = useState(true);
-
-  // Estados de UI
   const [listPrice, setListPrice] = useState("");
   const [offerAmount, setOfferAmount] = useState("");
   const [showListForm, setShowListForm] = useState(false);
@@ -123,8 +219,14 @@ export default function AssetDetail() {
     hasActiveOffer,
     offerAmount: myOfferAmount,
     expiresAt,
-    refetch: refetchOffer,
+    refetch: refetchMyOffer,
   } = useMyOffer(tokenId);
+  const {
+    offers,
+    isLoading: isLoadingOffers,
+    topOffer,
+    refetch: refetchOffers,
+  } = useNFTOffers(tokenId);
 
   // Hooks de escrita
   const { listNFT, isPending: isListing } = useListNFT();
@@ -142,7 +244,11 @@ export default function AssetDetail() {
     isConfirming: isOfferConfirming,
     isSuccess: isOfferMade,
   } = useMakeOffer();
-  const { acceptOffer, isPending: isAccepting } = useAcceptOffer();
+  const {
+    acceptOffer,
+    isPending: isAccepting,
+    isSuccess: isOfferAccepted,
+  } = useAcceptOffer();
   const {
     cancelOffer,
     isPending: isCancellingOffer,
@@ -154,10 +260,11 @@ export default function AssetDetail() {
 
   const refetchAll = () => {
     refetchListing();
-    refetchOffer();
+    refetchMyOffer();
+    refetchOffers();
   };
 
-  // Busca metadados do NFT via Alchemy
+  // Busca metadados via Alchemy
   useEffect(() => {
     const fetchNFT = async () => {
       try {
@@ -165,14 +272,12 @@ export default function AssetDetail() {
           `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTMetadata?contractAddress=${CONTRACT_ADDRESS}&tokenId=${tokenId}&refreshCache=false`,
         );
         const data = await res.json();
-
         let image = data.image?.cachedUrl ?? data.image?.originalUrl ?? "";
         if (!image && data.tokenUri) {
           const metaRes = await fetch(resolveIpfsUrl(data.tokenUri));
           const meta = await metaRes.json();
           image = resolveIpfsUrl(meta.image ?? "");
         }
-
         setNft({
           tokenId: data.tokenId,
           name: data.name ?? `NFT #${tokenId}`,
@@ -185,11 +290,10 @@ export default function AssetDetail() {
         setIsLoadingNft(false);
       }
     };
-
     fetchNFT();
   }, [tokenId]);
 
-  // Reações a transações bem-sucedidas
+  // Reações a transações
   useEffect(() => {
     if (isBought) {
       setTxMsg({
@@ -209,7 +313,8 @@ export default function AssetDetail() {
       });
       setShowOfferForm(false);
       setOfferAmount("");
-      refetchOffer();
+      refetchMyOffer();
+      refetchOffers();
     }
   }, [isOfferMade]);
 
@@ -219,12 +324,22 @@ export default function AssetDetail() {
         type: "success",
         text: "Oferta cancelada. ETH devolvido à sua carteira.",
       });
-      refetchOffer();
+      refetchMyOffer();
+      refetchOffers();
     }
   }, [isOfferCancelled]);
 
-  // ─── Handlers ───
+  useEffect(() => {
+    if (isOfferAccepted) {
+      setTxMsg({
+        type: "success",
+        text: "Oferta aceita! NFT transferido com sucesso.",
+      });
+      refetchAll();
+    }
+  }, [isOfferAccepted]);
 
+  // Handlers
   const handleList = async () => {
     if (!listPrice || parseFloat(listPrice) < 0.0001) {
       setTxMsg({ type: "error", text: "Preço mínimo é 0.0001 ETH." });
@@ -240,7 +355,7 @@ export default function AssetDetail() {
     } catch {
       setTxMsg({
         type: "error",
-        text: "Erro ao listar NFT. Verifique o MetaMask e tente novamente.",
+        text: "Erro ao listar NFT. Verifique o MetaMask.",
       });
     }
   };
@@ -253,7 +368,7 @@ export default function AssetDetail() {
     } catch {
       setTxMsg({
         type: "error",
-        text: "Erro ao comprar NFT. Verifique o MetaMask e tente novamente.",
+        text: "Erro ao comprar NFT. Verifique o MetaMask.",
       });
     }
   };
@@ -280,7 +395,7 @@ export default function AssetDetail() {
     } catch {
       setTxMsg({
         type: "error",
-        text: "Erro ao enviar oferta. Verifique o MetaMask e tente novamente.",
+        text: "Erro ao enviar oferta. Verifique o MetaMask.",
       });
     }
   };
@@ -289,11 +404,6 @@ export default function AssetDetail() {
     try {
       setTxMsg(null);
       await acceptOffer(tokenId, buyerAddress);
-      setTxMsg({
-        type: "success",
-        text: "Oferta aceita! NFT transferido com sucesso.",
-      });
-      refetchAll();
     } catch {
       setTxMsg({ type: "error", text: "Erro ao aceitar oferta." });
     }
@@ -309,7 +419,6 @@ export default function AssetDetail() {
   };
 
   if (isLoadingNft) return <LoadingSkeleton />;
-
   if (!nft) {
     return (
       <main className="min-h-screen bg-slate-950">
@@ -332,7 +441,6 @@ export default function AssetDetail() {
               fill
               className="object-cover"
               sizes="(max-width: 768px) 100vw, 50vw"
-              loading="eager"
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-blue-600/20 to-purple-600/20 flex items-center justify-center text-slate-600">
@@ -342,7 +450,7 @@ export default function AssetDetail() {
         </div>
 
         {/* ─── Informações + Ações ─── */}
-        <div className="flex flex-col justify-start gap-6">
+        <div className="flex flex-col gap-5">
           {/* Cabeçalho */}
           <div>
             <p className="text-blue-500 font-bold mb-1 uppercase tracking-widest text-sm">
@@ -356,16 +464,29 @@ export default function AssetDetail() {
             )}
           </div>
 
-          {/* Dono */}
-          {owner && (
-            <div className="flex items-center gap-2 text-sm">
-              <ShieldCheck size={16} className="text-green-500" />
-              <span className="text-slate-400">Dono:</span>
-              <span className="font-mono text-slate-300">
-                {isOwner ? "Você" : `${owner.slice(0, 6)}...${owner.slice(-4)}`}
-              </span>
-            </div>
-          )}
+          {/* Dono + maior oferta */}
+          <div className="flex items-center justify-between">
+            {owner && (
+              <div className="flex items-center gap-2 text-sm">
+                <ShieldCheck size={16} className="text-green-500" />
+                <span className="text-slate-400">Dono:</span>
+                <span className="font-mono text-slate-300">
+                  {isOwner
+                    ? "Você"
+                    : `${owner.slice(0, 6)}...${owner.slice(-4)}`}
+                </span>
+              </div>
+            )}
+            {topOffer && (
+              <div className="flex items-center gap-1.5 text-sm bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-1">
+                <TrendingUp size={13} className="text-yellow-400" />
+                <span className="text-yellow-400 font-bold">
+                  {topOffer} ETH
+                </span>
+                <span className="text-slate-500 text-xs">maior oferta</span>
+              </div>
+            )}
+          </div>
 
           {/* Feedback */}
           {txMsg && (
@@ -380,9 +501,7 @@ export default function AssetDetail() {
                   <p className="text-slate-400 text-sm mb-1">Preço de venda</p>
                   <p className="text-3xl font-bold">{price} ETH</p>
                 </div>
-
                 {isOwner ? (
-                  // Dono vê botão de cancelar listagem
                   <button
                     onClick={handleCancelListing}
                     disabled={isCancelling}
@@ -396,7 +515,6 @@ export default function AssetDetail() {
                     {isCancelling ? "Cancelando..." : "Cancelar Listagem"}
                   </button>
                 ) : (
-                  // Outros veem botão de comprar
                   <button
                     onClick={handleBuy}
                     disabled={isBuying || isBuyConfirming}
@@ -420,9 +538,7 @@ export default function AssetDetail() {
                 <p className="text-slate-400 text-sm">
                   Este NFT não está à venda.
                 </p>
-
                 {isOwner &&
-                  // Dono pode listar
                   (showListForm ? (
                     <div className="space-y-3">
                       <input
@@ -469,16 +585,14 @@ export default function AssetDetail() {
             )}
           </div>
 
-          {/* ─── Painel de Ofertas ─── */}
+          {/* ─── Painel de Fazer Oferta (não-dono) ─── */}
           {!isOwner && address && (
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
               <h3 className="font-bold text-slate-200 flex items-center gap-2">
                 <HandCoins size={18} className="text-yellow-400" />
                 Fazer uma Oferta
               </h3>
-
               {hasActiveOffer ? (
-                // Comprador já tem oferta ativa
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/30 rounded-xl p-3">
                     <CheckCircle size={16} />
@@ -516,8 +630,7 @@ export default function AssetDetail() {
                       : "Cancelar Oferta e Resgatar ETH"}
                   </button>
                 </div>
-              ) : // Comprador pode fazer nova oferta
-              showOfferForm ? (
+              ) : showOfferForm ? (
                 <div className="space-y-3">
                   <input
                     type="number"
@@ -568,74 +681,29 @@ export default function AssetDetail() {
             </div>
           )}
 
-          {/* ─── Painel de aceitar ofertas (só para o dono) ─── */}
-          {isOwner && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
+          {/* ─── Lista de Ofertas ─── */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-200 flex items-center gap-2">
                 <HandCoins size={18} className="text-yellow-400" />
-                Aceitar Oferta
+                Ofertas
+                {offers.length > 0 && (
+                  <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">
+                    {offers.length}
+                  </span>
+                )}
               </h3>
-              <p className="text-sm text-slate-400">
-                Para aceitar uma oferta, cole abaixo o endereço do comprador.
-                Você pode pedir o endereço diretamente a ele.
-              </p>
-              <OfferAcceptForm
-                tokenId={tokenId}
-                onAccept={handleAcceptOffer}
-                isAccepting={isAccepting}
-              />
             </div>
-          )}
+            <OffersTable
+              offers={offers}
+              isLoading={isLoadingOffers}
+              isOwner={!!isOwner}
+              onAccept={handleAcceptOffer}
+              isAccepting={isAccepting}
+            />
+          </div>
         </div>
       </div>
     </main>
-  );
-}
-
-// ─── Subcomponente: formulário de aceitar oferta ───
-function OfferAcceptForm({
-  tokenId,
-  onAccept,
-  isAccepting,
-}: {
-  tokenId: string;
-  onAccept: (buyer: `0x${string}`) => void;
-  isAccepting: boolean;
-}) {
-  const [buyerAddress, setBuyerAddress] = useState("");
-  const [error, setError] = useState("");
-
-  const handleSubmit = () => {
-    if (!buyerAddress.startsWith("0x") || buyerAddress.length !== 42) {
-      setError("Endereço inválido. Deve começar com 0x e ter 42 caracteres.");
-      return;
-    }
-    setError("");
-    onAccept(buyerAddress as `0x${string}`);
-  };
-
-  return (
-    <div className="space-y-3">
-      <input
-        type="text"
-        placeholder="Endereço do comprador (0x...)"
-        value={buyerAddress}
-        onChange={(e) => setBuyerAddress(e.target.value)}
-        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-yellow-500"
-      />
-      {error && <p className="text-red-400 text-xs">{error}</p>}
-      <button
-        onClick={handleSubmit}
-        disabled={isAccepting || !buyerAddress}
-        className="w-full bg-yellow-500 hover:bg-yellow-400 text-black disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
-      >
-        {isAccepting ? (
-          <Loader2 className="animate-spin" size={18} />
-        ) : (
-          <CheckCircle size={18} />
-        )}
-        {isAccepting ? "Aprovando e Aceitando..." : "Aceitar Oferta"}
-      </button>
-    </div>
   );
 }

@@ -43,6 +43,9 @@ contract NFTMarketplace is ERC721URIStorage, ERC2981, Ownable, ReentrancyGuard {
     /// @notice tokenId => buyer => Offer
     mapping(uint256 => mapping(address => Offer)) public offers;
 
+
+    mapping(uint256 => address[]) private _offerBuyers;
+
     // ─────────────────────────────────────────────
     // Events
     // ─────────────────────────────────────────────
@@ -177,6 +180,8 @@ contract NFTMarketplace is ERC721URIStorage, ERC2981, Ownable, ReentrancyGuard {
             active: true
         });
 
+        _offerBuyers[tokenId].push(msg.sender);
+
         emit OfferMade(tokenId, msg.sender, msg.value, expiresAt);
     }
 
@@ -264,6 +269,10 @@ contract NFTMarketplace is ERC721URIStorage, ERC2981, Ownable, ReentrancyGuard {
     /// @notice Retorna os dados de uma oferta específica
     function getOffer(uint256 tokenId, address buyer) external view returns (Offer memory) {
         return offers[tokenId][buyer];
+    }
+
+    function getOfferBuyers(uint256 tokenId) external view returns (address[] memory) {
+        return _offerBuyers[tokenId];
     }
 
     /// @notice Retorna o total de NFTs mintados
