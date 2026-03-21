@@ -1,36 +1,99 @@
 "use client";
 
-import { useAccount } from "wagmi"; // ✅ corrigido: era useConnection
+import { useAccount } from "wagmi";
 import { Navbar } from "@/components/NavBar";
 import {
   useProfileNFTs,
   useCollections,
   CollectionNFTItem,
-} from "@/hooks/useCollections"; // ✅ importa de useCollections
+} from "@/hooks/useCollections";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import { formatEther } from "viem";
+import { useState, useEffect } from "react";
+import { Pencil, User, ExternalLink } from "lucide-react";
+import { fetchProfile, UserProfile } from "@/services/profile";
+
+const resolveIpfsUrl = (url: string) => {
+  if (!url) return "";
+  if (url.startsWith("ipfs://"))
+    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
+  return url;
+};
+
+function ProfileAvatar({
+  imageUri,
+  name,
+  size = 96,
+}: {
+  imageUri?: string;
+  name?: string;
+  size?: number;
+}) {
+  const initials = name
+    ? name
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "?";
+
+  if (imageUri) {
+    return (
+      <div
+        className="relative rounded-full overflow-hidden bg-slate-700 shrink-0"
+        style={{ width: size, height: size }}
+      >
+        <Image
+          src={resolveIpfsUrl(imageUri)}
+          alt={name ?? "Perfil"}
+          fill
+          className="object-cover"
+          sizes={`${size}px`}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shrink-0 font-bold text-white"
+      style={{ width: size, height: size, fontSize: size * 0.3 }}
+    >
+      {initials}
+    </div>
+  );
+}
 
 export default function ProfilePage() {
-  const { address, isConnected } = useAccount(); // ✅ corrigido
+  const { address, isConnected } = useAccount();
   const { collections, isLoading: isLoadingCollections } = useCollections();
-
-  // Na Opção A, o perfil mostra NFTs de TODAS as coleções do usuário
-  // O seletor permite filtrar por coleção
   const [selectedCollection, setSelectedCollection] = useState<string>("");
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   const activeCollection =
     selectedCollection ||
     (collections.length > 0 ? collections[0].contractAddress : "");
 
-  // ✅ usa useProfileNFTs de useCollections (não de useProfileNFTs separado)
   const { nfts, isLoading: isLoadingNFTs } = useProfileNFTs(
     address,
     activeCollection || undefined,
   );
-
   const isLoading = isLoadingCollections || isLoadingNFTs;
+
+  useEffect(() => {
+    if (!address) return;
+
+    const load = async () => {
+      setIsLoadingProfile(true);
+      const p = await fetchProfile(address);
+      setProfile(p);
+      setIsLoadingProfile(false);
+    };
+
+    load();
+  }, [address]);
 
   if (!isConnected) {
     return (
@@ -49,13 +112,62 @@ export default function ProfilePage() {
       <div className="max-w-7xl mx-auto px-4 py-10">
         {/* Header */}
         <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 mb-8">
-          <p className="text-slate-400 text-sm mb-2">Carteira Conectada</p>
-          <h2 className="text-xl font-mono font-bold break-all">{address}</h2>
-          <p className="text-slate-500 text-sm mt-2">
-            {isLoading
-              ? "Carregando..."
-              : `${nfts.length} NFT${nfts.length !== 1 ? "s" : ""} encontrado${nfts.length !== 1 ? "s" : ""}`}
-          </p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            {/* Avatar */}
+            {isLoadingProfile ? (
+              <div className="w-24 h-24 rounded-full bg-slate-800 animate-pulse shrink-0" />
+            ) : (
+              <ProfileAvatar
+                imageUri={profile?.imageUri}
+                name={profile?.name}
+                size={96}
+              />
+            )}
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              {isLoadingProfile ? (
+                <div className="h-7 bg-slate-800 rounded animate-pulse w-40 mb-2" />
+              ) : (
+                <h2 className="text-xl font-bold mb-1">
+                  {profile?.name || (
+                    <span className="text-slate-500 italic font-normal">
+                      Sem nome
+                    </span>
+                  )}
+                </h2>
+              )}
+
+              <div className="flex items-center gap-2">
+                <p className="text-slate-400 text-sm font-mono truncate">
+                  {address}
+                </p>
+                <a
+                  href={`https://sepolia.etherscan.io/address/${address}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-slate-500 hover:text-slate-300 transition-colors shrink-0"
+                >
+                  <ExternalLink size={13} />
+                </a>
+              </div>
+
+              <p className="text-slate-500 text-sm mt-1">
+                {isLoading
+                  ? "Carregando..."
+                  : `${nfts.length} NFT${nfts.length !== 1 ? "s" : ""}`}
+              </p>
+            </div>
+
+            {/* Botão de editar perfil */}
+            <Link
+              href="/profile/edit"
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 font-medium px-4 py-2.5 rounded-xl transition-all text-sm shrink-0"
+            >
+              <Pencil size={14} />
+              Editar Perfil
+            </Link>
+          </div>
         </div>
 
         {/* Filtro de coleções */}
@@ -95,6 +207,7 @@ export default function ProfilePage() {
           </div>
         ) : nfts.length === 0 ? (
           <div className="text-center py-20">
+            <User size={48} className="text-slate-700 mx-auto mb-4" />
             <p className="text-slate-400 mb-4">
               {collections.length === 0
                 ? "Nenhuma coleção existe ainda."
@@ -110,11 +223,10 @@ export default function ProfilePage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {nfts.map((nft: CollectionNFTItem) => (
-              // ✅ Passa nftContract via query param
               <Link
                 href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
                 key={`${nft.nftContract}-${nft.tokenId}`}
-                className="group bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-blue-500 transition-all cursor-pointer"
+                className="group bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-blue-500 transition-all"
               >
                 <div className="aspect-square relative bg-slate-800">
                   {nft.image ? (

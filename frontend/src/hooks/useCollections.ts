@@ -6,7 +6,8 @@ import {
   useWaitForTransactionReceipt,
   useConnection, // ✅ corrigido: era useConnection
 } from "wagmi";
-import { parseEther, formatEther } from "viem";
+import { parseEther, formatEther, createPublicClient, http } from "viem";
+import { sepolia } from "viem/chains";
 import { useEffect, useState } from "react";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
@@ -19,6 +20,11 @@ const FACTORY_ADDRESS = process.env
   .NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS as `0x${string}`;
 
 const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
+
+const publicClient = createPublicClient({
+  chain: sepolia,
+  transport: http(`https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`),
+});
 
 // ─────────────────────────────────────────────
 // Tipos
@@ -144,9 +150,38 @@ export function useCollections() {
     query: { enabled: !!FACTORY_ADDRESS },
   });
 
-  const collections = (raw as CollectionInfo[] | undefined) ?? [];
+  const [collections, setCollections] = useState<CollectionInfo[]>([]);
+  const [isLoadingSupply, setIsLoadingSupply] = useState(false);
 
-  return { collections, isLoading, refetch };
+  // Busca totalSupply de cada coleção após carregar a lista
+  useEffect(() => {
+    const rawCollections = (raw as CollectionInfo[] | undefined) ?? [];
+    if (rawCollections.length === 0) return;
+
+    const fetchSupplies = async () => {
+      setIsLoadingSupply(true);
+      const withSupply = await Promise.all(
+        rawCollections.map(async (c) => {
+          try {
+            const supply = (await publicClient.readContract({
+              address: c.contractAddress,
+              abi: NFT_COLLECTION_ABI,
+              functionName: "totalSupply",
+            })) as bigint;
+            return { ...c, totalSupply: supply };
+          } catch {
+            return { ...c, totalSupply: BigInt(0) };
+          }
+        }),
+      );
+      setCollections(withSupply);
+      setIsLoadingSupply(false);
+    };
+
+    fetchSupplies();
+  }, [raw]);
+
+  return { collections, isLoading: isLoading || isLoadingSupply, refetch };
 }
 
 // ─────────────────────────────────────────────

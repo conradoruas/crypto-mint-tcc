@@ -6,6 +6,7 @@ import { Navbar } from "@/components/NavBar";
 import { Upload, Plus, Loader2, ChevronDown } from "lucide-react";
 import { uploadMetadataToIPFS } from "@/services/Pinata";
 import { useMintToCollection, useCollections } from "@/hooks/useCollections"; // ✅ usa nova arquitetura
+import { TooltipButton } from "@/components/TooltipButton";
 import { formatEther } from "viem";
 import Link from "next/link";
 
@@ -185,10 +186,22 @@ export default function CreateNFT() {
             </div>
           </div>
 
-          <button
+          <TooltipButton
             onClick={handleCreateNFT}
             disabled={
-              isLoading || !isConnected || collections.length === 0 || isSoldOut
+              isLoading ||
+              !isConnected ||
+              collections.length === 0 ||
+              !!isSoldOut
+            }
+            tooltip={
+              isSoldOut
+                ? `Supply esgotado — todos os ${chosenCollection?.maxSupply.toString()} NFTs já foram mintados`
+                : !isConnected
+                  ? "Conecte sua carteira para mintar"
+                  : collections.length === 0
+                    ? "Nenhuma coleção disponível"
+                    : undefined
             }
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all"
           >
@@ -203,10 +216,12 @@ export default function CreateNFT() {
                 ? "Aguardando MetaMask..."
                 : isConfirming
                   ? "Confirmando na Rede..."
-                  : chosenCollection
-                    ? `Criar NFT — ${formatEther(chosenCollection.mintPrice)} ETH`
-                    : "Criar NFT (Mint)"}
-          </button>
+                  : isSoldOut
+                    ? "Supply Esgotado"
+                    : chosenCollection
+                      ? `Criar NFT — ${formatEther(chosenCollection.mintPrice)} ETH`
+                      : "Criar NFT (Mint)"}
+          </TooltipButton>
 
           {isSuccess && (
             <div className="mt-4 p-4 bg-green-500/10 border border-green-500 rounded-xl text-green-500 text-sm text-center">
