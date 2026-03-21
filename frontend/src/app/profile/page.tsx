@@ -9,8 +9,15 @@ import {
 } from "@/hooks/useCollections";
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { Pencil, User, ExternalLink } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import {
+  Pencil,
+  User,
+  ExternalLink,
+  Search,
+  X,
+  SlidersHorizontal,
+} from "lucide-react";
 import { fetchProfile, UserProfile } from "@/services/profile";
 
 const resolveIpfsUrl = (url: string) => {
@@ -19,6 +26,57 @@ const resolveIpfsUrl = (url: string) => {
     return url.replace("ipfs://", "https://ipfs.io/ipfs/");
   return url;
 };
+
+// ─────────────────────────────────────────────
+// Tipos de ordenação
+// ─────────────────────────────────────────────
+
+type SortOption = "default" | "id_asc" | "id_desc" | "name_asc" | "name_desc";
+
+const SORT_LABELS: Record<SortOption, string> = {
+  default: "Padrão",
+  id_asc: "ID crescente",
+  id_desc: "ID decrescente",
+  name_asc: "Nome A→Z",
+  name_desc: "Nome Z→A",
+};
+
+// ─────────────────────────────────────────────
+// Filtro e ordenação
+// ─────────────────────────────────────────────
+
+function filterAndSort(
+  nfts: CollectionNFTItem[],
+  search: string,
+  sort: SortOption,
+): CollectionNFTItem[] {
+  const filtered = nfts.filter((nft) => {
+    if (!search.trim()) return true;
+    return (
+      nft.name.toLowerCase().includes(search.toLowerCase()) ||
+      nft.tokenId.includes(search.trim())
+    );
+  });
+
+  const sorted = [...filtered];
+
+  switch (sort) {
+    case "id_asc":
+      return sorted.sort((a, b) => parseInt(a.tokenId) - parseInt(b.tokenId));
+    case "id_desc":
+      return sorted.sort((a, b) => parseInt(b.tokenId) - parseInt(a.tokenId));
+    case "name_asc":
+      return sorted.sort((a, b) => a.name.localeCompare(b.name));
+    case "name_desc":
+      return sorted.sort((a, b) => b.name.localeCompare(a.name));
+    default:
+      return sorted;
+  }
+}
+
+// ─────────────────────────────────────────────
+// Avatar
+// ─────────────────────────────────────────────
 
 function ProfileAvatar({
   imageUri,
@@ -65,33 +123,49 @@ function ProfileAvatar({
   );
 }
 
+// ─────────────────────────────────────────────
+// Página principal
+// ─────────────────────────────────────────────
+
 export default function ProfilePage() {
   const { address, isConnected } = useAccount();
   const { collections, isLoading: isLoadingCollections } = useCollections();
+
   const [selectedCollection, setSelectedCollection] = useState<string>("");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
-  const activeCollection =
-    selectedCollection ||
-    (collections.length > 0 ? collections[0].contractAddress : "");
+  // Busca e ordenação
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortOption>("default");
 
   const { nfts, isLoading: isLoadingNFTs } = useProfileNFTs(
     address,
-    activeCollection || undefined,
+    selectedCollection || undefined,
   );
+
   const isLoading = isLoadingCollections || isLoadingNFTs;
+
+  const displayedNFTs = useMemo(
+    () => filterAndSort(nfts, search, sort),
+    [nfts, search, sort],
+  );
+
+  const hasActiveFilters = search !== "" || sort !== "default";
+
+  const clearFilters = () => {
+    setSearch("");
+    setSort("default");
+  };
 
   useEffect(() => {
     if (!address) return;
-
     const load = async () => {
       setIsLoadingProfile(true);
       const p = await fetchProfile(address);
       setProfile(p);
       setIsLoadingProfile(false);
     };
-
     load();
   }, [address]);
 
@@ -110,10 +184,9 @@ export default function ProfilePage() {
     <main className="min-h-screen bg-slate-950 text-white">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 py-10">
-        {/* Header */}
+        {/* ─── Header do perfil ─── */}
         <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 mb-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-            {/* Avatar */}
             {isLoadingProfile ? (
               <div className="w-24 h-24 rounded-full bg-slate-800 animate-pulse shrink-0" />
             ) : (
@@ -124,7 +197,6 @@ export default function ProfilePage() {
               />
             )}
 
-            {/* Info */}
             <div className="flex-1 min-w-0">
               {isLoadingProfile ? (
                 <div className="h-7 bg-slate-800 rounded animate-pulse w-40 mb-2" />
@@ -155,11 +227,12 @@ export default function ProfilePage() {
               <p className="text-slate-500 text-sm mt-1">
                 {isLoading
                   ? "Carregando..."
-                  : `${nfts.length} NFT${nfts.length !== 1 ? "s" : ""}`}
+                  : displayedNFTs.length === nfts.length
+                    ? `${nfts.length} NFT${nfts.length !== 1 ? "s" : ""}${selectedCollection ? " nesta coleção" : " no total"}`
+                    : `${displayedNFTs.length} de ${nfts.length} NFTs`}
               </p>
             </div>
 
-            {/* Botão de editar perfil */}
             <Link
               href="/profile/edit"
               className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 font-medium px-4 py-2.5 rounded-xl transition-all text-sm shrink-0"
@@ -170,15 +243,25 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Filtro de coleções */}
-        {!isLoadingCollections && collections.length > 1 && (
-          <div className="flex gap-2 flex-wrap mb-8">
+        {/* ─── Filtro de coleções ─── */}
+        {!isLoadingCollections && collections.length > 0 && (
+          <div className="flex gap-2 flex-wrap mb-6">
+            <button
+              onClick={() => setSelectedCollection("")}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                selectedCollection === ""
+                  ? "bg-blue-600 text-white"
+                  : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
+              }`}
+            >
+              Todas
+            </button>
             {collections.map((c) => (
               <button
                 key={c.contractAddress}
                 onClick={() => setSelectedCollection(c.contractAddress)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                  activeCollection === c.contractAddress
+                  selectedCollection === c.contractAddress
                     ? "bg-blue-600 text-white"
                     : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
                 }`}
@@ -189,7 +272,59 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Grid de NFTs */}
+        {/* ─── Busca e ordenação ─── */}
+        {!isLoading && nfts.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            {/* Busca */}
+            <div className="relative flex-1">
+              <Search
+                size={16}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
+              />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nome ou ID..."
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-white text-sm outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-600"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Ordenação */}
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortOption)}
+              className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none min-w-[160px]"
+            >
+              {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
+                <option key={key} value={key}>
+                  {SORT_LABELS[key]}
+                </option>
+              ))}
+            </select>
+
+            {/* Limpar filtros */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-all whitespace-nowrap"
+              >
+                <X size={14} />
+                Limpar
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ─── Grid de NFTs ─── */}
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4].map((i) => (
@@ -209,20 +344,32 @@ export default function ProfilePage() {
           <div className="text-center py-20">
             <User size={48} className="text-slate-700 mx-auto mb-4" />
             <p className="text-slate-400 mb-4">
-              {collections.length === 0
-                ? "Nenhuma coleção existe ainda."
-                : "Você não possui NFTs nesta coleção."}
+              {selectedCollection
+                ? "Você não possui NFTs nesta coleção."
+                : collections.length === 0
+                  ? "Nenhuma coleção existe ainda."
+                  : "Você não possui nenhum NFT."}
             </p>
-            <Link
-              href="/create"
-              className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-xl font-bold transition-all"
+          </div>
+        ) : displayedNFTs.length === 0 ? (
+          <div className="text-center py-20 border border-dashed border-slate-800 rounded-3xl">
+            <Search size={40} className="text-slate-700 mx-auto mb-4" />
+            <h3 className="text-lg font-bold mb-2">
+              Nenhum resultado encontrado
+            </h3>
+            <p className="text-slate-400 mb-6 text-sm">
+              Tente buscar por outro nome ou ajustar os filtros.
+            </p>
+            <button
+              onClick={clearFilters}
+              className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 font-medium px-5 py-2.5 rounded-xl transition-all text-sm"
             >
-              {collections.length === 0 ? "Criar Coleção" : "Mintar um NFT"}
-            </Link>
+              <X size={14} /> Limpar filtros
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {nfts.map((nft: CollectionNFTItem) => (
+            {displayedNFTs.map((nft: CollectionNFTItem) => (
               <Link
                 href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
                 key={`${nft.nftContract}-${nft.tokenId}`}
@@ -245,7 +392,7 @@ export default function ProfilePage() {
                   <p className="text-xs text-blue-400 font-medium mb-1">
                     #{nft.tokenId.padStart(3, "0")}
                   </p>
-                  <h3 className="font-bold">{nft.name}</h3>
+                  <h3 className="font-bold truncate">{nft.name}</h3>
                 </div>
               </Link>
             ))}

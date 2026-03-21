@@ -56,6 +56,7 @@ interface AlchemyNFT {
   name?: string;
   description?: string;
   tokenUri?: string;
+  contract?: { address: string };
   image?: {
     cachedUrl?: string;
     originalUrl?: string;
@@ -76,13 +77,13 @@ const resolveIpfsUrl = (url: string) => {
 
 export function useProfileNFTs(
   ownerAddress: string | undefined,
-  collectionAddress?: string,
+  collectionAddress?: string, // undefined = todas as coleções
 ) {
   const [nfts, setNfts] = useState<CollectionNFTItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const nftContract =
-    collectionAddress ?? process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS;
+  // Busca todas as coleções para saber os endereços
+  const { collections } = useCollections();
 
   useEffect(() => {
     if (!ownerAddress) {
@@ -90,10 +91,27 @@ export function useProfileNFTs(
       return;
     }
 
-    const fetchNFTs = async () => {
+    const load = async () => {
+      setIsLoading(true);
       try {
+        // Se passou um endereço específico, busca só nele
+        // Se não, busca em todas as coleções da factory
+        const contractList = collectionAddress
+          ? [collectionAddress]
+          : collections.map((c) => c.contractAddress);
+
+        if (contractList.length === 0) {
+          setNfts([]);
+          return;
+        }
+
+        // Monta os query params com múltiplos contratos
+        const contractParams = contractList
+          .map((addr) => `contractAddresses[]=${addr}`)
+          .join("&");
+
         const res = await fetch(
-          `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForOwner?owner=${ownerAddress}&contractAddresses[]=${nftContract}&withMetadata=true`,
+          `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForOwner?owner=${ownerAddress}&${contractParams}&withMetadata=true`,
         );
         const data = await res.json();
 
@@ -114,7 +132,9 @@ export function useProfileNFTs(
               name: nft.name ?? `NFT #${nft.tokenId}`,
               description: nft.description ?? "",
               image,
-              nftContract: nftContract as string,
+              // ✅ pega o contrato real de cada NFT retornado pela Alchemy
+              nftContract:
+                (nft as any).contract?.address ?? collectionAddress ?? "",
             };
           }),
         );
@@ -127,12 +147,16 @@ export function useProfileNFTs(
       }
     };
 
-    fetchNFTs();
-  }, [ownerAddress, nftContract]);
+    // Só busca quando tiver coleções carregadas (ou endereço específico)
+    if (collectionAddress || collections.length > 0) {
+      load();
+    } else {
+      setIsLoading(false);
+    }
+  }, [ownerAddress, collectionAddress, collections.length]);
 
   return { nfts, isLoading };
 }
-
 // ─────────────────────────────────────────────
 // useCollections
 // Busca todas as coleções criadas na factory

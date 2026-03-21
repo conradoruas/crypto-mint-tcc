@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { formatEther, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
+import { useCollections, CollectionInfo } from "@/hooks/useCollections";
 
 export interface NFTItem {
   tokenId: string;
@@ -181,6 +182,94 @@ export function useExploreNFTs(collectionAddress?: string) {
 
     fetchNFTs();
   }, [nftContract]);
+
+  return { nfts, isLoading };
+}
+
+// Busca NFTs de TODAS as coleções e agrega em uma lista única
+export function useExploreAllNFTs(collectionAddress?: string) {
+  const { collections } = useCollections(); // importa de useCollections
+  const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Se passou um endereço específico, delega para useExploreNFTs normal
+    // Caso contrário, busca em todas as coleções
+    if (collections.length === 0) {
+      setIsLoading(false);
+      return;
+    }
+
+    const targets = collectionAddress
+      ? [collectionAddress]
+      : collections.map((c) => c.contractAddress);
+
+    const fetchAll = async () => {
+      setIsLoading(true);
+      try {
+        const results = await Promise.all(
+          targets.map(async (addr) => {
+            const res = await fetch(
+              `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${addr}&withMetadata=true&refreshCache=false`,
+            );
+            const data = await res.json();
+
+            return Promise.all(
+              (data.nfts ?? []).map(async (nft: AlchemyNFT) => {
+                let image =
+                  nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
+                if (!image && nft.tokenUri) {
+                  try {
+                    const metaRes = await fetch(resolveIpfsUrl(nft.tokenUri));
+                    const meta = await metaRes.json();
+                    image = resolveIpfsUrl(meta.image ?? "");
+                  } catch {
+                    image = "";
+                  }
+                }
+
+                let listingPrice: string | null = null;
+                try {
+                  const listing = (await publicClient.readContract({
+                    address: MARKETPLACE_ADDRESS,
+                    abi: NFT_MARKETPLACE_ABI,
+                    functionName: "getListing",
+                    args: [addr as `0x${string}`, BigInt(nft.tokenId)],
+                  })) as { seller: string; price: bigint; active: boolean };
+                  if (listing.active) listingPrice = formatEther(listing.price);
+                } catch {
+                  listingPrice = null;
+                }
+
+                const topOffer = await fetchTopOffer(
+                  addr as `0x${string}`,
+                  nft.tokenId,
+                );
+
+                return {
+                  tokenId: nft.tokenId,
+                  name: nft.name ?? `NFT #${nft.tokenId}`,
+                  description: nft.description ?? "",
+                  image,
+                  nftContract: addr,
+                  listingPrice,
+                  topOffer,
+                } as NFTItemWithMarket;
+              }),
+            );
+          }),
+        );
+
+        setNfts(results.flat());
+      } catch (error) {
+        console.error("Erro ao buscar todos os NFTs:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAll();
+  }, [collectionAddress, collections.length]);
 
   return { nfts, isLoading };
 }
