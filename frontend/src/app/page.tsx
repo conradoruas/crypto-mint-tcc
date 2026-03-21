@@ -238,42 +238,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── CTA final ─── */}
-      <section className="max-w-3xl mx-auto px-4 pb-28 text-center">
-        <div className="p-12 rounded-3xl border border-slate-800 bg-slate-900/40 relative overflow-hidden">
-          {/* Glow interno */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.07) 0%, transparent 60%)",
-            }}
-          />
-
-          <h2 className="text-3xl md:text-4xl font-black mb-4 tracking-tight">
-            Pronto para começar?
-          </h2>
-          <p className="text-slate-400 mb-8 leading-relaxed">
-            Crie sua primeira coleção em minutos e comece a mintar NFTs na
-            Sepolia.
-          </p>
-          <div className="flex flex-wrap gap-4 justify-center">
-            <Link
-              href="/collections/create"
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-8 py-4 rounded-2xl font-bold transition-all hover:scale-105 text-sm shadow-lg shadow-blue-900/30"
-            >
-              <Layers size={18} /> Criar Coleção
-            </Link>
-            <Link
-              href="/explore"
-              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-8 py-4 rounded-2xl font-bold transition-all border border-slate-700 text-sm"
-            >
-              <LayoutGrid size={18} /> Explorar NFTs
-            </Link>
-          </div>
-        </div>
-      </section>
-
       {/* ─── Footer ─── */}
       <footer className="border-t border-slate-900 py-10 px-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-600">

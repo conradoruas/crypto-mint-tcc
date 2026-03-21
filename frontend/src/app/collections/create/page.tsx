@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useConnection } from "wagmi";
 import { Navbar } from "@/components/NavBar";
 import { Upload, Plus, Loader2, Info } from "lucide-react";
-import { uploadFileToIPFS } from "@/services/Pinata";
+import { uploadFileToIPFS } from "@/services/pinata";
 import { useCreateCollection } from "@/hooks/useCollections";
 
 export default function CreateCollectionPage() {

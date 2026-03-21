@@ -16,7 +16,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { formatEther } from "viem";
-import { uploadMetadataToIPFS } from "@/services/Pinata";
+import { uploadMetadataToIPFS } from "@/services/pinata";
 import {
   useCollectionDetails,
   useCollectionNFTs,

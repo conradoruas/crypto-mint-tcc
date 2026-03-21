@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccount } from "wagmi";
+import { useConnection } from "wagmi";
 import { Navbar } from "@/components/NavBar";
 import {
   useProfileNFTs,
@@ -128,7 +128,7 @@ function ProfileAvatar({
 // ─────────────────────────────────────────────
 
 export default function ProfilePage() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useConnection();
   const { collections, isLoading: isLoadingCollections } = useCollections();
 
   const [selectedCollection, setSelectedCollection] = useState<string>("");

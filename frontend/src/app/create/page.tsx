@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useConnection } from "wagmi"; // ✅ corrigido: era useConnection
 import { Navbar } from "@/components/NavBar";
 import { Upload, Plus, Loader2, ChevronDown } from "lucide-react";
-import { uploadMetadataToIPFS } from "@/services/Pinata";
+import { uploadMetadataToIPFS } from "@/services/pinata";
 import { useMintToCollection, useCollections } from "@/hooks/useCollections"; // ✅ usa nova arquitetura
 import { TooltipButton } from "@/components/TooltipButton";
 import { formatEther } from "viem";

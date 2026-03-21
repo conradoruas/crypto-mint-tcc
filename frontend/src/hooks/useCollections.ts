@@ -4,7 +4,7 @@ import {
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
-  useConnection, // ✅ corrigido: era useConnection
+  useConnection,
 } from "wagmi";
 import { parseEther, formatEther, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
@@ -132,7 +132,6 @@ export function useProfileNFTs(
               name: nft.name ?? `NFT #${nft.tokenId}`,
               description: nft.description ?? "",
               image,
-              // ✅ pega o contrato real de cada NFT retornado pela Alchemy
               nftContract:
                 (nft as any).contract?.address ?? collectionAddress ?? "",
             };
@@ -269,11 +268,11 @@ export function useCreateCollection() {
 // ─────────────────────────────────────────────
 
 export function useMintToCollection() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
+  const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
-  const { address } = useConnection(); // ✅ corrigido
+  const { address } = useConnection();
 
   const mint = async (
     collectionAddress: `0x${string}`,
@@ -285,7 +284,6 @@ export function useMintToCollection() {
     if (!to) throw new Error("Carteira não conectada");
 
     await mutateAsync({
-      // ✅ corrigido
       address: collectionAddress,
       abi: NFT_COLLECTION_ABI,
       functionName: "mint",

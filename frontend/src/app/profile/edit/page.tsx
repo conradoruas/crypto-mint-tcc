@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccount } from "wagmi";
+import { useConnection } from "wagmi";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/NavBar";
 import Image from "next/image";
@@ -36,7 +36,7 @@ async function uploadImageToIPFS(file: File): Promise<string> {
 }
 
 export default function EditProfilePage() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useConnection();
   const router = useRouter();
 
   // Dados atuais do perfil
