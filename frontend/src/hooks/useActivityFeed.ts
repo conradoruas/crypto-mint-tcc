@@ -9,7 +9,14 @@ import {
   fallback,
 } from "viem";
 import { sepolia } from "viem/chains";
+import { useQuery } from "@apollo/client/react";
 import { useCollections } from "@/hooks/useCollections";
+import {
+  GET_ACTIVITY_FEED,
+  GET_ACTIVITY_FEED_ALL,
+} from "@/lib/graphql/queries";
+
+const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 const MARKETPLACE_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
@@ -18,11 +25,10 @@ const INFURA_KEY = process.env.NEXT_PUBLIC_INFURA_API_KEY;
 
 const publicClient = createPublicClient({
   chain: sepolia,
-  // O fallback garante que se um nó estiver instável, o outro assume
   transport: fallback([
     http(`https://sepolia.infura.io/v3/${INFURA_KEY}`),
-    http("https://rpc.ankr.com/eth_sepolia"), // RPC alternativo com bom limite de logs
-    http(), // RPC público padrão do viem
+    http("https://rpc.ankr.com/eth_sepolia"),
+    http(),
   ]),
 });
 
@@ -79,27 +85,53 @@ const NFT_MINTED_ABI = parseAbiItem(
 // Hook principal
 // ─────────────────────────────────────────────
 
-export function useActivityFeed(
-  filterContract?: string, // filtra por coleção específica
-  limit = 50,
-) {
-  const [events, setEvents] = useState<ActivityEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export function useActivityFeed(filterContract?: string, limit = 50) {
+  // ── GraphQL path ──
+  type GqlEvent = {
+    id: string;
+    type: string;
+    nftContract: string;
+    tokenId: string;
+    from: string;
+    to?: string;
+    price?: string;
+    timestamp: string;
+    txHash: string;
+  };
+  type GqlActivityData = { activityEvents: GqlEvent[] };
+
+  const { data: gqlAll, loading: loadingAll } = useQuery<GqlActivityData>(
+    GET_ACTIVITY_FEED_ALL,
+    {
+      skip: !SUBGRAPH_ENABLED || !!filterContract,
+      variables: { first: limit },
+    },
+  );
+
+  const { data: gqlFiltered, loading: loadingFiltered } =
+    useQuery<GqlActivityData>(GET_ACTIVITY_FEED, {
+      skip: !SUBGRAPH_ENABLED || !filterContract,
+      variables: { first: limit, nftContract: filterContract },
+    });
+
+  // ── RPC path ──
+  const [rpcEvents, setRpcEvents] = useState<ActivityEvent[]>([]);
+  const [rpcLoading, setRpcLoading] = useState(true);
   const { collections } = useCollections();
 
   useEffect(() => {
-    if (collections.length === 0) return;
+    if (SUBGRAPH_ENABLED) return;
+    // Only wait for collections when filtering by one (needed to find mint events)
+    if (filterContract && collections.length === 0) return;
 
     const fetch = async () => {
-      setIsLoading(true);
+      setRpcLoading(true);
       try {
-        // Bloco atual para limitar o range (últimos ~7 dias ≈ 50400 blocos)
         const latestBlock = await publicClient.getBlockNumber();
-        const fromBlock = latestBlock - BigInt(7200);
+        const fromBlock = latestBlock - BigInt(7200 * 7); // ~6h on Sepolia
 
         const allEvents: ActivityEvent[] = [];
 
-        // ─── 1. Eventos do Marketplace ───
         const [
           soldLogs,
           listedLogs,
@@ -146,7 +178,6 @@ export function useActivityFeed(
           }),
         ]);
 
-        // Vendas
         for (const log of soldLogs) {
           const { nftContract, tokenId, seller, buyer, price } = log.args as {
             nftContract: string;
@@ -173,7 +204,6 @@ export function useActivityFeed(
           });
         }
 
-        // Listagens
         for (const log of listedLogs) {
           const { nftContract, tokenId, seller, price } = log.args as {
             nftContract: string;
@@ -198,7 +228,6 @@ export function useActivityFeed(
           });
         }
 
-        // Listagens canceladas
         for (const log of cancelledLogs) {
           const { nftContract, tokenId, seller } = log.args as {
             nftContract: string;
@@ -221,7 +250,6 @@ export function useActivityFeed(
           });
         }
 
-        // Ofertas feitas
         for (const log of offerMadeLogs) {
           const { nftContract, tokenId, buyer, amount } = log.args as {
             nftContract: string;
@@ -246,7 +274,6 @@ export function useActivityFeed(
           });
         }
 
-        // Ofertas aceitas
         for (const log of offerAcceptedLogs) {
           const { nftContract, tokenId, seller, buyer, amount } = log.args as {
             nftContract: string;
@@ -273,7 +300,6 @@ export function useActivityFeed(
           });
         }
 
-        // Ofertas canceladas
         for (const log of offerCancelledLogs) {
           const { nftContract, tokenId, buyer } = log.args as {
             nftContract: string;
@@ -296,79 +322,91 @@ export function useActivityFeed(
           });
         }
 
-        // ─── 2. Eventos de Mint (por coleção) ───
-        const targetCollections = filterContract
-          ? collections.filter(
-              (c) =>
-                c.contractAddress.toLowerCase() ===
-                filterContract.toLowerCase(),
-            )
-          : collections;
-
-        const mintLogs = await Promise.all(
-          targetCollections.map((c) =>
-            publicClient
+        // Mint events — only when filtering by a specific collection
+        // (avoids N getLogs calls across all collections in the global feed)
+        if (filterContract) {
+          const targetCollection = collections.find(
+            (c) =>
+              c.contractAddress.toLowerCase() === filterContract.toLowerCase(),
+          );
+          if (targetCollection) {
+            const mintLogs = await publicClient
               .getLogs({
-                address: c.contractAddress,
+                address: targetCollection.contractAddress,
                 event: NFT_MINTED_ABI,
                 fromBlock,
                 toBlock: "latest",
               })
-              .catch(() => []),
-          ),
-        );
+              .catch(() => []);
 
-        for (let i = 0; i < targetCollections.length; i++) {
-          const collection = targetCollections[i];
-          for (const log of mintLogs[i]) {
-            const { to, tokenId } = log.args as {
-              to: string;
-              tokenId: bigint;
-              tokenUri: string;
-            };
-            allEvents.push({
-              id: `mint-${log.transactionHash}-${tokenId}`,
-              type: "mint",
-              nftContract: collection.contractAddress,
-              tokenId: tokenId.toString(),
-              from: to,
-              txHash: log.transactionHash ?? "",
-              blockNumber: log.blockNumber ?? BigInt(0),
-            });
+            for (const log of mintLogs) {
+              const { to, tokenId } = log.args as {
+                to: string;
+                tokenId: bigint;
+                tokenUri: string;
+              };
+              allEvents.push({
+                id: `mint-${log.transactionHash}-${tokenId}`,
+                type: "mint",
+                nftContract: targetCollection.contractAddress,
+                tokenId: tokenId.toString(),
+                from: to,
+                txHash: log.transactionHash ?? "",
+                blockNumber: log.blockNumber ?? BigInt(0),
+              });
+            }
           }
         }
 
-        // ─── 3. Busca timestamps dos blocos únicos ───
-        const uniqueBlocks = [...new Set(allEvents.map((e) => e.blockNumber))];
-        const blockTimestamps = new Map<bigint, number>();
+        // Estimate timestamps from block numbers — no extra RPC calls needed.
+        // Sepolia avg block time ≈ 12s.
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const estimateTimestamp = (blockNumber: bigint) =>
+          nowSeconds - Number(latestBlock - blockNumber) * 12;
 
-        await Promise.all(
-          uniqueBlocks.map(async (blockNumber) => {
-            try {
-              const block = await publicClient.getBlock({ blockNumber });
-              blockTimestamps.set(blockNumber, Number(block.timestamp));
-            } catch {
-              /* ignora */
-            }
-          }),
-        );
-
-        // ─── 4. Ordena por bloco mais recente ───
         const sorted = allEvents
-          .map((e) => ({ ...e, timestamp: blockTimestamps.get(e.blockNumber) }))
+          .map((e) => ({
+            ...e,
+            timestamp: estimateTimestamp(e.blockNumber),
+          }))
           .sort((a, b) => Number(b.blockNumber - a.blockNumber))
           .slice(0, limit);
 
-        setEvents(sorted);
+        setRpcEvents(sorted);
       } catch (error) {
         console.error("Erro ao buscar atividade:", error);
       } finally {
-        setIsLoading(false);
+        setRpcLoading(false);
       }
     };
 
     fetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collections.length, filterContract, limit]);
 
-  return { events, isLoading };
+  if (SUBGRAPH_ENABLED) {
+    const rawEvents: GqlEvent[] =
+      (filterContract ? gqlFiltered?.activityEvents : gqlAll?.activityEvents) ??
+      [];
+
+    const events: ActivityEvent[] = rawEvents.map((e) => ({
+      id: e.id,
+      type: e.type as ActivityType,
+      nftContract: e.nftContract,
+      tokenId: e.tokenId,
+      from: e.from,
+      to: e.to,
+      priceETH: e.price ? formatEther(BigInt(e.price)) : undefined,
+      txHash: e.txHash,
+      blockNumber: BigInt(0),
+      timestamp: e.timestamp ? Number(e.timestamp) : undefined,
+    }));
+
+    return {
+      events,
+      isLoading: filterContract ? loadingFiltered : loadingAll,
+    };
+  }
+
+  return { events: rpcEvents, isLoading: rpcLoading };
 }

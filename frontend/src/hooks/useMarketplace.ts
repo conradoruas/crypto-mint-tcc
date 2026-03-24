@@ -4,13 +4,17 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
   useReadContract,
-  useConnection, // ✅ corrigido: era useConnection
+  useConnection,
 } from "wagmi";
 import { parseEther, formatEther, createPublicClient, http } from "viem";
 import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@apollo/client/react";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { sepolia } from "viem/chains";
+import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
+
+const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 // ✅ Separado: marketplace genérico tem seu próprio endereço
 const MARKETPLACE_ADDRESS = process.env
@@ -126,14 +130,37 @@ export function useMyOffer(nftContract: string, tokenId: string) {
 // ─────────────────────────────────────────────
 
 export function useNFTOffers(nftContract: string, tokenId: string) {
-  const [offers, setOffers] = useState<OfferWithBuyer[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [topOffer, setTopOffer] = useState<string | null>(null);
+  // ── GraphQL path ──
+  type GqlOffer = {
+    id: string;
+    buyer: string;
+    amount: string;
+    expiresAt: string;
+    active: boolean;
+  };
+  type GqlOffersData = { offers: GqlOffer[] };
+
+  const {
+    data: gqlData,
+    loading: gqlLoading,
+    refetch: gqlRefetch,
+  } = useQuery<GqlOffersData>(GET_OFFERS_FOR_NFT, {
+    skip: !SUBGRAPH_ENABLED || !nftContract || !tokenId,
+    variables: {
+      nftContract: nftContract?.toLowerCase(),
+      tokenId: tokenId,
+    },
+  });
+
+  // ── RPC path ──
+  const [rpcOffers, setRpcOffers] = useState<OfferWithBuyer[]>([]);
+  const [rpcLoading, setRpcLoading] = useState(false);
+  const [rpcTopOffer, setRpcTopOffer] = useState<string | null>(null);
   const [hasFetched, setHasFetched] = useState(false);
 
-  const fetchOffers = useCallback(async () => {
-    if (!nftContract || !tokenId || hasFetched) return;
-    setIsLoading(true);
+  const fetchRpcOffers = useCallback(async () => {
+    if (SUBGRAPH_ENABLED || !nftContract || !tokenId || hasFetched) return;
+    setRpcLoading(true);
 
     try {
       const buyers = (await publicClient.readContract({
@@ -144,8 +171,8 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
       })) as `0x${string}`[];
 
       if (buyers.length === 0) {
-        setOffers([]);
-        setTopOffer(null);
+        setRpcOffers([]);
+        setRpcTopOffer(null);
         setHasFetched(true);
         return;
       }
@@ -176,27 +203,51 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
         )
         .sort((a, b) => (b.amount > a.amount ? 1 : -1));
 
-      setOffers(activeOffers);
-      setTopOffer(
+      setRpcOffers(activeOffers);
+      setRpcTopOffer(
         activeOffers.length > 0 ? formatEther(activeOffers[0].amount) : null,
       );
     } catch (error) {
       console.error("Erro ao buscar ofertas:", error);
     } finally {
-      setIsLoading(false);
+      setRpcLoading(false);
       setHasFetched(true);
     }
   }, [nftContract, tokenId, hasFetched]);
 
   useEffect(() => {
-    fetchOffers();
-  }, [fetchOffers]);
+    fetchRpcOffers();
+  }, [fetchRpcOffers]);
 
   const refetch = useCallback(() => {
-    setHasFetched(false);
-  }, []);
+    if (SUBGRAPH_ENABLED) {
+      gqlRefetch();
+    } else {
+      setHasFetched(false);
+    }
+  }, [gqlRefetch]);
 
-  return { offers, isLoading, topOffer, refetch };
+  if (SUBGRAPH_ENABLED) {
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const gqlOffers = (gqlData?.offers ?? [])
+      .filter((o) => o.active && BigInt(o.expiresAt) > now)
+      .map((o) => ({
+        buyer: o.buyer as `0x${string}`,
+        buyerAddress: o.buyer as `0x${string}`,
+        amount: BigInt(o.amount),
+        expiresAt: BigInt(o.expiresAt),
+        active: true,
+      })) as OfferWithBuyer[];
+
+    return {
+      offers: gqlOffers,
+      isLoading: gqlLoading,
+      topOffer: gqlOffers.length > 0 ? formatEther(gqlOffers[0].amount) : null,
+      refetch,
+    };
+  }
+
+  return { offers: rpcOffers, isLoading: rpcLoading, topOffer: rpcTopOffer, refetch };
 }
 
 // ─────────────────────────────────────────────

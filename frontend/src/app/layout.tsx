@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Manrope } from "next/font/google";
 import { Web3Provider } from "@/components/Web3Provider";
+import { ApolloProvider } from "@/components/ApolloProvider";
 
 import "./globals.css";
 
@@ -35,9 +36,11 @@ export default function RootLayout({
       className={`dark ${spaceGrotesk.variable} ${manrope.variable}`}
     >
       <body suppressHydrationWarning>
-        <Web3Provider>
-          <div className="min-h-full flex flex-col">{children}</div>
-        </Web3Provider>
+        <ApolloProvider>
+          <Web3Provider>
+            <div className="min-h-full flex flex-col">{children}</div>
+          </Web3Provider>
+        </ApolloProvider>
       </body>
     </html>
   );

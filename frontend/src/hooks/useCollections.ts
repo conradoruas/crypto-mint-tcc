@@ -9,12 +9,16 @@ import {
 import { parseEther, formatEther, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { useEffect, useState } from "react";
+import { useQuery } from "@apollo/client/react";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
+import { GET_COLLECTIONS } from "@/lib/graphql/queries";
 
 // ─────────────────────────────────────────────
 // Endereços
 // ─────────────────────────────────────────────
+
+const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 const FACTORY_ADDRESS = process.env
   .NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS as `0x${string}`;
@@ -77,12 +81,11 @@ const resolveIpfsUrl = (url: string) => {
 
 export function useProfileNFTs(
   ownerAddress: string | undefined,
-  collectionAddress?: string, // undefined = todas as coleções
+  collectionAddress?: string,
 ) {
   const [nfts, setNfts] = useState<CollectionNFTItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Busca todas as coleções para saber os endereços
   const { collections } = useCollections();
 
   useEffect(() => {
@@ -94,8 +97,6 @@ export function useProfileNFTs(
     const load = async () => {
       setIsLoading(true);
       try {
-        // Se passou um endereço específico, busca só nele
-        // Se não, busca em todas as coleções da factory
         const contractList = collectionAddress
           ? [collectionAddress]
           : collections.map((c) => c.contractAddress);
@@ -105,7 +106,6 @@ export function useProfileNFTs(
           return;
         }
 
-        // Monta os query params com múltiplos contratos
         const contractParams = contractList
           .map((addr) => `contractAddresses[]=${addr}`)
           .join("&");
@@ -146,7 +146,6 @@ export function useProfileNFTs(
       }
     };
 
-    // Só busca quando tiver coleções carregadas (ou endereço específico)
     if (collectionAddress || collections.length > 0) {
       load();
     } else {
@@ -156,28 +155,52 @@ export function useProfileNFTs(
 
   return { nfts, isLoading };
 }
+
 // ─────────────────────────────────────────────
 // useCollections
 // Busca todas as coleções criadas na factory
 // ─────────────────────────────────────────────
 
 export function useCollections() {
+  // ── GraphQL path ──
+  type GqlCollectionsData = { collections: GqlCollection[] };
+  type GqlCollection = {
+    contractAddress: string;
+    creator: string;
+    name: string;
+    symbol: string;
+    description?: string;
+    image?: string;
+    maxSupply?: string;
+    mintPrice?: string;
+    createdAt?: string;
+    totalSupply?: string;
+  };
+  const {
+    data: gqlData,
+    loading: gqlLoading,
+    refetch: gqlRefetch,
+  } = useQuery<GqlCollectionsData>(GET_COLLECTIONS, {
+    skip: !SUBGRAPH_ENABLED,
+  });
+
+  // ── RPC path ──
   const {
     data: raw,
-    isLoading,
-    refetch,
+    isLoading: rpcLoading,
+    refetch: rpcRefetch,
   } = useReadContract({
     address: FACTORY_ADDRESS,
     abi: NFT_COLLECTION_FACTORY_ABI,
     functionName: "getAllCollections",
-    query: { enabled: !!FACTORY_ADDRESS },
+    query: { enabled: !!FACTORY_ADDRESS && !SUBGRAPH_ENABLED },
   });
 
-  const [collections, setCollections] = useState<CollectionInfo[]>([]);
+  const [rpcCollections, setRpcCollections] = useState<CollectionInfo[]>([]);
   const [isLoadingSupply, setIsLoadingSupply] = useState(false);
 
-  // Busca totalSupply de cada coleção após carregar a lista
   useEffect(() => {
+    if (SUBGRAPH_ENABLED) return;
     const rawCollections = (raw as CollectionInfo[] | undefined) ?? [];
     if (rawCollections.length === 0) return;
 
@@ -197,14 +220,40 @@ export function useCollections() {
           }
         }),
       );
-      setCollections(withSupply);
+      setRpcCollections(withSupply);
       setIsLoadingSupply(false);
     };
 
     fetchSupplies();
   }, [raw]);
 
-  return { collections, isLoading: isLoading || isLoadingSupply, refetch };
+  if (SUBGRAPH_ENABLED) {
+    const collections: CollectionInfo[] = (gqlData?.collections ?? []).map(
+      (c) => ({
+        contractAddress: c.contractAddress as `0x${string}`,
+        creator: c.creator as `0x${string}`,
+        name: c.name,
+        symbol: c.symbol,
+        description: c.description ?? "",
+        image: c.image ?? "",
+        maxSupply: BigInt(c.maxSupply ?? 0),
+        mintPrice: BigInt(c.mintPrice ?? 0),
+        createdAt: BigInt(c.createdAt ?? 0),
+        totalSupply: BigInt(c.totalSupply ?? 0),
+      }),
+    );
+    return {
+      collections,
+      isLoading: gqlLoading,
+      refetch: gqlRefetch as () => void,
+    };
+  }
+
+  return {
+    collections: rpcCollections,
+    isLoading: rpcLoading || isLoadingSupply,
+    refetch: rpcRefetch as () => void,
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -213,7 +262,7 @@ export function useCollections() {
 // ─────────────────────────────────────────────
 
 export function useCreatorCollections() {
-  const { address } = useConnection(); // ✅ corrigido
+  const { address } = useConnection();
   const { collections, isLoading } = useCollections();
 
   const myCollections = collections.filter(
@@ -229,7 +278,7 @@ export function useCreatorCollections() {
 // ─────────────────────────────────────────────
 
 export function useCreateCollection() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
+  const { data: hash, mutateAsync, isPending } = useWriteContract();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,

@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
 import { formatEther, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
+import { useQuery } from "@apollo/client/react";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
-import { useCollections, CollectionInfo } from "@/hooks/useCollections";
+import { useCollections } from "@/hooks/useCollections";
+import {
+  GET_ALL_NFTS,
+  GET_NFTS_FOR_CONTRACT,
+} from "@/lib/graphql/queries";
+
+const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 export interface NFTItem {
   tokenId: string;
@@ -98,21 +105,139 @@ async function fetchTopOffer(
   }
 }
 
+// ─── GraphQL types ───
+
+type GqlListing = { id: string; price: string; active: boolean; seller: string };
+type GqlOffer = { id: string; amount: string; buyer: string; expiresAt?: string };
+type GqlNFT = {
+  id: string;
+  tokenId: string;
+  tokenUri?: string;
+  owner: string;
+  collection?: { id: string; contractAddress: string; name: string; symbol: string };
+  listing?: GqlListing | null;
+  offers?: GqlOffer[];
+};
+type GqlNFTsData = { nfts: GqlNFT[] };
+
+// Fetch Alchemy metadata for a contract, returns a map tokenId -> {name, description, image}
+async function fetchAlchemyMetadata(
+  contractAddress: string,
+): Promise<Map<string, { name: string; description: string; image: string }>> {
+  const map = new Map<
+    string,
+    { name: string; description: string; image: string }
+  >();
+  try {
+    const res = await fetch(
+      `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${contractAddress}&withMetadata=true&refreshCache=false`,
+    );
+    const data = await res.json();
+    for (const nft of data.nfts ?? []) {
+      let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
+      if (!image && nft.tokenUri) {
+        try {
+          const metaRes = await fetch(resolveIpfsUrl(nft.tokenUri));
+          const meta = await metaRes.json();
+          image = resolveIpfsUrl(meta.image ?? "");
+        } catch {
+          image = "";
+        }
+      }
+      map.set(nft.tokenId, {
+        name: nft.name ?? `NFT #${nft.tokenId}`,
+        description: nft.description ?? "",
+        image,
+      });
+    }
+  } catch {
+    /* ignora */
+  }
+  return map;
+}
+
+// Merge subgraph NFTs (listing/offer data) with Alchemy metadata
+async function mergeWithAlchemy(
+  nfts: GqlNFT[],
+  collectionAddress?: string,
+): Promise<NFTItemWithMarket[]> {
+  // Group by contract address
+  const byContract = new Map<string, GqlNFT[]>();
+  for (const nft of nfts) {
+    const addr = (
+      nft.collection?.contractAddress ?? collectionAddress ?? ""
+    ).toLowerCase();
+    if (!byContract.has(addr)) byContract.set(addr, []);
+    byContract.get(addr)!.push(nft);
+  }
+
+  // Fetch Alchemy metadata for all contracts in parallel
+  const metaMaps = await Promise.all(
+    [...byContract.keys()].map(async (addr) => ({
+      addr,
+      meta: await fetchAlchemyMetadata(addr),
+    })),
+  );
+  const metaByContract = new Map(metaMaps.map(({ addr, meta }) => [addr, meta]));
+
+  return nfts.map((nft) => {
+    const addr = (
+      nft.collection?.contractAddress ?? collectionAddress ?? ""
+    ).toLowerCase();
+    const meta = metaByContract.get(addr)?.get(nft.tokenId);
+    const activeListing = nft.listing?.active ? nft.listing : null;
+    const topOfferRaw = nft.offers?.[0]?.amount;
+
+    return {
+      tokenId: nft.tokenId,
+      name: meta?.name ?? `NFT #${nft.tokenId}`,
+      description: meta?.description ?? "",
+      image: meta?.image ?? "",
+      nftContract: nft.collection?.contractAddress ?? collectionAddress ?? "",
+      listingPrice: activeListing
+        ? formatEther(BigInt(activeListing.price))
+        : null,
+      topOffer: topOfferRaw ? formatEther(BigInt(topOfferRaw)) : null,
+    } as NFTItemWithMarket;
+  });
+}
+
 // ─────────────────────────────────────────────
-// useExploreNFTs
-// Aceita collectionAddress para buscar NFTs de uma coleção específica.
-// Na Opção A, sempre passa o endereço da coleção — não há "coleção padrão".
+// useExploreNFTs — busca NFTs de uma coleção específica
 // ─────────────────────────────────────────────
 
 export function useExploreNFTs(collectionAddress?: string) {
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // ✅ collectionAddress é obrigatório na Opção A
-  // Se não vier, retorna vazio — o Explorer deve passar o endereço da coleção
+  // ── GraphQL path ──
+  const { data: gqlData, loading: gqlQueryLoading } =
+    useQuery<GqlNFTsData>(GET_NFTS_FOR_CONTRACT, {
+      skip: !SUBGRAPH_ENABLED || !collectionAddress,
+      variables: { collection: collectionAddress?.toLowerCase() },
+    });
+
+  useEffect(() => {
+    if (!SUBGRAPH_ENABLED || !collectionAddress) return;
+    if (gqlQueryLoading) return;
+    const raw = gqlData?.nfts ?? [];
+    if (raw.length === 0) {
+      setNfts([]);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    mergeWithAlchemy(raw, collectionAddress).then((items: NFTItemWithMarket[]) => {
+      setNfts(items);
+      setIsLoading(false);
+    });
+  }, [gqlData, gqlQueryLoading, collectionAddress]);
+
+  // ── RPC path ──
   const nftContract = collectionAddress as `0x${string}` | undefined;
 
   useEffect(() => {
+    if (SUBGRAPH_ENABLED) return;
     if (!nftContract) {
       setNfts([]);
       setIsLoading(false);
@@ -186,15 +311,52 @@ export function useExploreNFTs(collectionAddress?: string) {
   return { nfts, isLoading };
 }
 
-// Busca NFTs de TODAS as coleções e agrega em uma lista única
+// ─────────────────────────────────────────────
+// useExploreAllNFTs — busca NFTs de todas as coleções
+// ─────────────────────────────────────────────
+
 export function useExploreAllNFTs(collectionAddress?: string) {
-  const { collections } = useCollections(); // importa de useCollections
+  const { collections } = useCollections();
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // ── GraphQL path: all NFTs ──
+  const { data: gqlAllData, loading: gqlAllLoading } =
+    useQuery<GqlNFTsData>(GET_ALL_NFTS, {
+      skip: !SUBGRAPH_ENABLED || !!collectionAddress,
+      variables: { first: 200 },
+    });
+
+  // ── GraphQL path: filtered by collection ──
+  const { data: gqlColData, loading: gqlColLoading } =
+    useQuery<GqlNFTsData>(GET_NFTS_FOR_CONTRACT, {
+      skip: !SUBGRAPH_ENABLED || !collectionAddress,
+      variables: { collection: collectionAddress?.toLowerCase() },
+    });
+
   useEffect(() => {
-    // Se passou um endereço específico, delega para useExploreNFTs normal
-    // Caso contrário, busca em todas as coleções
+    if (!SUBGRAPH_ENABLED) return;
+    const loading = collectionAddress ? gqlColLoading : gqlAllLoading;
+    if (loading) return;
+    const raw = collectionAddress
+      ? (gqlColData?.nfts ?? [])
+      : (gqlAllData?.nfts ?? []);
+
+    if (raw.length === 0) {
+      setNfts([]);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    mergeWithAlchemy(raw, collectionAddress).then((items: NFTItemWithMarket[]) => {
+      setNfts(items);
+      setIsLoading(false);
+    });
+  }, [gqlAllData, gqlColData, gqlAllLoading, gqlColLoading, collectionAddress]);
+
+  // ── RPC path ──
+  useEffect(() => {
+    if (SUBGRAPH_ENABLED) return;
     if (collections.length === 0) {
       setIsLoading(false);
       return;
@@ -269,6 +431,7 @@ export function useExploreAllNFTs(collectionAddress?: string) {
     };
 
     fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionAddress, collections.length]);
 
   return { nfts, isLoading };

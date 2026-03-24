@@ -1,0 +1,15 @@
+{
+  "name": "cryptomint-subgraph",
+  "version": "1.0.0",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "graph deploy --studio cryptomint",
+    "create-local": "graph create --node http://localhost:8020/ cryptomint",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 cryptomint"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "^0.81.0",
+    "@graphprotocol/graph-ts": "^0.35.1"
+  }
+}

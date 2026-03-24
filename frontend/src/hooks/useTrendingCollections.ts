@@ -3,9 +3,13 @@
 import { useEffect, useState } from "react";
 import { createPublicClient, http, formatEther, parseAbiItem } from "viem";
 import { sepolia } from "viem/chains";
+import { useQuery } from "@apollo/client/react";
 import { useCollections } from "@/hooks/useCollections";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
+import { GET_TRENDING_COLLECTIONS } from "@/lib/graphql/queries";
+
+const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 const MARKETPLACE_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
@@ -13,19 +17,16 @@ const MARKETPLACE_ADDRESS = process.env
 const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 const INFURA_KEY = process.env.NEXT_PUBLIC_INFURA_API_KEY;
 
-// Alchemy: readContract, owners API
 const publicClient = createPublicClient({
   chain: sepolia,
   transport: http(`https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`),
 });
 
-// Infura: getLogs (suporta ranges maiores que Alchemy free tier)
 const infuraClient = createPublicClient({
   chain: sepolia,
   transport: http(`https://sepolia.infura.io/v3/${INFURA_KEY}`),
 });
 
-// ─── Eventos ───
 const ITEM_SOLD_ABI = parseAbiItem(
   "event ItemSold(address indexed nftContract, uint256 indexed tokenId, address seller, address buyer, uint256 price)",
 );
@@ -59,21 +60,49 @@ export interface TrendingCollection {
 // Hook principal
 // ─────────────────────────────────────────────
 
+type GqlCollectionStats = {
+  totalVolume?: string;
+  volume24h?: string;
+  totalSales?: string;
+  sales24h?: string;
+  floorPrice?: string;
+  lastSaleTimestamp?: string;
+};
+type GqlTrendingCollection = {
+  contractAddress: string;
+  name: string;
+  symbol: string;
+  image?: string;
+  mintPrice?: string;
+  maxSupply?: string;
+  totalSupply?: string;
+  stats?: GqlCollectionStats;
+};
+type GqlTrendingData = { collections: GqlTrendingCollection[] };
+
 export function useTrendingCollections(limit = 10) {
   const [trending, setTrending] = useState<TrendingCollection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // ── GraphQL path ──
+  const { data: gqlData, loading: gqlLoading } = useQuery<GqlTrendingData>(
+    GET_TRENDING_COLLECTIONS,
+    { skip: !SUBGRAPH_ENABLED },
+  );
+
+  // ── RPC path ──
   const { collections } = useCollections();
 
   useEffect(() => {
+    if (SUBGRAPH_ENABLED) return;
     if (collections.length === 0) return;
 
     const fetchData = async () => {
       setIsLoading(true);
       try {
         const latestBlock = await infuraClient.getBlockNumber();
-        const fromBlock24h = latestBlock - BigInt(7200); // ~24h
-        const fromBlock7d = latestBlock - BigInt(50400); // ~7 dias
+        const fromBlock24h = latestBlock - BigInt(7200);
+        const fromBlock7d = latestBlock - BigInt(50400);
 
         const soldLogs = await infuraClient.getLogs({
           address: MARKETPLACE_ADDRESS,
@@ -104,16 +133,13 @@ export function useTrendingCollections(limit = 10) {
           collections.map(async (col) => {
             const addr = col.contractAddress.toLowerCase();
 
-            // ─── Vendas 24h ───
             const sales = soldLogs.filter(
               (l) =>
-                (
-                  l.args as { nftContract: string }
-                ).nftContract?.toLowerCase() === addr,
+                (l.args as { nftContract: string }).nftContract?.toLowerCase() ===
+                addr,
             );
             const sales24h = sales.length;
 
-            // ─── Volume 24h ───
             const volume24hWei = sales.reduce(
               (acc, l) =>
                 acc + ((l.args as { price: bigint }).price ?? BigInt(0)),
@@ -121,16 +147,16 @@ export function useTrendingCollections(limit = 10) {
             );
             const volume24h = parseFloat(formatEther(volume24hWei)).toFixed(4);
 
-            // ─── Sparkline (últimas vendas) ───
             const floorHistory = sales
               .map((l) =>
                 parseFloat(
-                  formatEther((l.args as { price: bigint }).price ?? BigInt(0)),
+                  formatEther(
+                    (l.args as { price: bigint }).price ?? BigInt(0),
+                  ),
                 ),
               )
               .slice(-8);
 
-            // ─── Floor price atual (menor listagem ativa — readContract via Alchemy) ───
             let floorPrice: string | null = null;
             try {
               const colListings = listedLogs7d.filter(
@@ -166,7 +192,6 @@ export function useTrendingCollections(limit = 10) {
               /* ignora */
             }
 
-            // ─── Variação do floor 24h ───
             let floorChange24h: number | null = null;
             if (floorHistory.length >= 2) {
               const first = floorHistory[0];
@@ -174,7 +199,6 @@ export function useTrendingCollections(limit = 10) {
               if (first > 0) floorChange24h = ((last - first) / first) * 100;
             }
 
-            // ─── Top offer ───
             let topOffer: string | null = null;
             const offersSorted = offerLogs
               .filter(
@@ -189,7 +213,6 @@ export function useTrendingCollections(limit = 10) {
               topOffer = parseFloat(formatEther(offersSorted[0])).toFixed(4);
             }
 
-            // ─── Owners únicos via Alchemy ───
             let owners = 0;
             try {
               const res = await globalThis.fetch(
@@ -201,7 +224,6 @@ export function useTrendingCollections(limit = 10) {
               /* ignora */
             }
 
-            // ─── % listado ───
             let listedPct: string | null = null;
             try {
               const totalSupply = (await publicClient.readContract({
@@ -255,7 +277,44 @@ export function useTrendingCollections(limit = 10) {
     };
 
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collections.length, limit]);
+
+  if (SUBGRAPH_ENABLED) {
+    const cols = gqlData?.collections ?? [];
+    const mapped: TrendingCollection[] = cols
+      .map((c) => {
+        const stats = c.stats;
+        const floorRaw = stats?.floorPrice;
+        const floorPrice = floorRaw
+          ? parseFloat(formatEther(BigInt(floorRaw))).toFixed(4)
+          : null;
+        const vol24hRaw = stats?.volume24h ?? "0";
+        const volume24h = parseFloat(formatEther(BigInt(vol24hRaw))).toFixed(4);
+        const topOfferRaw = null; // not indexed per-collection in subgraph
+        const sales24h = Number(stats?.sales24h ?? 0);
+        const listedPct = null; // not tracked at collection level
+
+        return {
+          contractAddress: c.contractAddress,
+          name: c.name,
+          symbol: c.symbol,
+          image: c.image ?? "",
+          floorPrice,
+          floorChange24h: null,
+          topOffer: topOfferRaw,
+          sales24h,
+          owners: 0,
+          listedPct,
+          volume24h,
+          floorHistory: [],
+        } as TrendingCollection;
+      })
+      .sort((a, b) => parseFloat(b.volume24h) - parseFloat(a.volume24h))
+      .slice(0, limit);
+
+    return { trending: mapped, isLoading: gqlLoading };
+  }
 
   return { trending, isLoading };
 }

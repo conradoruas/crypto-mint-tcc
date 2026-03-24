@@ -1,0 +1,83 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: NFTCollectionFactory
+    network: sepolia
+    source:
+      address: "0x6840a22e29e3ca1dee6c44dbdee25b459dc561a2"
+      abi: NFTCollectionFactory
+      startBlock: 7500000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Collection
+        - MarketplaceStats
+      abis:
+        - name: NFTCollectionFactory
+          file: ./abis/NFTCollectionFactory.json
+      eventHandlers:
+        - event: CollectionCreated(indexed address,indexed address,string,indexed uint256)
+          handler: handleCollectionCreated
+      file: ./src/factory.ts
+
+  - kind: ethereum
+    name: NFTMarketplace
+    network: sepolia
+    source:
+      address: "0xa04EBb648a56332EFA07c369eeF5fCa26Aa0A36C"
+      abi: NFTMarketplace
+      startBlock: 7500000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Listing
+        - Offer
+        - ActivityEvent
+        - MarketplaceStats
+        - CollectionStats
+      abis:
+        - name: NFTMarketplace
+          file: ./abis/NFTMarketplace.json
+      eventHandlers:
+        - event: ItemListed(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleItemListed
+        - event: ItemSold(indexed address,indexed uint256,address,address,uint256)
+          handler: handleItemSold
+        - event: ListingCancelled(indexed address,indexed uint256,indexed address)
+          handler: handleListingCancelled
+        - event: OfferMade(indexed address,indexed uint256,indexed address,uint256,uint256)
+          handler: handleOfferMade
+        - event: OfferAccepted(indexed address,indexed uint256,address,address,uint256)
+          handler: handleOfferAccepted
+        - event: OfferCancelled(indexed address,indexed uint256,indexed address)
+          handler: handleOfferCancelled
+      file: ./src/marketplace.ts
+
+templates:
+  - kind: ethereum
+    name: NFTCollection
+    network: sepolia
+    source:
+      abi: NFTCollection
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - NFT
+        - Collection
+        - ActivityEvent
+        - MarketplaceStats
+      abis:
+        - name: NFTCollection
+          file: ./abis/NFTCollection.json
+      eventHandlers:
+        - event: NFTMinted(indexed address,indexed uint256,string)
+          handler: handleNFTMinted
+      file: ./src/collection.ts

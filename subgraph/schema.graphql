@@ -1,0 +1,84 @@
+type Collection @entity {
+  id: ID!
+  contractAddress: Bytes!
+  creator: Bytes!
+  name: String!
+  symbol: String!
+  description: String!
+  image: String!
+  maxSupply: BigInt!
+  mintPrice: BigInt!
+  totalSupply: BigInt!
+  createdAt: BigInt!
+  collectionId: BigInt!
+  nfts: [NFT!]! @derivedFrom(field: "collection")
+  stats: CollectionStats
+}
+
+type NFT @entity {
+  id: ID!
+  tokenId: BigInt!
+  tokenUri: String!
+  owner: Bytes!
+  collection: Collection!
+  mintedAt: BigInt!
+  listing: Listing
+  offers: [Offer!]! @derivedFrom(field: "nft")
+}
+
+type Listing @entity {
+  id: ID!
+  nftContract: Bytes!
+  tokenId: BigInt!
+  seller: Bytes!
+  price: BigInt!
+  active: Boolean!
+  nft: NFT
+  createdAt: BigInt!
+  updatedAt: BigInt!
+}
+
+type Offer @entity {
+  id: ID!
+  nftContract: Bytes!
+  tokenId: BigInt!
+  buyer: Bytes!
+  amount: BigInt!
+  expiresAt: BigInt!
+  active: Boolean!
+  nft: NFT
+  createdAt: BigInt!
+}
+
+type ActivityEvent @entity {
+  id: ID!
+  type: String!
+  nftContract: Bytes!
+  tokenId: BigInt!
+  from: Bytes!
+  to: Bytes
+  price: BigInt
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+type MarketplaceStats @entity {
+  id: ID!
+  totalCollections: BigInt!
+  totalNFTs: BigInt!
+  totalListed: BigInt!
+  totalVolume: BigInt!
+  totalSales: BigInt!
+}
+
+type CollectionStats @entity {
+  id: ID!
+  collection: Collection!
+  totalVolume: BigInt!
+  volume24h: BigInt!
+  totalSales: BigInt!
+  sales24h: BigInt!
+  floorPrice: BigInt
+  lastSaleTimestamp: BigInt!
+}
