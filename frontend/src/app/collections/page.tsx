@@ -15,8 +15,6 @@ const resolveIpfsUrl = (url: string) => {
 };
 
 function CollectionCard({ collection }: { collection: CollectionInfo }) {
-  console.log(collection.image);
-  console.log(collection);
   const image = resolveIpfsUrl(collection.image);
   const mintPriceEth = formatEther(collection.mintPrice);
 
@@ -117,7 +115,7 @@ export default function CollectionsPage() {
             <p className="text-slate-400">
               {isLoading
                 ? "Carregando..."
-                : `${collections.length} coleç${collections.length !== 1 ? "ões" : "ão"} criada${collections.length !== 1 ? "s" : ""}`}
+                : `${collections.length} coleção${collections.length !== 1 ? "ões" : ""} criada${collections.length !== 1 ? "s" : ""}`}
             </p>
           </div>
           <Link

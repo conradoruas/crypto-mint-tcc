@@ -1,239 +1,281 @@
 "use client";
 
 import { useState } from "react";
-import { useConnection } from "wagmi"; // ✅ corrigido: era useConnection
+import { useAccount, useReadContract } from "wagmi";
 import { Navbar } from "@/components/NavBar";
-import { Upload, Plus, Loader2, ChevronDown } from "lucide-react";
-import { uploadMetadataToIPFS } from "@/services/pinata";
-import { useMintToCollection, useCollections } from "@/hooks/useCollections"; // ✅ usa nova arquitetura
-import { TooltipButton } from "@/components/TooltipButton";
+import { Loader2, Plus, Layers, ShieldCheck } from "lucide-react";
+import { useCollections, useMintToCollection } from "@/hooks/useCollections";
+import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { formatEther } from "viem";
+import Image from "next/image";
 import Link from "next/link";
 
-export default function CreateNFT() {
-  const { address, isConnected } = useConnection(); // ✅ corrigido
-  const [file, setFile] = useState<File | null>(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
-  const [selectedCollection, setSelectedCollection] = useState("");
+const resolveIpfsUrl = (url: string) => {
+  if (!url) return "";
+  if (url.startsWith("ipfs://"))
+    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
+  return url;
+};
 
-  // ✅ Busca coleções da factory para o usuário escolher
+function CollectionOption({
+  collection,
+  selected,
+  onSelect,
+}: {
+  collection: {
+    contractAddress: string;
+    name: string;
+    symbol: string;
+    image: string;
+    mintPrice: bigint;
+    maxSupply: bigint;
+    totalSupply?: bigint;
+  };
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const { data: urisLoaded } = useReadContract({
+    address: collection.contractAddress as `0x${string}`,
+    abi: NFT_COLLECTION_ABI,
+    functionName: "urisLoaded",
+  });
+
+  const isSoldOut =
+    collection.totalSupply !== undefined &&
+    collection.totalSupply >= collection.maxSupply;
+  const unavailable = isSoldOut || !urisLoaded;
+  const image = resolveIpfsUrl(collection.image);
+
+  return (
+    <button
+      onClick={onSelect}
+      disabled={unavailable}
+      className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-4 ${
+        selected
+          ? "border-blue-500 bg-blue-500/10"
+          : unavailable
+            ? "border-slate-800 bg-slate-900/50 opacity-50 cursor-not-allowed"
+            : "border-slate-800 bg-slate-900 hover:border-slate-600 cursor-pointer"
+      }`}
+    >
+      <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden shrink-0 relative">
+        {image ? (
+          <Image
+            src={image}
+            alt={collection.name}
+            fill
+            className="object-cover"
+            sizes="64px"
+          />
+        ) : (
+          <div className="w-full h-full bg-slate-700" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="font-bold truncate">{collection.name}</p>
+          <span className="text-xs text-slate-500 font-mono shrink-0">
+            {collection.symbol}
+          </span>
+        </div>
+        <p className="text-sm text-blue-400 font-bold mt-0.5">
+          {formatEther(collection.mintPrice)} ETH
+        </p>
+        <p className="text-xs text-slate-500 mt-0.5">
+          {collection.totalSupply?.toString() ?? "?"} /{" "}
+          {collection.maxSupply.toString()} mintados
+          {isSoldOut && <span className="text-red-400 ml-1">· Esgotado</span>}
+          {!urisLoaded && !isSoldOut && (
+            <span className="text-yellow-400 ml-1">· Não disponível</span>
+          )}
+        </p>
+      </div>
+      {selected && <ShieldCheck size={20} className="text-blue-400 shrink-0" />}
+    </button>
+  );
+}
+
+export default function MintPage() {
+  const { address, isConnected } = useAccount();
   const { collections, isLoading: isLoadingCollections } = useCollections();
-
-  // ✅ usa useMintToCollection em vez de useMintNFT
+  const [selectedCollection, setSelectedCollection] = useState("");
+  const [mintSuccess, setMintSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const { mint, isPending, isConfirming, isSuccess, hash } =
     useMintToCollection();
 
-  const chosenCollection = collections.find(
+  const chosen = collections.find(
     (c) => c.contractAddress === selectedCollection,
   );
 
-  const isSoldOut =
-    chosenCollection &&
-    chosenCollection.totalSupply !== undefined &&
-    Number(chosenCollection.totalSupply) >= Number(chosenCollection.maxSupply);
+  if (isSuccess && hash && !mintSuccess) setMintSuccess(hash);
 
-  const handleCreateNFT = async () => {
-    if (!file || !name) {
-      alert("Por favor, preencha o nome e selecione uma imagem.");
+  const handleMint = async () => {
+    setError(null);
+    if (!address || !selectedCollection || !chosen) {
+      setError("Selecione uma coleção e conecte sua carteira.");
       return;
     }
-    if (!address) {
-      alert("Conecte sua carteira antes de criar um NFT.");
-      return;
-    }
-    if (!selectedCollection) {
-      alert("Selecione uma coleção para mintar o NFT.");
-      return;
-    }
-
-    if (isSoldOut) {
-      alert("Esta coleção já atingiu o limite máximo de NFTs.");
-      return;
-    }
-
     try {
-      setIsUploading(true);
-      const tokenUri = await uploadMetadataToIPFS(file, name, description);
-      console.log("✅ Upload confirmado:", tokenUri);
-
-      // ✅ Passa collectionAddress e mintPrice dinâmico da coleção escolhida
       await mint(
         selectedCollection as `0x${string}`,
-        tokenUri,
-        formatEther(chosenCollection!.mintPrice),
+        formatEther(chosen.mintPrice),
         address,
       );
-
-      console.log("✅ Mint realizado com sucesso");
-    } catch (error) {
-      console.error("Erro na criação:", error);
-      if (error instanceof Error) {
-        alert(`Erro: ${error.message}`);
-      } else {
-        alert("Erro desconhecido. Verifique o console.");
-      }
-    } finally {
-      setIsUploading(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro desconhecido.");
     }
   };
 
-  const isLoading = isUploading || isPending || isConfirming;
+  // ─── Tela de sucesso ───
+  if (mintSuccess) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white">
+        <Navbar />
+        <div className="max-w-lg mx-auto px-4 py-24 text-center">
+          <div className="w-20 h-20 bg-green-500/20 border border-green-500/40 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ShieldCheck size={36} className="text-green-400" />
+          </div>
+          <h1 className="text-3xl font-black mb-3">NFT Mintado!</h1>
+          <p className="text-slate-400 mb-6">
+            Seu NFT aleatório foi mintado com sucesso.
+          </p>
+          <a
+            href={`https://sepolia.etherscan.io/tx/${mintSuccess}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 underline text-sm block mb-8"
+          >
+            Ver transação no Etherscan
+          </a>
+          <div className="flex gap-4 justify-center">
+            <Link
+              href="/profile"
+              className="bg-blue-600 hover:bg-blue-700 font-bold px-6 py-3 rounded-xl transition-all"
+            >
+              Ver meu perfil
+            </Link>
+            <button
+              onClick={() => {
+                setMintSuccess(null);
+                setSelectedCollection("");
+              }}
+              className="bg-slate-800 hover:bg-slate-700 font-bold px-6 py-3 rounded-xl transition-all"
+            >
+              Mintar outro
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <Navbar />
-      <div className="max-w-3xl mx-auto px-4 py-16">
-        <h1 className="text-4xl font-bold mb-2">Criar Novo NFT</h1>
+      <div className="max-w-2xl mx-auto px-4 py-16">
+        <h1 className="text-4xl font-black mb-2">Mintar NFT</h1>
         <p className="text-slate-400 mb-10">
-          Faça o upload do seu arquivo e defina os metadados na blockchain.
+          Escolha uma coleção e receba um NFT{" "}
+          <strong className="text-white">aleatório</strong> dos disponíveis.
         </p>
 
-        <div className="space-y-8 bg-slate-900 p-8 rounded-3xl border border-slate-800">
-          {/* Seletor de coleção */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Coleção *</label>
+        <div className="space-y-6">
+          {/* ─── Seleção de coleção ─── */}
+          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
+            <h2 className="font-bold mb-4 flex items-center gap-2">
+              <Layers size={18} className="text-blue-400" />
+              Escolha uma coleção
+            </h2>
+
             {isLoadingCollections ? (
-              <div className="h-12 bg-slate-800 rounded-xl animate-pulse" />
+              <div className="space-y-3">
+                {[1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="h-20 bg-slate-800 rounded-2xl animate-pulse"
+                  />
+                ))}
+              </div>
             ) : collections.length === 0 ? (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 rounded-xl p-4 text-sm">
-                Nenhuma coleção disponível.{" "}
+              <div className="text-center py-10 border border-dashed border-slate-700 rounded-2xl">
+                <p className="text-slate-400 text-sm mb-4">
+                  Nenhuma coleção disponível.
+                </p>
                 <Link
                   href="/collections/create"
-                  className="underline font-bold"
+                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 font-bold px-5 py-2.5 rounded-xl text-sm transition-all"
                 >
-                  Criar uma coleção primeiro →
+                  <Plus size={14} /> Criar coleção
                 </Link>
               </div>
             ) : (
-              <div className="relative">
-                <select
-                  value={selectedCollection}
-                  onChange={(e) => setSelectedCollection(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
-                >
-                  <option value="">Selecione uma coleção...</option>
-                  {collections.map((c) => (
-                    <option key={c.contractAddress} value={c.contractAddress}>
-                      {c.name} ({c.symbol}) — {formatEther(c.mintPrice)} ETH
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={16}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                />
+              <div className="space-y-3">
+                {collections.map((c) => (
+                  <CollectionOption
+                    key={c.contractAddress}
+                    collection={c}
+                    selected={selectedCollection === c.contractAddress}
+                    onSelect={() => setSelectedCollection(c.contractAddress)}
+                  />
+                ))}
               </div>
             )}
-            {chosenCollection && (
-              <p className="text-xs text-slate-500 mt-1.5">
-                Supply: {chosenCollection.totalSupply?.toString() ?? "?"} /{" "}
-                {chosenCollection.maxSupply.toString()} mintados
-              </p>
-            )}
           </div>
 
-          {/* Upload de Imagem */}
-          <div>
-            <label className="block text-sm font-medium mb-4">Imagem</label>
-            <input
-              type="file"
-              id="file-upload"
-              className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-            <label
-              htmlFor="file-upload"
-              className={`border-2 border-dashed rounded-2xl p-12 text-center transition-colors cursor-pointer block
-                ${file ? "border-green-500 bg-green-500/5" : "border-slate-700 hover:border-blue-500"}`}
-            >
-              <Upload
-                className={`mx-auto mb-4 ${file ? "text-green-500" : "text-slate-500"}`}
-              />
-              <p className="text-sm text-slate-400">
-                {file
-                  ? `Selecionado: ${file.name}`
-                  : "Clique para selecionar seu arquivo"}
-              </p>
-            </label>
-          </div>
-
-          {/* Campos de Texto */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Nome do Item
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white"
-                placeholder="Ex: Cyber Punk #001"
-              />
+          {/* ─── Resumo ─── */}
+          {chosen && (
+            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-3">
+              <h2 className="font-bold">Resumo</h2>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Coleção</span>
+                <span className="font-medium">{chosen.name}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">NFT recebido</span>
+                <span className="font-medium text-slate-300">Aleatório 🎲</span>
+              </div>
+              <div className="border-t border-slate-800 pt-3 flex justify-between">
+                <span className="font-bold">Total</span>
+                <span className="font-black text-blue-400">
+                  {formatEther(chosen.mintPrice)} ETH
+                </span>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Descrição
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 h-32 outline-none text-white resize-none"
-                placeholder="Conte a história por trás deste ativo..."
-              />
-            </div>
-          </div>
+          )}
 
-          <TooltipButton
-            onClick={handleCreateNFT}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/40 text-red-400 text-sm rounded-xl p-4">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={handleMint}
             disabled={
-              isLoading ||
-              !isConnected ||
-              collections.length === 0 ||
-              !!isSoldOut
+              isPending || isConfirming || !isConnected || !selectedCollection
             }
-            tooltip={
-              isSoldOut
-                ? `Supply esgotado — todos os ${chosenCollection?.maxSupply.toString()} NFTs já foram mintados`
-                : !isConnected
-                  ? "Conecte sua carteira para mintar"
-                  : collections.length === 0
-                    ? "Nenhuma coleção disponível"
-                    : undefined
-            }
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all"
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all text-white"
           >
-            {isLoading ? (
-              <Loader2 className="animate-spin" size={20} />
+            {isPending || isConfirming ? (
+              <>
+                <Loader2 className="animate-spin" size={20} />
+                {isPending ? "Aguardando MetaMask..." : "Confirmando..."}
+              </>
             ) : (
-              <Plus size={20} />
+              <>
+                <Plus size={20} />
+                {chosen
+                  ? `Mintar NFT Aleatório — ${formatEther(chosen.mintPrice)} ETH`
+                  : "Mintar NFT"}
+              </>
             )}
-            {isUploading
-              ? "Subindo para IPFS..."
-              : isPending
-                ? "Aguardando MetaMask..."
-                : isConfirming
-                  ? "Confirmando na Rede..."
-                  : isSoldOut
-                    ? "Supply Esgotado"
-                    : chosenCollection
-                      ? `Criar NFT — ${formatEther(chosenCollection.mintPrice)} ETH`
-                      : "Criar NFT (Mint)"}
-          </TooltipButton>
+          </button>
 
-          {isSuccess && (
-            <div className="mt-4 p-4 bg-green-500/10 border border-green-500 rounded-xl text-green-500 text-sm text-center">
-              NFT Criado com sucesso! <br />
-              <a
-                href={`https://sepolia.etherscan.io/tx/${hash}`}
-                target="_blank"
-                className="underline font-bold"
-              >
-                Ver no Etherscan
-              </a>
-            </div>
+          {!isConnected && (
+            <p className="text-center text-slate-500 text-sm">
+              Conecte sua carteira para mintar
+            </p>
           )}
         </div>
       </div>

@@ -11,6 +11,7 @@ import {
   Box,
 } from "lucide-react";
 import { StatsSection } from "@/components/StatsSection";
+import { TrendingSection } from "@/components/TrendingSection";
 
 export default function Home() {
   return (
@@ -93,6 +94,9 @@ export default function Home() {
 
       {/* ─── Stats — componente client com dados reais ─── */}
       <StatsSection />
+
+      {/* ─── TrendingSection — componente client com dados reais das colecoes ─── */}
+      <TrendingSection />
 
       {/* ─── Como funciona ─── */}
       <section className="max-w-7xl mx-auto px-4 py-20">

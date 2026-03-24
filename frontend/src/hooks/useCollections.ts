@@ -276,7 +276,6 @@ export function useMintToCollection() {
 
   const mint = async (
     collectionAddress: `0x${string}`,
-    tokenUri: string,
     mintPriceInEth: string,
     recipientAddress?: `0x${string}`,
   ) => {
@@ -287,7 +286,7 @@ export function useMintToCollection() {
       address: collectionAddress,
       abi: NFT_COLLECTION_ABI,
       functionName: "mint",
-      args: [to, tokenUri],
+      args: [to],
       value: parseEther(mintPriceInEth),
       gas: BigInt(300000),
     });

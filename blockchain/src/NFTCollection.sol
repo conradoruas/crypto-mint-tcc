@@ -15,12 +15,11 @@ contract NFTCollection is ERC721URIStorage, ERC2981, Ownable {
     string  public collectionImage;
     address public factory;
 
-    event NFTMinted(address indexed to, uint256 indexed tokenId, string tokenUri);
+    // ✅ Lista de URIs pré-carregadas pelo dono
+    string[] private _tokenURIs;
+    bool     public  revealed; // false = metadata oculta até o reveal
 
-    modifier onlyFactory() {
-        _onlyFactory();
-        _;
-    }
+    event NFTMinted(address indexed to, uint256 indexed tokenId, string tokenUri);
 
     constructor(
         string memory _name,
@@ -39,19 +38,47 @@ contract NFTCollection is ERC721URIStorage, ERC2981, Ownable {
         factory               = _factory;
     }
 
-    function mint(address to, string memory tokenUri) external payable {
+    // ─── Dono carrega os URIs antes do lançamento ───
+    function loadTokenURIs(string[] calldata uris) external onlyOwner {
+        require(_nextTokenId == 0, "Mint ja iniciado");
+        require(uris.length == maxSupply, "Quantidade incorreta de URIs");
+        for (uint256 i = 0; i < uris.length; i++) {
+            _tokenURIs.push(uris[i]);
+        }
+    }
+
+    // ─── Mint público — recebe URI aleatória ───
+    function mint(address to) external payable {
+        require(_tokenURIs.length == maxSupply, "URIs nao carregadas");
         require(_nextTokenId < maxSupply, "Supply esgotado");
         require(msg.value >= mintPrice, "Valor insuficiente");
 
-        uint256 tokenId = _nextTokenId++;
-        _safeMint(to, tokenId);
-        _setTokenURI(tokenId, tokenUri);
+        // Pseudoaleatoriedade suficiente para TCC
+        // (produção usaria Chainlink VRF)
+        uint256 remaining = maxSupply - _nextTokenId;
+        uint256 randomIndex = uint256(
+            keccak256(abi.encodePacked(block.timestamp, block.prevrandao, to, _nextTokenId))
+        ) % remaining;
 
-        emit NFTMinted(to, tokenId, tokenUri);
+        // Troca o índice sorteado com o último disponível (Fisher-Yates)
+        uint256 tokenId = _nextTokenId;
+        string memory uri = _tokenURIs[randomIndex];
+        _tokenURIs[randomIndex] = _tokenURIs[remaining - 1];
+        _tokenURIs[remaining - 1] = uri;
+
+        _nextTokenId++;
+        _safeMint(to, tokenId);
+        _setTokenURI(tokenId, uri);
+
+        emit NFTMinted(to, tokenId, uri);
     }
 
     function totalSupply() external view returns (uint256) {
         return _nextTokenId;
+    }
+
+    function urisLoaded() external view returns (bool) {
+        return _tokenURIs.length == maxSupply;
     }
 
     function withdraw() external onlyOwner {
@@ -63,9 +90,5 @@ contract NFTCollection is ERC721URIStorage, ERC2981, Ownable {
         public view override(ERC721URIStorage, ERC2981) returns (bool)
     {
         return super.supportsInterface(interfaceId);
-    }
-
-    function _onlyFactory() internal view {
-      require(msg.sender == factory, "Apenas a factory pode chamar isso");
     }
 }

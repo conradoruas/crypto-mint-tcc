@@ -18,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-br">
-      <body className={inter.className}>
+      <body suppressHydrationWarning className={inter.className}>
         <Web3Provider>
           <div className="min-h-full flex flex-col">{children}</div>
         </Web3Provider>

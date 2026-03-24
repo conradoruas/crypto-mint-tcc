@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {NFTMarketplace} from "../src/NFTMarketplace.sol";
 import {NFTCollection} from "../src/NFTCollection.sol";
 import {NFTCollectionFactory} from "../src/NFTCollectionFactory.sol";
@@ -24,7 +24,7 @@ contract NFTMarketplaceTest is Test {
     uint256 constant LIST_PRICE   = 0.05 ether;
     uint256 constant OFFER_AMOUNT = 0.03 ether;
     uint256 constant FEE_BPS      = 250; // 2.5%
-    uint256 constant MAX_SUPPLY   = 10000;
+    uint256 constant MAX_SUPPLY   = 5;   // pequeno para facilitar loadTokenURIs nos testes
     string  constant TOKEN_URI    = "ipfs://QmTest123";
     string  constant COLLECTION_NAME   = "Test Collection";
     string  constant COLLECTION_SYMBOL = "TEST";
@@ -48,7 +48,7 @@ contract NFTMarketplaceTest is Test {
         vm.prank(owner);
         factory = new NFTCollectionFactory();
 
-        // Cria uma coleção via factory como seller
+        // Cria coleção com MAX_SUPPLY = 5
         vm.prank(seller);
         address collectionAddr = factory.createCollection(
             COLLECTION_NAME,
@@ -58,24 +58,37 @@ contract NFTMarketplaceTest is Test {
             MAX_SUPPLY,
             MINT_PRICE
         );
-
         collection = NFTCollection(collectionAddr);
+
+        // ✅ Carrega as URIs antes de qualquer mint
+        _loadURIs(collection, MAX_SUPPLY);
     }
 
     // ─────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────
 
+    /// Carrega N URIs no contrato da coleção (como owner/seller)
+    function _loadURIs(NFTCollection col, uint256 count) internal {
+        string[] memory uris = new string[](count);
+        for (uint256 i = 0; i < count; i++) {
+            uris[i] = string(abi.encodePacked("ipfs://QmTest", vm.toString(i)));
+        }
+        vm.prank(col.owner());
+        col.loadTokenURIs(uris);
+    }
+
     /// Minta um NFT para um endereço e retorna o tokenId
-    function _mintNft(address to) internal returns (uint256 tokenId) {
+    function _mintNFT(address to) internal returns (uint256 tokenId) {
         tokenId = collection.totalSupply();
         vm.prank(to);
-        collection.mint{value: MINT_PRICE}(to, TOKEN_URI);
+        // ✅ mint agora recebe só o endereço — URI é escolhida aleatoriamente pelo contrato
+        collection.mint{value: MINT_PRICE}(to);
     }
 
     /// Minta, aprova o marketplace e lista o NFT
     function _mintAndList(address listSeller, uint256 price) internal returns (uint256 tokenId) {
-        tokenId = _mintNft(listSeller);
+        tokenId = _mintNFT(listSeller);
         vm.startPrank(listSeller);
         collection.setApprovalForAll(address(marketplace), true);
         marketplace.listItem(address(collection), tokenId, price);
@@ -83,41 +96,118 @@ contract NFTMarketplaceTest is Test {
     }
 
     // ─────────────────────────────────────────────
+    // NFTCollection — loadTokenURIs
+    // ─────────────────────────────────────────────
+
+    function test_collection_urisLoaded() public view {
+        assertTrue(collection.urisLoaded());
+    }
+
+    function test_collection_loadURIs_revertsIfMintAlreadyStarted() public {
+        // Minta um NFT para iniciar o mint
+        vm.prank(seller);
+        collection.mint{value: MINT_PRICE}(seller);
+
+        // Agora tenta carregar URIs novamente — deve falhar pois mint já iniciou
+        string[] memory uris = new string[](MAX_SUPPLY);
+        for (uint256 i = 0; i < MAX_SUPPLY; i++) uris[i] = TOKEN_URI;
+
+        vm.prank(seller);
+        vm.expectRevert("Mint ja iniciado");
+        collection.loadTokenURIs(uris);
+    }
+
+    function test_collection_loadURIs_revertsIfWrongCount() public {
+        // Cria nova coleção sem URIs carregadas
+        vm.prank(seller);
+        address addr = factory.createCollection("New", "NW", "", "", 3, MINT_PRICE);
+        NFTCollection newCol = NFTCollection(addr);
+
+        string[] memory wrongUris = new string[](2); // supply é 3, mas passamos 2
+        wrongUris[0] = TOKEN_URI;
+        wrongUris[1] = TOKEN_URI;
+
+        vm.prank(seller);
+        vm.expectRevert("Quantidade incorreta de URIs");
+        newCol.loadTokenURIs(wrongUris);
+    }
+
+    function test_collection_loadURIs_revertsIfNotOwner() public {
+        vm.prank(seller);
+        address addr = factory.createCollection("New", "NW", "", "", 2, MINT_PRICE);
+        NFTCollection newCol = NFTCollection(addr);
+
+        string[] memory uris = new string[](2);
+        uris[0] = TOKEN_URI; uris[1] = TOKEN_URI;
+
+        vm.prank(stranger);
+        vm.expectRevert();
+        newCol.loadTokenURIs(uris);
+    }
+
+    // ─────────────────────────────────────────────
     // NFTCollection — Mint
     // ─────────────────────────────────────────────
 
     function test_collection_mint_success() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         assertEq(collection.ownerOf(tokenId), seller);
-        assertEq(collection.tokenURI(tokenId), TOKEN_URI);
+        assertGt(bytes(collection.tokenURI(tokenId)).length, 0); // tem URI
         assertEq(collection.totalSupply(), 1);
     }
 
     function test_collection_mint_emitsEvent() public {
-        vm.expectEmit(true, true, false, true);
-        emit NFTCollection.NFTMinted(seller, 0, TOKEN_URI);
+        // O evento emite a URI escolhida aleatoriamente — verificamos só os campos indexados
+        vm.expectEmit(true, true, false, false);
+        emit NFTCollection.NFTMinted(seller, 0, "");
         vm.prank(seller);
-        collection.mint{value: MINT_PRICE}(seller, TOKEN_URI);
+        collection.mint{value: MINT_PRICE}(seller);
+    }
+
+    function test_collection_mint_revertsIfURIsNotLoaded() public {
+        // Cria coleção sem carregar URIs
+        vm.prank(seller);
+        address addr = factory.createCollection("Empty", "EMP", "", "", 2, MINT_PRICE);
+        NFTCollection emptyCol = NFTCollection(addr);
+
+        vm.prank(buyer);
+        vm.expectRevert("URIs nao carregadas");
+        emptyCol.mint{value: MINT_PRICE}(buyer);
     }
 
     function test_collection_mint_revertsIfInsufficientPayment() public {
         vm.prank(seller);
         vm.expectRevert("Valor insuficiente");
-        collection.mint{value: 0.00001 ether}(seller, TOKEN_URI);
+        collection.mint{value: 0.00001 ether}(seller);
     }
 
     function test_collection_mint_revertsIfSupplyExceeded() public {
-        // Cria coleção com supply 1
+        // Cria coleção com supply 1 e carrega URIs
         vm.prank(seller);
         address addr = factory.createCollection("Tiny", "TN", "", "", 1, MINT_PRICE);
         NFTCollection tiny = NFTCollection(addr);
+        _loadURIs(tiny, 1);
 
         vm.prank(seller);
-        tiny.mint{value: MINT_PRICE}(seller, TOKEN_URI);
+        tiny.mint{value: MINT_PRICE}(seller);
 
         vm.prank(buyer);
         vm.expectRevert("Supply esgotado");
-        tiny.mint{value: MINT_PRICE}(buyer, TOKEN_URI);
+        tiny.mint{value: MINT_PRICE}(buyer);
+    }
+
+    function test_collection_mint_allTokensUnique() public {
+        // Minta todos os tokens e verifica que cada um tem URI diferente
+        string[] memory usedUris = new string[](MAX_SUPPLY);
+        for (uint256 i = 0; i < MAX_SUPPLY; i++) {
+            vm.prank(seller);
+            collection.mint{value: MINT_PRICE}(seller);
+            usedUris[i] = collection.tokenURI(i);
+        }
+        // Verifica que todas as URIs são não-vazias
+        for (uint256 i = 0; i < MAX_SUPPLY; i++) {
+            assertGt(bytes(usedUris[i]).length, 0);
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -172,7 +262,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_listItem_emitsEvent() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         vm.startPrank(seller);
         collection.setApprovalForAll(address(marketplace), true);
 
@@ -183,14 +273,14 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_listItem_revertsIfNotOwner() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         vm.prank(stranger);
         vm.expectRevert("Voce nao e o dono deste NFT");
         marketplace.listItem(address(collection), tokenId, LIST_PRICE);
     }
 
     function test_listItem_revertsIfPriceTooLow() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         vm.startPrank(seller);
         collection.setApprovalForAll(address(marketplace), true);
         vm.expectRevert("Preco minimo e 0.0001 ETH");
@@ -199,7 +289,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_listItem_revertsIfNotApproved() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         vm.prank(seller);
         vm.expectRevert("Contrato nao aprovado para transferir este NFT");
         marketplace.listItem(address(collection), tokenId, LIST_PRICE);
@@ -244,7 +334,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_cancelListing_revertsIfNotListed() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         vm.prank(seller);
         vm.expectRevert("NFT nao esta listado");
         marketplace.cancelListing(address(collection), tokenId);
@@ -296,7 +386,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_buyItem_revertsIfNotListed() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         vm.prank(buyer);
         vm.expectRevert("NFT nao esta a venda");
         marketplace.buyItem{value: LIST_PRICE}(address(collection), tokenId);
@@ -319,7 +409,7 @@ contract NFTMarketplaceTest is Test {
     function test_buyItem_feeCalculation() public {
         uint256 tokenId = _mintAndList(seller, LIST_PRICE);
         uint256 contractBefore = address(marketplace).balance;
-        uint256 sellerBefore = seller.balance;
+        uint256 sellerBefore   = seller.balance;
 
         vm.prank(buyer);
         marketplace.buyItem{value: LIST_PRICE}(address(collection), tokenId);
@@ -334,7 +424,7 @@ contract NFTMarketplaceTest is Test {
     // ─────────────────────────────────────────────
 
     function test_makeOffer_success() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         uint256 contractBefore = address(marketplace).balance;
 
         vm.prank(buyer);
@@ -349,7 +439,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_makeOffer_registresBuyerInList() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -360,7 +450,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_makeOffer_multipleOffers() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -373,7 +463,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_makeOffer_emitsEvent() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.expectEmit(true, true, true, true);
         emit NFTMarketplace.OfferMade(address(collection), tokenId, buyer, OFFER_AMOUNT, block.timestamp + 7 days);
@@ -382,21 +472,21 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_makeOffer_revertsIfAmountTooLow() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         vm.prank(buyer);
         vm.expectRevert("Oferta minima e 0.0001 ETH");
         marketplace.makeOffer{value: 0.00001 ether}(address(collection), tokenId);
     }
 
     function test_makeOffer_revertsIfOwnerTriesToOffer() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         vm.prank(seller);
         vm.expectRevert("Dono nao pode ofertar no proprio NFT");
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
     }
 
     function test_makeOffer_revertsIfDuplicateOffer() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -411,7 +501,7 @@ contract NFTMarketplaceTest is Test {
     // ─────────────────────────────────────────────
 
     function test_acceptOffer_success() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -445,7 +535,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_acceptOffer_sellerReceivesCorrectAmount() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -464,7 +554,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_acceptOffer_emitsEvent() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -479,7 +569,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_acceptOffer_revertsIfNotOwner() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -490,7 +580,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_acceptOffer_revertsIfOfferNotActive() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.startPrank(seller);
         collection.setApprovalForAll(address(marketplace), true);
@@ -500,7 +590,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_acceptOffer_revertsIfExpired() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -515,7 +605,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_acceptOffer_revertsIfNotApproved() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -530,7 +620,7 @@ contract NFTMarketplaceTest is Test {
     // ─────────────────────────────────────────────
 
     function test_cancelOffer_success() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -547,7 +637,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_cancelOffer_emitsEvent() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -559,7 +649,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_cancelOffer_revertsIfNoActiveOffer() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         vm.prank(buyer);
         vm.expectRevert("Voce nao tem oferta ativa neste NFT");
         marketplace.cancelOffer(address(collection), tokenId);
@@ -570,7 +660,7 @@ contract NFTMarketplaceTest is Test {
     // ─────────────────────────────────────────────
 
     function test_reclaimExpiredOffer_success() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -586,7 +676,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_reclaimExpiredOffer_revertsIfNotExpired() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -597,7 +687,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_reclaimExpiredOffer_revertsIfNoOffer() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
         vm.warp(block.timestamp + 8 days);
         vm.prank(stranger);
         vm.expectRevert("Oferta nao esta ativa");
@@ -652,7 +742,7 @@ contract NFTMarketplaceTest is Test {
     // ─────────────────────────────────────────────
 
     function test_fullFlow_mintListBuy() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.startPrank(seller);
         collection.setApprovalForAll(address(marketplace), true);
@@ -674,7 +764,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_fullFlow_mintOfferAccept() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -710,7 +800,7 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_fullFlow_offerCancelledAndNewOffer() public {
-        uint256 tokenId = _mintNft(seller);
+        uint256 tokenId = _mintNFT(seller);
 
         vm.prank(buyer);
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
@@ -731,19 +821,20 @@ contract NFTMarketplaceTest is Test {
     }
 
     function test_fullFlow_multipleCollections() public {
-        // Cria segunda coleção
+        // Cria segunda coleção com URIs carregadas
         vm.prank(buyer);
-        address addr2 = factory.createCollection("Second", "SEC", "", "", 100, MINT_PRICE);
+        address addr2 = factory.createCollection("Second", "SEC", "", "", 2, MINT_PRICE);
         NFTCollection collection2 = NFTCollection(addr2);
+        _loadURIs(collection2, 2);
 
         // Minta em cada coleção
         uint256 tokenId1 = collection.totalSupply();
         vm.prank(seller);
-        collection.mint{value: MINT_PRICE}(seller, TOKEN_URI);
+        collection.mint{value: MINT_PRICE}(seller); // ✅ só address
 
         uint256 tokenId2 = collection2.totalSupply();
         vm.prank(buyer);
-        collection2.mint{value: MINT_PRICE}(buyer, TOKEN_URI);
+        collection2.mint{value: MINT_PRICE}(buyer); // ✅ só address
 
         // Lista nas duas coleções no mesmo marketplace
         vm.startPrank(seller);
@@ -756,16 +847,38 @@ contract NFTMarketplaceTest is Test {
         marketplace.listItem(address(collection2), tokenId2, LIST_PRICE);
         vm.stopPrank();
 
-        // Listagens são independentes
         assertTrue(marketplace.getListing(address(collection), tokenId1).active);
         assertTrue(marketplace.getListing(address(collection2), tokenId2).active);
 
-        // Compra o da collection1
         vm.prank(buyer2);
         marketplace.buyItem{value: LIST_PRICE}(address(collection), tokenId1);
 
         assertEq(collection.ownerOf(tokenId1), buyer2);
-        // collection2 não foi afetada
         assertTrue(marketplace.getListing(address(collection2), tokenId2).active);
+    }
+
+    function test_sellerReceivesPaymentFromBuyer() public {
+        uint256 tokenId = _mintNFT(seller);
+
+        uint256 offerValue = 0.05 ether;
+        vm.prank(buyer);
+        marketplace.makeOffer{value: offerValue}(address(collection), tokenId);
+
+        uint256 sellerBefore   = seller.balance;
+        uint256 buyerBefore    = buyer.balance;
+        uint256 contractBefore = address(marketplace).balance;
+
+        vm.startPrank(seller);
+        collection.setApprovalForAll(address(marketplace), true);
+        marketplace.acceptOffer(address(collection), tokenId, buyer);
+        vm.stopPrank();
+
+        uint256 fee            = (offerValue * FEE_BPS) / 10000;
+        uint256 sellerProceeds = offerValue - fee;
+
+        assertEq(collection.ownerOf(tokenId), buyer);
+        assertEq(seller.balance - sellerBefore, sellerProceeds);
+        assertEq(buyerBefore, buyer.balance);
+        assertEq(address(marketplace).balance, contractBefore - sellerProceeds);
     }
 }
