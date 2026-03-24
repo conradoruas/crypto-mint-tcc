@@ -23,15 +23,10 @@ const resolveIpfsUrl = (url: string) => {
 async function uploadImageToIPFS(file: File): Promise<string> {
   const formData = new FormData();
   formData.append("file", file);
-
-  const res = await fetch("/api/upload-image", {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) throw new Error(`Falha no upload da imagem: ${res.status}`);
+  const res = await fetch("/api/upload-image", { method: "POST", body: formData });
+  if (!res.ok) throw new Error(`Image upload failed: ${res.status}`);
   const data = await res.json();
-  if (!data.uri) throw new Error("URI inválida retornada pelo servidor");
+  if (!data.uri) throw new Error("Invalid URI returned by server");
   return data.uri;
 }
 
@@ -39,28 +34,18 @@ export default function EditProfilePage() {
   const { address, isConnected } = useConnection();
   const router = useRouter();
 
-  // Dados atuais do perfil
-  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(
-    null,
-  );
+  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-
-  // Campos editáveis
   const [name, setName] = useState("");
-  const [previewUrl, setPreviewUrl] = useState<string>(""); // preview local
-  const [imageFile, setImageFile] = useState<File | null>(null); // arquivo selecionado mas NÃO enviado
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Carrega perfil atual
   useEffect(() => {
-    if (!address) {
-      setIsLoadingProfile(false);
-      return;
-    }
+    if (!address) { setIsLoadingProfile(false); return; }
     fetchProfile(address).then((p) => {
       setCurrentProfile(p);
       setName(p?.name ?? "");
@@ -69,98 +54,84 @@ export default function EditProfilePage() {
     });
   }, [address]);
 
-  // Seleciona imagem — só faz preview local, NÃO envia ainda
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setImageFile(file);
-
-    // Gera preview local usando URL.createObjectURL
-    const localUrl = URL.createObjectURL(file);
-    setPreviewUrl(localUrl);
+    setPreviewUrl(URL.createObjectURL(file));
   };
 
-  // Salva tudo de uma vez ao clicar em Salvar
   const handleSave = async () => {
     if (!address) return;
     setError(null);
     setIsSaving(true);
-
     try {
       let imageUri = currentProfile?.imageUri ?? "";
-
-      // Só faz upload da imagem se o usuário selecionou uma nova
-      if (imageFile) {
-        imageUri = await uploadImageToIPFS(imageFile);
-      }
-
-      const updated: UserProfile = {
-        address,
-        name: name.trim(),
-        imageUri,
-        updatedAt: Date.now(),
-      };
-
-      // Upload do JSON de perfil para o IPFS
+      if (imageFile) imageUri = await uploadImageToIPFS(imageFile);
+      const updated: UserProfile = { address, name: name.trim(), imageUri, updatedAt: Date.now() };
       const uri = await uploadProfileToIPFS(updated);
       saveProfileHash(address, uri);
-
       setSuccess(true);
       setTimeout(() => router.push("/profile"), 1500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao salvar perfil.");
+      setError(e instanceof Error ? e.message : "Error saving profile.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const hasChanges =
-    name !== (currentProfile?.name ?? "") || imageFile !== null;
+  const hasChanges = name !== (currentProfile?.name ?? "") || imageFile !== null;
 
   if (!isConnected) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white">
+      <main className="min-h-screen bg-background text-on-surface">
         <Navbar />
-        <p className="text-center py-20 text-slate-400">
-          Conecte sua carteira.
+        <p className="text-center py-20 text-sm text-on-surface-variant">
+          Connect your wallet.
         </p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-background text-on-surface">
       <Navbar />
-      <div className="max-w-lg mx-auto px-4 py-16">
+      <div className="pt-32 pb-20 max-w-lg mx-auto px-8">
+
         {/* Header */}
         <div className="flex items-center gap-4 mb-10">
           <button
             onClick={() => router.back()}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 transition-all"
+            className="p-2 rounded-sm bg-surface-container-low border border-outline-variant/15 text-on-surface-variant hover:border-primary/30 hover:text-primary transition-all"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={16} />
           </button>
           <div>
-            <h1 className="text-2xl font-black">Editar Perfil</h1>
-            <p className="text-slate-400 text-sm">
-              As alterações só são salvas ao clicar em Salvar
+            <span className="text-xs font-headline font-bold tracking-[0.3em] text-primary uppercase block mb-0.5">
+              Settings
+            </span>
+            <h1 className="font-headline text-2xl font-bold tracking-tighter uppercase">
+              Edit Profile
+            </h1>
+            <p className="text-xs text-on-surface-variant mt-0.5">
+              Changes are only saved when you click Save
             </p>
           </div>
         </div>
 
         {isLoadingProfile ? (
           <div className="space-y-4">
-            <div className="h-32 bg-slate-900 rounded-3xl animate-pulse" />
-            <div className="h-14 bg-slate-900 rounded-2xl animate-pulse" />
+            <div className="h-32 animate-pulse rounded-sm bg-surface-container-high" />
+            <div className="h-14 animate-pulse rounded-sm bg-surface-container-high" />
           </div>
         ) : (
-          <div className="space-y-6 bg-slate-900 p-8 rounded-3xl border border-slate-800">
-            {/* Foto */}
-            <div className="flex flex-col items-center gap-4">
+          <div className="bg-surface-container-low border border-outline-variant/10 p-8 space-y-6 rounded-sm">
+
+            {/* Avatar */}
+            <div className="flex flex-col items-center gap-3">
               <div className="relative group">
                 {previewUrl ? (
-                  <div className="w-28 h-28 rounded-full overflow-hidden bg-slate-700 relative">
+                  <div className="w-28 h-28 overflow-hidden relative border-2 border-outline-variant/20 rounded-sm">
                     <Image
                       src={previewUrl}
                       alt="Preview"
@@ -170,19 +141,16 @@ export default function EditProfilePage() {
                     />
                   </div>
                 ) : (
-                  <div className="w-28 h-28 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-3xl font-bold">
+                  <div className="w-28 h-28 flex items-center justify-center font-headline font-bold text-3xl bg-surface-container-high border-2 border-outline-variant/20 rounded-sm text-primary">
                     {name ? name[0].toUpperCase() : "?"}
                   </div>
                 )}
-
-                {/* Overlay */}
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 rounded-sm"
                 >
-                  <Camera size={22} className="text-white" />
+                  <Camera size={22} className="text-primary" />
                 </button>
-
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -194,79 +162,86 @@ export default function EditProfilePage() {
 
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                className="text-sm font-headline font-bold text-primary hover:text-primary-container transition-colors uppercase tracking-widest"
               >
-                {imageFile ? `✓ ${imageFile.name}` : "Trocar foto"}
+                {imageFile ? `✓ ${imageFile.name}` : "Change Photo"}
               </button>
 
               {imageFile && (
-                <p className="text-xs text-slate-500">
-                  A foto será enviada ao clicar em Salvar
+                <p className="text-xs text-on-surface-variant/50 uppercase tracking-widest">
+                  Photo will be uploaded when you save
                 </p>
               )}
             </div>
 
-            {/* Nome */}
+            {/* Name */}
             <div>
-              <label className="block text-sm font-medium mb-2">Nome</label>
+              <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+                Display Name
+              </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={32}
-                placeholder="Seu nome..."
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Your name..."
+                className="w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40"
               />
-              <p className="text-xs text-slate-500 mt-1.5 text-right">
+              <p className="text-xs mt-1.5 text-right text-on-surface-variant/30 font-mono">
                 {name.length}/32
               </p>
             </div>
 
-            {/* Endereço (somente leitura) */}
+            {/* Wallet (read-only) */}
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-400">
-                Carteira
+              <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+                Wallet
               </label>
-              <p className="font-mono text-sm text-slate-500 bg-slate-800 rounded-xl px-4 py-3 truncate">
+              <p className="text-sm px-4 py-3 truncate font-mono text-on-surface-variant/50 bg-surface-container border border-outline-variant/10 rounded-sm">
                 {address}
               </p>
             </div>
 
-            {/* Erro */}
+            {/* Error */}
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl p-3">
+              <div className="text-sm p-3 bg-error/5 border border-error/20 text-error rounded-sm">
                 {error}
               </div>
             )}
 
-            {/* Sucesso */}
+            {/* Success */}
             {success && (
-              <div className="bg-green-500/10 border border-green-500/30 text-green-400 text-sm rounded-xl p-3 flex items-center gap-2">
-                <Check size={14} /> Perfil salvo! Redirecionando...
+              <div className="text-sm p-3 flex items-center gap-2 bg-primary/5 border border-primary/20 text-primary rounded-sm">
+                <Check size={13} /> Profile saved! Redirecting...
               </div>
             )}
 
-            {/* Botões */}
+            {/* Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => router.back()}
                 disabled={isSaving}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 disabled:cursor-not-allowed font-bold py-3 rounded-xl transition-all"
+                className="flex-1 font-headline font-bold py-3 rounded-sm border border-outline-variant/20 text-on-surface-variant hover:bg-surface-container transition-all text-sm uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Cancelar
+                Cancel
               </button>
-              <button
-                onClick={handleSave}
-                disabled={isSaving || !hasChanges}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
-              >
-                {isSaving ? (
-                  <Loader2 className="animate-spin" size={18} />
-                ) : (
-                  <Check size={18} />
-                )}
-                {isSaving ? "Salvando..." : "Salvar"}
-              </button>
+              <div className="flex-1 relative group overflow-hidden">
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving || !hasChanges}
+                  className={`w-full relative overflow-hidden font-headline font-bold py-3 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest ${
+                    isSaving || !hasChanges
+                      ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
+                      : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
+                  }`}
+                >
+                  {!(isSaving || !hasChanges) && (
+                    <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+                  )}
+                  {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                  {isSaving ? "Saving..." : "Save"}
+                </button>
+              </div>
             </div>
           </div>
         )}

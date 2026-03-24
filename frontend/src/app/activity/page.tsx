@@ -20,77 +20,50 @@ import {
   ExternalLink,
   ChevronDown,
 } from "lucide-react";
-
-// ─────────────────────────────────────────────
-// Configuração visual por tipo de evento
-// ─────────────────────────────────────────────
+import Footer from "@/components/Footer";
 
 const EVENT_CONFIG: Record<
   ActivityType,
-  {
-    label: string;
-    icon: React.ReactNode;
-    color: string;
-    bg: string;
-    border: string;
-  }
+  { label: string; icon: React.ReactNode; colorClass: string }
 > = {
   sale: {
-    label: "Venda",
-    icon: <ShoppingCart size={14} />,
-    color: "text-green-400",
-    bg: "bg-green-500/10",
-    border: "border-green-500/20",
+    label: "Sale",
+    icon: <ShoppingCart size={16} />,
+    colorClass: "text-primary",
   },
   listing: {
-    label: "Listagem",
-    icon: <Tag size={14} />,
-    color: "text-blue-400",
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/20",
+    label: "Listing",
+    icon: <Tag size={16} />,
+    colorClass: "text-secondary",
   },
   listing_cancelled: {
-    label: "Listagem Cancelada",
-    icon: <X size={14} />,
-    color: "text-slate-400",
-    bg: "bg-slate-500/10",
-    border: "border-slate-500/20",
+    label: "Listing Cancelled",
+    icon: <X size={16} />,
+    colorClass: "text-on-surface-variant",
   },
   offer: {
-    label: "Oferta",
-    icon: <HandCoins size={14} />,
-    color: "text-yellow-400",
-    bg: "bg-yellow-500/10",
-    border: "border-yellow-500/20",
+    label: "Offer",
+    icon: <HandCoins size={16} />,
+    colorClass: "text-tertiary",
   },
   offer_accepted: {
-    label: "Oferta Aceita",
-    icon: <CheckCircle size={14} />,
-    color: "text-emerald-400",
-    bg: "bg-emerald-500/10",
-    border: "border-emerald-500/20",
+    label: "Offer Accepted",
+    icon: <CheckCircle size={16} />,
+    colorClass: "text-primary",
   },
   offer_cancelled: {
-    label: "Oferta Cancelada",
-    icon: <X size={14} />,
-    color: "text-red-400",
-    bg: "bg-red-500/10",
-    border: "border-red-500/20",
+    label: "Offer Cancelled",
+    icon: <X size={16} />,
+    colorClass: "text-error",
   },
   mint: {
     label: "Mint",
-    icon: <Sparkles size={14} />,
-    color: "text-purple-400",
-    bg: "bg-purple-500/10",
-    border: "border-purple-500/20",
+    icon: <Sparkles size={16} />,
+    colorClass: "text-tertiary",
   },
 };
 
 const ALL_TYPES = Object.keys(EVENT_CONFIG) as ActivityType[];
-
-// ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
 
 function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -99,15 +72,11 @@ function shortAddr(addr: string) {
 function formatTime(timestamp?: number) {
   if (!timestamp) return "—";
   const diff = Math.floor(Date.now() / 1000) - timestamp;
-  if (diff < 60) return `${diff}s atrás`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}min atrás`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h atrás`;
-  return `${Math.floor(diff / 86400)}d atrás`;
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
-
-// ─────────────────────────────────────────────
-// Card de evento
-// ─────────────────────────────────────────────
 
 function EventRow({
   event,
@@ -119,188 +88,119 @@ function EventRow({
   const cfg = EVENT_CONFIG[event.type];
 
   return (
-    <div
-      className={`flex items-center gap-4 p-4 rounded-2xl border ${cfg.border} ${cfg.bg} hover:brightness-110 transition-all`}
-    >
-      {/* Ícone do tipo */}
-      <div
-        className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center ${cfg.color} bg-slate-900/60`}
-      >
-        {cfg.icon}
-      </div>
-
-      {/* Info principal */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className={`text-xs font-bold uppercase tracking-wide ${cfg.color}`}
-          >
+    <tr className="group hover:bg-surface-container-low transition-colors">
+      {/* Event type */}
+      <td className="py-6 pr-4">
+        <div className="flex items-center gap-3">
+          <span className={cfg.colorClass}>{cfg.icon}</span>
+          <span className="font-headline font-bold text-sm text-on-surface">
             {cfg.label}
           </span>
-          {collectionName && (
-            <span className="text-xs text-slate-500 font-medium">
-              {collectionName}
-            </span>
-          )}
         </div>
+      </td>
 
-        <div className="flex items-center gap-1 text-sm mt-0.5 flex-wrap">
-          {/* Descrição por tipo */}
-          {event.type === "sale" && (
-            <p className="text-slate-300">
-              <span className="font-mono text-xs text-slate-500">
-                {shortAddr(event.from)}
-              </span>
-              <span className="text-slate-500 mx-1">vendeu para</span>
-              <span className="font-mono text-xs text-slate-500">
-                {shortAddr(event.to ?? "")}
-              </span>
-              <span className="text-slate-500 mx-1">·</span>
+      {/* Item */}
+      <td className="py-6 px-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-sm overflow-hidden bg-surface-container-high flex-shrink-0" />
+          <div>
+            <div className="font-headline font-bold text-on-surface text-sm leading-none">
               <Link
                 href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
-                className="text-white hover:text-blue-400 font-medium transition-colors"
+                className="hover:text-primary transition-colors"
               >
                 #{event.tokenId.padStart(3, "0")}
               </Link>
-            </p>
-          )}
-          {event.type === "listing" && (
-            <p className="text-slate-300">
-              <span className="font-mono text-xs text-slate-500">
-                {shortAddr(event.from)}
-              </span>
-              <span className="text-slate-500 mx-1">listou</span>
-              <Link
-                href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
-                className="text-white hover:text-blue-400 font-medium transition-colors"
-              >
-                #{event.tokenId.padStart(3, "0")}
-              </Link>
-            </p>
-          )}
-          {event.type === "listing_cancelled" && (
-            <p className="text-slate-300">
-              <span className="font-mono text-xs text-slate-500">
-                {shortAddr(event.from)}
-              </span>
-              <span className="text-slate-500 mx-1">cancelou listagem de</span>
-              <Link
-                href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
-                className="text-white hover:text-blue-400 font-medium transition-colors"
-              >
-                #{event.tokenId.padStart(3, "0")}
-              </Link>
-            </p>
-          )}
-          {event.type === "offer" && (
-            <p className="text-slate-300">
-              <span className="font-mono text-xs text-slate-500">
-                {shortAddr(event.from)}
-              </span>
-              <span className="text-slate-500 mx-1">ofertou em</span>
-              <Link
-                href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
-                className="text-white hover:text-blue-400 font-medium transition-colors"
-              >
-                #{event.tokenId.padStart(3, "0")}
-              </Link>
-            </p>
-          )}
-          {event.type === "offer_accepted" && (
-            <p className="text-slate-300">
-              <span className="font-mono text-xs text-slate-500">
-                {shortAddr(event.from)}
-              </span>
-              <span className="text-slate-500 mx-1">aceitou oferta de</span>
-              <span className="font-mono text-xs text-slate-500">
-                {shortAddr(event.to ?? "")}
-              </span>
-              <span className="text-slate-500 mx-1">em</span>
-              <Link
-                href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
-                className="text-white hover:text-blue-400 font-medium transition-colors"
-              >
-                #{event.tokenId.padStart(3, "0")}
-              </Link>
-            </p>
-          )}
-          {event.type === "offer_cancelled" && (
-            <p className="text-slate-300">
-              <span className="font-mono text-xs text-slate-500">
-                {shortAddr(event.from)}
-              </span>
-              <span className="text-slate-500 mx-1">cancelou oferta em</span>
-              <Link
-                href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
-                className="text-white hover:text-blue-400 font-medium transition-colors"
-              >
-                #{event.tokenId.padStart(3, "0")}
-              </Link>
-            </p>
-          )}
-          {event.type === "mint" && (
-            <p className="text-slate-300">
-              <span className="font-mono text-xs text-slate-500">
-                {shortAddr(event.from)}
-              </span>
-              <span className="text-slate-500 mx-1">mintou</span>
-              <Link
-                href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
-                className="text-white hover:text-blue-400 font-medium transition-colors"
-              >
-                #{event.tokenId.padStart(3, "0")}
-              </Link>
-            </p>
-          )}
+            </div>
+            {collectionName && (
+              <div className="text-on-surface-variant text-xs mt-1 uppercase tracking-wider">
+                {collectionName}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </td>
 
-      {/* Preço */}
-      {event.priceETH && (
-        <div className="text-right shrink-0">
-          <p className={`font-bold text-sm ${cfg.color}`}>
+      {/* Price */}
+      <td className="py-6 px-4 text-right">
+        {event.priceETH ? (
+          <div className="font-headline font-bold text-on-surface">
             {parseFloat(event.priceETH).toFixed(4)} ETH
-          </p>
-        </div>
-      )}
+          </div>
+        ) : (
+          <span className="text-on-surface-variant/30">—</span>
+        )}
+      </td>
 
-      {/* Timestamp + Etherscan */}
-      <div className="text-right shrink-0 hidden sm:block">
-        <p className="text-xs text-slate-500">{formatTime(event.timestamp)}</p>
-        <a
-          href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-slate-600 hover:text-slate-400 transition-colors inline-flex items-center gap-0.5 text-xs mt-0.5"
-        >
-          tx <ExternalLink size={10} />
-        </a>
-      </div>
-    </div>
+      {/* From */}
+      <td className="py-6 px-4 text-center">
+        <span className="text-primary font-mono text-xs hover:underline cursor-pointer">
+          {shortAddr(event.from)}
+        </span>
+      </td>
+
+      {/* To */}
+      <td className="py-6 px-4 text-center">
+        {event.to ? (
+          <span className="text-secondary font-mono text-xs hover:underline cursor-pointer">
+            {shortAddr(event.to)}
+          </span>
+        ) : (
+          <span className="text-on-surface-variant/30 text-xs">—</span>
+        )}
+      </td>
+
+      {/* Time + tx */}
+      <td className="py-6 pl-4 text-right">
+        <div className="flex items-center justify-end gap-2 text-on-surface-variant text-xs">
+          <span>{formatTime(event.timestamp)}</span>
+          <a
+            href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-primary transition-colors"
+          >
+            <ExternalLink size={12} />
+          </a>
+        </div>
+      </td>
+    </tr>
   );
 }
-
-// ─────────────────────────────────────────────
-// Skeleton
-// ─────────────────────────────────────────────
 
 function SkeletonRow() {
   return (
-    <div className="flex items-center gap-4 p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
-      <div className="w-9 h-9 rounded-xl bg-slate-800 animate-pulse shrink-0" />
-      <div className="flex-1 space-y-2">
-        <div className="h-3 bg-slate-800 rounded animate-pulse w-1/4" />
-        <div className="h-3 bg-slate-800 rounded animate-pulse w-1/2" />
-      </div>
-      <div className="h-4 bg-slate-800 rounded animate-pulse w-16 hidden sm:block" />
-      <div className="h-4 bg-slate-800 rounded animate-pulse w-12 hidden sm:block" />
-    </div>
+    <tr>
+      <td className="py-6 pr-4">
+        <div className="flex items-center gap-3">
+          <div className="w-6 h-6 animate-pulse bg-surface-container-high rounded-sm" />
+          <div className="h-4 w-16 animate-pulse bg-surface-container-high rounded-sm" />
+        </div>
+      </td>
+      <td className="py-6 px-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 animate-pulse bg-surface-container-high rounded-sm flex-shrink-0" />
+          <div className="space-y-2">
+            <div className="h-4 w-24 animate-pulse bg-surface-container-high rounded-sm" />
+            <div className="h-3 w-16 animate-pulse bg-surface-container-high rounded-sm" />
+          </div>
+        </div>
+      </td>
+      <td className="py-6 px-4 text-right">
+        <div className="h-4 w-16 animate-pulse bg-surface-container-high rounded-sm ml-auto" />
+      </td>
+      <td className="py-6 px-4 text-center">
+        <div className="h-3 w-20 animate-pulse bg-surface-container-high rounded-sm mx-auto" />
+      </td>
+      <td className="py-6 px-4 text-center">
+        <div className="h-3 w-20 animate-pulse bg-surface-container-high rounded-sm mx-auto" />
+      </td>
+      <td className="py-6 pl-4 text-right">
+        <div className="h-3 w-12 animate-pulse bg-surface-container-high rounded-sm ml-auto" />
+      </td>
+    </tr>
   );
 }
-
-// ─────────────────────────────────────────────
-// Página principal
-// ─────────────────────────────────────────────
 
 export default function ActivityPage() {
   const { collections, isLoading: isLoadingCollections } = useCollections();
@@ -313,7 +213,6 @@ export default function ActivityPage() {
     100,
   );
 
-  // Filtro por tipo no frontend
   const displayedEvents =
     selectedTypes.length === 0
       ? events
@@ -331,123 +230,183 @@ export default function ActivityPage() {
     )?.name;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-background text-on-surface">
       <Navbar />
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        {/* ─── Header ─── */}
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
-            <Activity size={18} className="text-blue-400" />
+      <div className="pt-32 pb-20 px-8 max-w-[1920px] mx-auto min-h-screen">
+        {/* Page Header */}
+        <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-8">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span className="text-xs font-headline font-bold tracking-[0.3em] text-primary uppercase">
+                Live Market Feed
+              </span>
+            </div>
+            <h1 className="text-5xl md:text-7xl font-bold font-headline tracking-tighter text-on-surface uppercase">
+              Platform Activity
+            </h1>
+            <p className="text-on-surface-variant max-w-xl text-lg font-light leading-relaxed">
+              Real-time synchronization of the on-chain ledger. Every pulse of
+              the marketplace.
+            </p>
           </div>
-          <h1 className="text-3xl font-black tracking-tight">Atividade</h1>
-        </div>
-        <p className="text-slate-400 text-sm mb-10 ml-[52px]">
-          Histórico de eventos on-chain dos últimos 7 dias
-        </p>
+        </header>
 
-        {/* ─── Filtros ─── */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          {/* Filtro de coleção */}
-          <select
-            value={selectedCollection}
-            onChange={(e) => setSelectedCollection(e.target.value)}
-            className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer flex-1"
-          >
-            <option value="">Todas as coleções</option>
-            {collections.map((c) => (
-              <option key={c.contractAddress} value={c.contractAddress}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-
-          {/* Filtro de tipo */}
-          <div className="relative">
+        {/* Filters */}
+        <section className="mb-8 overflow-x-auto">
+          <div className="flex items-center gap-2 pb-4 flex-wrap">
+            {/* Type pill filters */}
             <button
-              onClick={() => setShowTypeFilter((v) => !v)}
-              className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm border transition-all w-full sm:w-auto justify-between ${
-                selectedTypes.length > 0
-                  ? "bg-blue-600 border-blue-600 text-white"
-                  : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+              onClick={() => setSelectedTypes([])}
+              className={`px-6 py-2 rounded-full text-xs font-headline font-bold uppercase tracking-widest transition-all ${
+                selectedTypes.length === 0
+                  ? "bg-primary/10 text-primary border border-primary/20"
+                  : "text-on-surface-variant hover:bg-surface-container-high"
               }`}
             >
-              {selectedTypes.length > 0
-                ? `${selectedTypes.length} tipo${selectedTypes.length > 1 ? "s" : ""}`
-                : "Tipo de evento"}
-              <ChevronDown
-                size={14}
-                className={`transition-transform ${showTypeFilter ? "rotate-180" : ""}`}
-              />
+              All Events
             </button>
+            {ALL_TYPES.map((type) => {
+              const cfg = EVENT_CONFIG[type];
+              const isSelected = selectedTypes.includes(type);
+              return (
+                <button
+                  key={type}
+                  onClick={() => toggleType(type)}
+                  className={`px-6 py-2 rounded-full text-xs font-headline font-bold uppercase tracking-widest transition-all ${
+                    isSelected
+                      ? `bg-surface-container-high ${cfg.colorClass} border border-outline-variant/30`
+                      : "text-on-surface-variant hover:bg-surface-container-high"
+                  }`}
+                >
+                  {cfg.label}
+                </button>
+              );
+            })}
 
-            {showTypeFilter && (
-              <div className="absolute top-full mt-2 right-0 z-20 bg-slate-900 border border-slate-800 rounded-2xl p-3 w-56 shadow-xl">
-                {ALL_TYPES.map((type) => {
-                  const cfg = EVENT_CONFIG[type];
-                  return (
+            <div className="h-6 w-px bg-outline-variant/20 mx-2" />
+
+            {/* Collection filter */}
+            {!isLoadingCollections && collections.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowTypeFilter((v) => !v)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-sm text-xs text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/15"
+                >
+                  <Activity size={14} />
+                  {selectedCollection
+                    ? (collections.find(
+                        (c) => c.contractAddress === selectedCollection,
+                      )?.name ?? "Collection")
+                    : "All Collections"}
+                  <ChevronDown
+                    size={12}
+                    className={`transition-transform ${showTypeFilter ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {showTypeFilter && (
+                  <div className="absolute top-full mt-1 left-0 z-20 w-56 shadow-xl bg-surface-container border border-outline-variant/20 rounded-sm">
                     <button
-                      key={type}
-                      onClick={() => toggleType(type)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                        selectedTypes.includes(type)
-                          ? `${cfg.bg} ${cfg.color}`
-                          : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                      }`}
+                      onClick={() => {
+                        setSelectedCollection("");
+                        setShowTypeFilter(false);
+                      }}
+                      className="w-full flex items-center px-4 py-3 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all border-b border-outline-variant/10"
                     >
-                      <span className={cfg.color}>{cfg.icon}</span>
-                      {cfg.label}
+                      All Collections
                     </button>
-                  );
-                })}
-                {selectedTypes.length > 0 && (
-                  <button
-                    onClick={() => setSelectedTypes([])}
-                    className="w-full mt-2 px-3 py-2 rounded-xl text-xs text-red-400 hover:bg-red-500/10 transition-all border border-red-500/20"
-                  >
-                    Limpar filtros
-                  </button>
+                    {collections.map((c) => (
+                      <button
+                        key={c.contractAddress}
+                        onClick={() => {
+                          setSelectedCollection(c.contractAddress);
+                          setShowTypeFilter(false);
+                        }}
+                        className={`w-full flex items-center px-4 py-3 text-sm transition-all border-b border-outline-variant/10 last:border-0 ${
+                          selectedCollection === c.contractAddress
+                            ? "text-primary bg-primary/5"
+                            : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
+                        }`}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
           </div>
-        </div>
+        </section>
 
-        {/* ─── Contador ─── */}
+        {/* Count */}
         {!isLoading && (
-          <p className="text-xs text-slate-500 mb-4">
+          <p className="text-xs text-on-surface-variant uppercase tracking-widest mb-4">
             {displayedEvents.length === events.length
-              ? `${events.length} evento${events.length !== 1 ? "s" : ""}`
-              : `${displayedEvents.length} de ${events.length} eventos`}
+              ? `${events.length} event${events.length !== 1 ? "s" : ""}`
+              : `${displayedEvents.length} of ${events.length} events`}
           </p>
         )}
 
-        {/* ─── Lista de eventos ─── */}
-        <div className="space-y-2">
-          {isLoading ? (
-            Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
-          ) : displayedEvents.length === 0 ? (
-            <div className="text-center py-20 border border-dashed border-slate-800 rounded-3xl">
-              <Activity size={40} className="text-slate-700 mx-auto mb-4" />
-              <h3 className="text-lg font-bold mb-2">
-                Nenhuma atividade encontrada
-              </h3>
-              <p className="text-slate-400 text-sm">
-                {selectedTypes.length > 0 || selectedCollection
-                  ? "Tente ajustar os filtros."
-                  : "Nenhum evento nos últimos 7 dias."}
-              </p>
-            </div>
-          ) : (
-            displayedEvents.map((event) => (
-              <EventRow
-                key={event.id}
-                event={event}
-                collectionName={collectionName(event.nftContract)}
-              />
-            ))
-          )}
+        {/* Ledger table */}
+        <div className="relative overflow-x-auto">
+          <div className="absolute -top-10 -right-10 w-64 h-64 bg-primary/5 blur-[100px] pointer-events-none" />
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-outline-variant/10">
+                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
+                  Event
+                </th>
+                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
+                  Item
+                </th>
+                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-right">
+                  Price
+                </th>
+                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-center">
+                  From
+                </th>
+                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-center">
+                  To
+                </th>
+                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-right">
+                  Time
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-outline-variant/5">
+              {isLoading ? (
+                Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
+              ) : displayedEvents.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-20 text-center">
+                    <Activity
+                      size={40}
+                      className="mx-auto mb-4 text-on-surface-variant/30"
+                    />
+                    <h3 className="font-headline text-lg font-bold mb-2 text-on-surface">
+                      No activity found
+                    </h3>
+                    <p className="text-sm text-on-surface-variant">
+                      {selectedTypes.length > 0 || selectedCollection
+                        ? "Try adjusting the filters."
+                        : "No events in the last 7 days."}
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                displayedEvents.map((event) => (
+                  <EventRow
+                    key={event.id}
+                    event={event}
+                    collectionName={collectionName(event.nftContract)}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
+      <Footer />
     </main>
   );
 }

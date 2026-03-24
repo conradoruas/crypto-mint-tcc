@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  useAccount,
+  useConnection,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
@@ -17,6 +17,7 @@ import {
   X,
   Image as ImageIcon,
   CheckCircle,
+  Layers,
 } from "lucide-react";
 import { useCreateCollection } from "@/hooks/useCollections";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
@@ -25,7 +26,6 @@ import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
 const FACTORY_ADDRESS = process.env
   .NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS as `0x${string}`;
 
-// ─── Tipos ───
 interface NFTDraft {
   id: number;
   name: string;
@@ -34,7 +34,6 @@ interface NFTDraft {
   previewUrl: string;
 }
 
-// ─── Helpers de upload ───
 async function uploadImage(file: File): Promise<string> {
   const formData = new FormData();
   formData.append("file", file);
@@ -42,9 +41,9 @@ async function uploadImage(file: File): Promise<string> {
     method: "POST",
     body: formData,
   });
-  if (!res.ok) throw new Error(`Falha no upload: ${res.status}`);
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
   const data = await res.json();
-  if (!data.uri) throw new Error("URI inválida");
+  if (!data.uri) throw new Error("Invalid URI");
   return data.uri;
 }
 
@@ -63,34 +62,31 @@ async function uploadMetadata(
       address: `nft-${Date.now()}`,
     }),
   });
-  if (!res.ok) throw new Error(`Falha no upload de metadados: ${res.status}`);
+  if (!res.ok) throw new Error(`Metadata upload failed: ${res.status}`);
   const data = await res.json();
-  if (!data.uri) throw new Error("URI inválida");
+  if (!data.uri) throw new Error("Invalid URI");
   return data.uri;
 }
 
+const inputClass =
+  "w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40";
+
 export default function CreateCollectionPage() {
   const router = useRouter();
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useConnection();
 
-  // ─── Dados da coleção ───
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string>("");
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [description, setDescription] = useState("");
   const [mintPrice, setMintPrice] = useState("0.0001");
-
-  // ─── NFTs da coleção ───
   const [nfts, setNfts] = useState<NFTDraft[]>([]);
-
-  // ─── Estados de loading ───
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [isUploadingNFTs, setIsUploadingNFTs] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // ─── Hook de criação de coleção ───
   const {
     createCollection,
     isPending: isCreating,
@@ -99,14 +95,11 @@ export default function CreateCollectionPage() {
     hash: createHash,
   } = useCreateCollection();
 
-  // ─── Hook de loadTokenURIs ───
-  const { writeContractAsync, isPending: isLoadingURIs } = useWriteContract();
+  const { mutateAsync, isPending: isLoadingURIs } = useWriteContract();
   const [loadURIsHash, setLoadURIsHash] = useState<`0x${string}` | undefined>();
   const { isLoading: isConfirmingLoad, isSuccess: urisLoaded } =
     useWaitForTransactionReceipt({ hash: loadURIsHash });
 
-  // ─── Busca automática do endereço da coleção recém-deployada ───
-  // Busca os índices de coleções do criador
   const { data: creatorCollectionIds } = useReadContract({
     address: FACTORY_ADDRESS,
     abi: NFT_COLLECTION_FACTORY_ABI,
@@ -115,14 +108,12 @@ export default function CreateCollectionPage() {
     query: { enabled: !!collectionCreated && !!address, refetchInterval: 2000 },
   });
 
-  // Pega o último índice criado pelo usuário
   const lastIndex = creatorCollectionIds
     ? (creatorCollectionIds as bigint[])[
         (creatorCollectionIds as bigint[]).length - 1
       ]
     : undefined;
 
-  // Busca os detalhes da última coleção para obter o endereço
   const { data: lastCollectionData } = useReadContract({
     address: FACTORY_ADDRESS,
     abi: NFT_COLLECTION_FACTORY_ABI,
@@ -143,7 +134,6 @@ export default function CreateCollectionPage() {
     isLoadingURIs ||
     isConfirmingLoad;
 
-  // ─── Gerenciar NFTs ───
   const addNFT = () =>
     setNfts((prev) => [
       ...prev,
@@ -167,39 +157,36 @@ export default function CreateCollectionPage() {
       }),
     );
 
-  // ─── Etapa 1: Deploy da coleção ───
   const handleCreateCollection = async () => {
     setError(null);
     if (!name || !symbol) {
-      setError("Nome e símbolo são obrigatórios.");
+      setError("Name and symbol are required.");
       return;
     }
     if (!coverFile) {
-      setError("Selecione uma imagem de capa.");
+      setError("Select a cover image.");
       return;
     }
     if (!isConnected) {
-      setError("Conecte sua carteira.");
+      setError("Connect your wallet.");
       return;
     }
     if (nfts.length === 0) {
-      setError("Adicione ao menos 1 NFT à coleção.");
+      setError("Add at least 1 NFT to the collection.");
       return;
     }
     if (nfts.some((n) => !n.name || !n.file)) {
-      setError("Todos os NFTs precisam de nome e imagem.");
+      setError("All NFTs need a name and image.");
       return;
     }
     if (parseFloat(mintPrice) < 0.0001) {
-      setError("Preço mínimo é 0.0001 ETH.");
+      setError("Minimum price is 0.0001 ETH.");
       return;
     }
-
     try {
       setIsUploadingCover(true);
       const coverUri = await uploadImage(coverFile);
       setIsUploadingCover(false);
-
       await createCollection({
         name,
         symbol: symbol.toUpperCase(),
@@ -209,18 +196,16 @@ export default function CreateCollectionPage() {
         mintPrice,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro desconhecido.");
+      setError(e instanceof Error ? e.message : "Unknown error.");
       setIsUploadingCover(false);
     }
   };
 
-  // ─── Etapa 2: Upload + loadTokenURIs ───
   const handleLoadURIs = async (addr: `0x${string}`) => {
     setError(null);
     try {
       setIsUploadingNFTs(true);
       const uris: string[] = [];
-
       for (let i = 0; i < nfts.length; i++) {
         setUploadProgress(Math.round((i / nfts.length) * 90));
         const nft = nfts[i];
@@ -232,63 +217,63 @@ export default function CreateCollectionPage() {
         );
         uris.push(metaUri);
       }
-
       setUploadProgress(95);
       setIsUploadingNFTs(false);
-
-      const tx = await writeContractAsync({
+      const tx = await mutateAsync({
         address: addr,
         abi: NFT_COLLECTION_ABI,
         functionName: "loadTokenURIs",
         args: [uris],
         gas: BigInt(500000 + uris.length * 30000),
       });
-
       setLoadURIsHash(tx);
       setUploadProgress(100);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar URIs.");
+      setError(e instanceof Error ? e.message : "Error loading URIs.");
       setIsUploadingNFTs(false);
     }
   };
 
-  // ─────────────────────────────────────────────
-  // Tela de sucesso final
-  // ─────────────────────────────────────────────
+  // ── Success screen ──────────────────────────────────────────────────────────
   if (urisLoaded) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white">
+      <main className="min-h-screen bg-background text-on-surface">
         <Navbar />
-        <div className="max-w-xl mx-auto px-4 py-24 text-center">
-          <div className="w-20 h-20 bg-green-500/20 border border-green-500/40 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle size={36} className="text-green-400" />
+        <div className="max-w-lg mx-auto px-8 py-32 text-center">
+          <div className="w-20 h-20 flex items-center justify-center mx-auto mb-6 bg-primary/5 border border-primary/20 rounded-sm">
+            <CheckCircle size={36} className="text-primary" />
           </div>
-          <h1 className="text-3xl font-black mb-3">Coleção Pronta!</h1>
-          <p className="text-slate-400 mb-2">
-            {nfts.length} NFTs carregados e prontos para mint.
+          <span className="text-xs font-headline font-bold tracking-[0.3em] text-primary uppercase block mb-3">
+            Deploy Complete
+          </span>
+          <h1 className="font-headline text-4xl font-bold tracking-tighter mb-3 uppercase">
+            Collection Ready!
+          </h1>
+          <p className="mb-2 text-sm text-on-surface-variant">
+            {nfts.length} NFTs loaded and ready to mint.
           </p>
           {loadURIsHash && (
             <a
               href={`https://sepolia.etherscan.io/tx/${loadURIsHash}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 underline text-sm block mb-8"
+              className="block mb-8 text-sm text-primary hover:text-primary-container transition-colors font-mono underline"
             >
-              Ver transação no Etherscan
+              View on Etherscan
             </a>
           )}
           <div className="flex gap-4 justify-center">
             <button
               onClick={() => router.push("/collections")}
-              className="bg-blue-600 hover:bg-blue-700 font-bold px-6 py-3 rounded-xl transition-all"
+              className="font-headline font-bold px-6 py-3 rounded-sm bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed text-sm uppercase tracking-wider hover:brightness-110 transition-all"
             >
-              Ver Coleções
+              View Collections
             </button>
             <button
               onClick={() => router.push("/collections/create")}
-              className="bg-slate-800 hover:bg-slate-700 font-bold px-6 py-3 rounded-xl transition-all"
+              className="font-headline font-bold px-6 py-3 rounded-sm border border-outline-variant/20 text-on-surface-variant hover:bg-surface-container transition-all text-sm uppercase tracking-wider"
             >
-              Criar Outra
+              Create Another
             </button>
           </div>
         </div>
@@ -296,39 +281,43 @@ export default function CreateCollectionPage() {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Tela intermediária: coleção deployada, aguarda loadTokenURIs
-  // ─────────────────────────────────────────────
+  // ── Deployed, needs loadTokenURIs ───────────────────────────────────────────
   if (collectionCreated && !urisLoaded) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white">
+      <main className="min-h-screen bg-background text-on-surface">
         <Navbar />
-        <div className="max-w-xl mx-auto px-4 py-24 text-center">
-          <div className="w-20 h-20 bg-blue-500/20 border border-blue-500/40 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle size={36} className="text-blue-400" />
+        <div className="max-w-xl mx-auto px-8 py-32 text-center">
+          <div className="w-20 h-20 flex items-center justify-center mx-auto mb-6 bg-secondary/5 border border-secondary/20 rounded-sm">
+            <CheckCircle size={36} className="text-secondary" />
           </div>
-          <h1 className="text-3xl font-black mb-3">Coleção Deployada!</h1>
-          <p className="text-slate-400 mb-6">
-            Agora carregue os {nfts.length} NFTs na blockchain para liberar o
-            mint.
+          <span className="text-xs font-headline font-bold tracking-[0.3em] text-secondary uppercase block mb-3">
+            Contract Deployed
+          </span>
+          <h1 className="font-headline text-4xl font-bold tracking-tighter mb-3 uppercase">
+            Collection Deployed!
+          </h1>
+          <p className="mb-6 text-sm text-on-surface-variant">
+            Now load the {nfts.length} NFTs onto the blockchain to enable
+            minting.
           </p>
 
-          {/* Endereço detectado automaticamente */}
           {deployedAddress ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-6 text-left">
-              <p className="text-xs text-slate-500 mb-1">Contrato deployado</p>
-              <p className="font-mono text-xs text-green-400 break-all">
+            <div className="p-4 mb-6 text-left bg-surface-container-low border border-outline-variant/10 rounded-sm">
+              <p className="text-[10px] text-on-surface-variant uppercase tracking-widest mb-1">
+                Deployed Contract
+              </p>
+              <p className="text-xs font-mono text-primary break-all">
                 {deployedAddress}
               </p>
             </div>
           ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-6 flex items-center gap-3">
+            <div className="p-4 mb-6 flex items-center gap-3 bg-surface-container-low border border-outline-variant/10 rounded-sm">
               <Loader2
-                size={16}
-                className="text-slate-500 animate-spin shrink-0"
+                size={14}
+                className="animate-spin shrink-0 text-on-surface-variant/50"
               />
-              <p className="text-xs text-slate-400">
-                Detectando endereço do contrato...
+              <p className="text-xs text-on-surface-variant">
+                Detecting contract address...
               </p>
             </div>
           )}
@@ -338,28 +327,27 @@ export default function CreateCollectionPage() {
               href={`https://sepolia.etherscan.io/tx/${createHash}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 underline text-sm block mb-6"
+              className="block mb-6 text-sm text-primary hover:text-primary-container transition-colors font-mono underline"
             >
-              Ver deploy no Etherscan
+              View deploy on Etherscan
             </a>
           )}
 
-          {/* Barra de progresso do upload */}
           {(isUploadingNFTs || isLoadingURIs || isConfirmingLoad) && (
-            <div className="mb-6">
-              <div className="flex justify-between text-xs text-slate-400 mb-2">
+            <div className="mb-6 text-left">
+              <div className="flex justify-between text-xs text-on-surface-variant mb-2 uppercase tracking-widest">
                 <span>
                   {isUploadingNFTs
-                    ? `Enviando NFTs para IPFS... (${uploadProgress}%)`
+                    ? `Uploading NFTs to IPFS... (${uploadProgress}%)`
                     : isLoadingURIs
-                      ? "Aguardando MetaMask..."
-                      : "Confirmando na blockchain..."}
+                      ? "Awaiting wallet..."
+                      : "Confirming on blockchain..."}
                 </span>
                 <span>{uploadProgress}%</span>
               </div>
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-1 bg-surface-container-high overflow-hidden rounded-full">
                 <div
-                  className="h-full bg-blue-500 rounded-full transition-all"
+                  className="h-full transition-all bg-gradient-to-r from-primary to-secondary"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
@@ -367,60 +355,83 @@ export default function CreateCollectionPage() {
           )}
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/40 text-red-400 text-sm rounded-xl p-3 mb-4">
+            <div className="text-sm p-4 mb-4 bg-error/5 border border-error/20 text-error rounded-sm">
               {error}
             </div>
           )}
 
-          <button
-            onClick={() => deployedAddress && handleLoadURIs(deployedAddress)}
-            disabled={isLoading || !deployedAddress}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all"
-          >
-            {isLoading || !deployedAddress ? (
-              <>
-                <Loader2 className="animate-spin" size={20} />
-                {!deployedAddress
-                  ? "Aguardando endereço..."
-                  : isUploadingNFTs
-                    ? `Enviando NFTs... ${uploadProgress}%`
-                    : isLoadingURIs
-                      ? "Aguardando MetaMask..."
-                      : "Confirmando..."}
-              </>
-            ) : (
-              <>
-                <Upload size={20} /> Carregar {nfts.length} NFTs na Blockchain
-              </>
-            )}
-          </button>
+          <div className="relative group overflow-hidden">
+            <button
+              onClick={() => deployedAddress && handleLoadURIs(deployedAddress)}
+              disabled={isLoading || !deployedAddress}
+              className={`w-full relative overflow-hidden font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${
+                isLoading || !deployedAddress
+                  ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
+                  : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
+              }`}
+            >
+              {!isLoading && deployedAddress && (
+                <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+              )}
+              {isLoading || !deployedAddress ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  {!deployedAddress
+                    ? "Awaiting address..."
+                    : isUploadingNFTs
+                      ? `Uploading NFTs... ${uploadProgress}%`
+                      : isLoadingURIs
+                        ? "Awaiting wallet..."
+                        : "Confirming..."}
+                </>
+              ) : (
+                <>
+                  <Upload size={18} /> Load {nfts.length} NFTs onto Blockchain
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </main>
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Formulário principal
-  // ─────────────────────────────────────────────
+  // ── Main form ───────────────────────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-background text-on-surface">
       <Navbar />
-      <div className="max-w-3xl mx-auto px-4 py-16">
-        <h1 className="text-4xl font-black mb-2">Nova Coleção</h1>
-        <p className="text-slate-400 mb-10">
-          Defina os dados da coleção e adicione todos os NFTs disponíveis para
-          mint.
-        </p>
+      <div className="pt-32 pb-20 max-w-[1920px] mx-auto px-8">
+        {/* Page Header */}
+        <header className="mb-16 max-w-3xl mx-auto">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+            <span className="text-xs font-headline font-bold tracking-[0.3em] text-secondary uppercase">
+              Collection Factory · Sepolia
+            </span>
+          </div>
+          <h1 className="font-headline text-6xl md:text-8xl font-bold tracking-tighter text-on-surface mb-4 leading-none uppercase">
+            New <span className="text-primary italic">Collection</span>
+          </h1>
+          <p className="text-on-surface-variant text-lg max-w-lg font-light leading-relaxed">
+            Define your collection metadata and add all NFTs available for
+            minting.
+          </p>
+        </header>
 
-        <div className="space-y-8">
-          {/* ─── Seção 1: Dados da coleção ─── */}
-          <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 space-y-6">
-            <h2 className="text-xl font-bold">1. Dados da Coleção</h2>
+        <div className="max-w-3xl mx-auto space-y-6">
+          {/* Section 01: Collection Data */}
+          <div className="bg-surface-container-low border border-outline-variant/10 p-8 space-y-6">
+            <h2 className="font-headline text-lg font-bold uppercase tracking-tight flex items-center gap-3">
+              <span className="text-[10px] font-headline font-black px-2 py-0.5 bg-primary/10 border border-primary/20 text-primary uppercase tracking-widest">
+                01
+              </span>
+              Collection Data
+            </h2>
 
-            {/* Imagem de capa */}
+            {/* Cover image */}
             <div>
-              <label className="block text-sm font-medium mb-3">
-                Imagem de Capa *
+              <label className="block text-[10px] font-headline font-bold mb-3 uppercase tracking-widest text-on-surface-variant">
+                Cover Image *
               </label>
               <input
                 type="file"
@@ -435,77 +446,86 @@ export default function CreateCollectionPage() {
               />
               <label
                 htmlFor="cover-upload"
-                className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors cursor-pointer block
-                  ${coverFile ? "border-green-500 bg-green-500/5" : "border-slate-700 hover:border-blue-500"}`}
+                className={`block p-8 text-center cursor-pointer transition-all border rounded-sm ${
+                  coverFile
+                    ? "border-primary/40 bg-primary/5"
+                    : "border-dashed border-outline-variant/20 hover:border-outline-variant/40"
+                }`}
               >
                 {coverPreview ? (
-                  <div className="relative h-32">
+                  <div className="relative h-40">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={coverPreview}
                       alt="preview"
-                      className="h-full mx-auto object-cover rounded-xl"
+                      className="h-full mx-auto object-cover rounded-sm"
                     />
                   </div>
                 ) : (
                   <>
-                    <Upload className="mx-auto mb-3 text-slate-500" />
-                    <p className="text-sm text-slate-400">
-                      Clique para selecionar a imagem de capa
+                    <Upload
+                      className="mx-auto mb-3 text-on-surface-variant/30"
+                      size={24}
+                    />
+                    <p className="text-sm text-on-surface-variant/50">
+                      Click to select a cover image
                     </p>
                   </>
                 )}
                 {coverFile && (
-                  <p className="text-xs text-green-400 mt-2">
+                  <p className="text-xs mt-2 text-primary font-headline font-bold uppercase tracking-widest">
                     ✓ {coverFile.name}
                   </p>
                 )}
               </label>
             </div>
 
-            {/* Nome e Símbolo */}
+            {/* Name + Symbol */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Nome *</label>
+                <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+                  Name *
+                </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 outline-none text-white focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ex: Cyber Monkeys"
+                  className={inputClass}
+                  placeholder="e.g. Cyber Monkeys"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">
-                  Símbolo *
+                <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+                  Symbol *
                 </label>
                 <input
                   type="text"
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value.toUpperCase())}
                   maxLength={8}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 outline-none text-white uppercase focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ex: CYBM"
+                  className={`${inputClass} uppercase`}
+                  placeholder="e.g. CYBM"
                 />
               </div>
             </div>
 
-            {/* Descrição */}
+            {/* Description */}
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Descrição
+              <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+                Description
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 h-24 outline-none text-white resize-none"
-                placeholder="Descreva sua coleção..."
+                className={`${inputClass} h-24 resize-none`}
+                placeholder="Describe your collection..."
               />
             </div>
 
-            {/* Preço */}
+            {/* Mint price */}
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Preço de Mint (ETH) *
+              <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+                Mint Price (ETH) *
               </label>
               <input
                 type="number"
@@ -513,63 +533,73 @@ export default function CreateCollectionPage() {
                 min="0.0001"
                 value={mintPrice}
                 onChange={(e) => setMintPrice(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 outline-none text-white focus:ring-2 focus:ring-blue-500"
+                className={inputClass}
                 placeholder="0.0001"
               />
             </div>
 
-            {/* Info */}
-            <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
-              <Info size={16} className="text-blue-400 mt-0.5 shrink-0" />
-              <p className="text-xs text-slate-400 leading-relaxed">
-                O supply máximo é definido pela quantidade de NFTs adicionados
-                abaixo. Cada usuário recebe um NFT{" "}
-                <strong className="text-white">aleatório</strong> ao mintar.
+            {/* Info callout */}
+            <div className="glass-panel border-l-2 border-primary/40 border border-outline-variant/10 p-4 flex items-start gap-3">
+              <Info size={14} className="text-primary mt-0.5 shrink-0" />
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                Max supply is determined by the number of NFTs added below. Each
+                user receives a{" "}
+                <strong className="text-on-surface font-semibold">
+                  random NFT
+                </strong>{" "}
+                when minting.
               </p>
             </div>
           </div>
 
-          {/* ─── Seção 2: NFTs da coleção ─── */}
-          <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 space-y-6">
+          {/* Section 02: NFTs */}
+          <div className="bg-surface-container-low border border-outline-variant/10 p-8 space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold">2. NFTs da Coleção</h2>
-                <p className="text-slate-400 text-sm mt-1">
+                <h2 className="font-headline text-lg font-bold uppercase tracking-tight flex items-center gap-3">
+                  <span className="text-[10px] font-headline font-black px-2 py-0.5 bg-secondary/10 border border-secondary/20 text-secondary uppercase tracking-widest">
+                    02
+                  </span>
+                  Collection NFTs
+                </h2>
+                <p className="text-xs text-on-surface-variant mt-1 uppercase tracking-widest">
                   {nfts.length === 0
-                    ? "Adicione os NFTs disponíveis para mint."
-                    : `${nfts.length} NFT${nfts.length !== 1 ? "s" : ""} adicionado${nfts.length !== 1 ? "s" : ""}`}
+                    ? "Add the NFTs available for minting."
+                    : `${nfts.length} NFT${nfts.length !== 1 ? "s" : ""} added`}
                 </p>
               </div>
               <button
                 onClick={addNFT}
-                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                className="flex items-center gap-2 text-xs font-headline font-bold uppercase tracking-widest px-4 py-2 border border-outline-variant/20 text-on-surface-variant hover:border-primary/30 hover:text-primary transition-all rounded-sm"
               >
-                <Plus size={14} /> Adicionar NFT
+                <Plus size={12} /> Add NFT
               </button>
             </div>
 
             {nfts.length === 0 ? (
-              <div className="text-center py-12 border border-dashed border-slate-700 rounded-2xl">
-                <ImageIcon size={36} className="text-slate-700 mx-auto mb-3" />
-                <p className="text-slate-500 text-sm mb-4">
-                  Nenhum NFT adicionado ainda
+              <div className="text-center py-12 border border-dashed border-outline-variant/20 rounded-sm">
+                <ImageIcon
+                  size={36}
+                  className="mx-auto mb-3 text-on-surface-variant/20"
+                />
+                <p className="text-sm text-on-surface-variant mb-4">
+                  No NFTs added yet
                 </p>
                 <button
                   onClick={addNFT}
-                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-5 py-2.5 rounded-xl font-bold text-sm transition-all"
+                  className="inline-flex items-center gap-2 font-headline font-bold px-5 py-2.5 text-sm rounded-sm bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed uppercase tracking-wider"
                 >
-                  <Plus size={14} /> Adicionar primeiro NFT
+                  <Plus size={13} /> Add First NFT
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {nfts.map((nft, index) => (
                   <div
                     key={nft.id}
-                    className="bg-slate-800 border border-slate-700 rounded-2xl p-5"
+                    className="p-4 bg-surface-container border border-outline-variant/10 rounded-sm"
                   >
                     <div className="flex items-start gap-4">
-                      {/* Preview da imagem */}
                       <div className="shrink-0">
                         <input
                           type="file"
@@ -586,25 +616,31 @@ export default function CreateCollectionPage() {
                         />
                         <label
                           htmlFor={`nft-file-${nft.id}`}
-                          className={`w-20 h-20 rounded-xl border-2 border-dashed flex items-center justify-center cursor-pointer overflow-hidden transition-colors
-                            ${nft.file ? "border-green-500" : "border-slate-600 hover:border-blue-500"}`}
+                          className={`w-20 h-20 flex items-center justify-center cursor-pointer overflow-hidden rounded-sm transition-all border ${
+                            nft.file
+                              ? "border-primary/40"
+                              : "border-dashed border-outline-variant/20 hover:border-outline-variant/40"
+                          }`}
                         >
                           {nft.previewUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={nft.previewUrl}
                               alt="preview"
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <Upload size={16} className="text-slate-500" />
+                            <Upload
+                              size={14}
+                              className="text-on-surface-variant/30"
+                            />
                           )}
                         </label>
                       </div>
 
-                      {/* Campos */}
-                      <div className="flex-1 space-y-3">
+                      <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 font-mono shrink-0">
+                          <span className="text-[10px] font-headline font-bold text-on-surface-variant shrink-0 uppercase tracking-widest">
                             #{String(index + 1).padStart(3, "0")}
                           </span>
                           <input
@@ -613,8 +649,8 @@ export default function CreateCollectionPage() {
                             onChange={(e) =>
                               updateNFT(nft.id, "name", e.target.value)
                             }
-                            className="flex-1 bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Nome do NFT *"
+                            className={`${inputClass} flex-1`}
+                            placeholder="NFT Name *"
                           />
                         </div>
                         <textarea
@@ -622,17 +658,16 @@ export default function CreateCollectionPage() {
                           onChange={(e) =>
                             updateNFT(nft.id, "description", e.target.value)
                           }
-                          className="w-full bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 text-white text-sm outline-none resize-none h-16"
-                          placeholder="Descrição (opcional)"
+                          className={`${inputClass} h-16 resize-none`}
+                          placeholder="Description (optional)"
                         />
                       </div>
 
-                      {/* Remover */}
                       <button
                         onClick={() => removeNFT(nft.id)}
-                        className="shrink-0 p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                        className="shrink-0 p-1.5 text-on-surface-variant/30 hover:text-error transition-colors"
                       >
-                        <X size={16} />
+                        <X size={14} />
                       </button>
                     </div>
                   </div>
@@ -640,41 +675,49 @@ export default function CreateCollectionPage() {
 
                 <button
                   onClick={addNFT}
-                  className="w-full py-3 border border-dashed border-slate-700 hover:border-blue-500 rounded-xl text-slate-500 hover:text-blue-400 text-sm flex items-center justify-center gap-2 transition-all"
+                  className="w-full py-3 text-xs flex items-center justify-center gap-2 transition-all border border-dashed border-outline-variant/10 text-on-surface-variant/40 hover:border-primary/30 hover:text-primary rounded-sm font-headline font-bold uppercase tracking-widest"
                 >
-                  <Plus size={14} /> Adicionar mais um NFT
+                  <Plus size={12} /> Add Another NFT
                 </button>
               </div>
             )}
           </div>
 
-          {/* Erro */}
           {error && (
-            <div className="bg-red-500/10 border border-red-500/40 text-red-400 text-sm rounded-xl p-4">
+            <div className="text-sm p-4 bg-error/5 border border-error/20 text-error rounded-sm">
               {error}
             </div>
           )}
 
-          {/* Botão principal */}
-          <button
-            onClick={handleCreateCollection}
-            disabled={isLoading || nfts.length === 0}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all text-white"
-          >
-            {isLoading ? (
-              <Loader2 className="animate-spin" size={20} />
-            ) : (
-              <Plus size={20} />
-            )}
-            {isUploadingCover
-              ? "Enviando capa para IPFS..."
-              : isCreating
-                ? "Aguardando MetaMask..."
-                : isConfirmingCreate
-                  ? "Deployando contrato..."
-                  : `Criar Coleção com ${nfts.length} NFT${nfts.length !== 1 ? "s" : ""}`}
-          </button>
+          <div className="relative group overflow-hidden">
+            <button
+              onClick={handleCreateCollection}
+              disabled={isLoading || nfts.length === 0}
+              className={`w-full relative overflow-hidden font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${
+                isLoading || nfts.length === 0
+                  ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
+                  : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
+              }`}
+            >
+              {!isLoading && nfts.length > 0 && (
+                <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+              )}
+              {isLoading ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : (
+                <Layers size={18} />
+              )}
+              {isUploadingCover
+                ? "Uploading cover to IPFS..."
+                : isCreating
+                  ? "Awaiting wallet..."
+                  : isConfirmingCreate
+                    ? "Deploying contract..."
+                    : `Create Collection with ${nfts.length} NFT${nfts.length !== 1 ? "s" : ""}`}
+            </button>
+          </div>
         </div>
+        <Footer />
       </div>
     </main>
   );

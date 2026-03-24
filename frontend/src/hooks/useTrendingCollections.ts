@@ -13,11 +13,13 @@ const MARKETPLACE_ADDRESS = process.env
 const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 const INFURA_KEY = process.env.NEXT_PUBLIC_INFURA_API_KEY;
 
+// Alchemy: readContract, owners API
 const publicClient = createPublicClient({
   chain: sepolia,
   transport: http(`https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`),
 });
 
+// Infura: getLogs (suporta ranges maiores que Alchemy free tier)
 const infuraClient = createPublicClient({
   chain: sepolia,
   transport: http(`https://sepolia.infura.io/v3/${INFURA_KEY}`),
@@ -73,33 +75,30 @@ export function useTrendingCollections(limit = 10) {
         const fromBlock24h = latestBlock - BigInt(7200); // ~24h
         const fromBlock7d = latestBlock - BigInt(50400); // ~7 dias
 
-        const [soldLogs, listedLogs24h, offerLogs, listedLogs7d] =
-          await Promise.all([
-            infuraClient.getLogs({
-              address: MARKETPLACE_ADDRESS,
-              event: ITEM_SOLD_ABI,
-              fromBlock: fromBlock24h,
-              toBlock: "latest",
-            }),
-            infuraClient.getLogs({
-              address: MARKETPLACE_ADDRESS,
-              event: ITEM_LISTED_ABI,
-              fromBlock: fromBlock24h,
-              toBlock: "latest",
-            }),
-            infuraClient.getLogs({
-              address: MARKETPLACE_ADDRESS,
-              event: OFFER_MADE_ABI,
-              fromBlock: fromBlock24h,
-              toBlock: "latest",
-            }),
-            infuraClient.getLogs({
-              address: MARKETPLACE_ADDRESS,
-              event: ITEM_LISTED_ABI,
-              fromBlock: fromBlock7d,
-              toBlock: "latest",
-            }), // para floor price
-          ]);
+        const soldLogs = await infuraClient.getLogs({
+          address: MARKETPLACE_ADDRESS,
+          event: ITEM_SOLD_ABI,
+          fromBlock: fromBlock24h,
+          toBlock: "latest",
+        });
+        const listedLogs24h = await infuraClient.getLogs({
+          address: MARKETPLACE_ADDRESS,
+          event: ITEM_LISTED_ABI,
+          fromBlock: fromBlock24h,
+          toBlock: "latest",
+        });
+        const offerLogs = await infuraClient.getLogs({
+          address: MARKETPLACE_ADDRESS,
+          event: OFFER_MADE_ABI,
+          fromBlock: fromBlock24h,
+          toBlock: "latest",
+        });
+        const listedLogs7d = await infuraClient.getLogs({
+          address: MARKETPLACE_ADDRESS,
+          event: ITEM_LISTED_ABI,
+          fromBlock: fromBlock7d,
+          toBlock: "latest",
+        });
 
         const results: TrendingCollection[] = await Promise.all(
           collections.map(async (col) => {

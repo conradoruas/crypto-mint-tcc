@@ -6,7 +6,7 @@ import {
 } from "@/hooks/useTrendingCollections";
 import Image from "next/image";
 import Link from "next/link";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown } from "lucide-react";
 
 const resolveIpfsUrl = (url: string) => {
   if (!url) return "";
@@ -15,23 +15,18 @@ const resolveIpfsUrl = (url: string) => {
   return url;
 };
 
-// ─── Sparkline SVG simples ───
 function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
   if (data.length < 2) {
     return (
       <div className="w-16 h-8 flex items-center justify-center">
-        <div className="w-full h-px bg-slate-700" />
+        <div className="w-full h-px bg-outline-variant/30" />
       </div>
     );
   }
-
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
-  const w = 64,
-    h = 32,
-    pad = 2;
-
+  const w = 64, h = 32, pad = 2;
   const points = data
     .map((v, i) => {
       const x = pad + (i / (data.length - 1)) * (w - pad * 2);
@@ -39,9 +34,7 @@ function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
       return `${x},${y}`;
     })
     .join(" ");
-
-  const color = positive ? "#22c55e" : "#ef4444";
-
+  const color = positive ? "#8ff5ff" : "#ff716c";
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
       <polyline
@@ -51,12 +44,12 @@ function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
+        style={{ filter: `drop-shadow(0 0 3px ${color})` }}
       />
     </svg>
   );
 }
 
-// ─── Linha da tabela ───
 function TrendingRow({
   collection,
   rank,
@@ -71,100 +64,97 @@ function TrendingRow({
   return (
     <Link
       href={`/collections/${collection.contractAddress}`}
-      className="grid grid-cols-[32px_2fr_1fr_1fr_1fr_1fr_1fr_1fr_80px] items-center gap-4 px-4 py-3 hover:bg-slate-900/60 transition-colors border-b border-slate-800/50 last:border-0"
+      className="grid grid-cols-[32px_2fr_1fr_1fr_1fr_1fr_1fr_1fr_80px] items-center gap-4 px-4 py-4 transition-colors border-b border-outline-variant/5 last:border-0 hover:bg-surface-container group"
     >
-      {/* Rank */}
-      <span className="text-slate-500 text-sm font-mono text-right">
+      <span className="font-headline text-on-surface-variant text-sm text-right">
         {rank}
       </span>
 
-      {/* Coleção */}
       <div className="flex items-center gap-3 min-w-0">
-        <div className="w-9 h-9 rounded-xl bg-slate-800 overflow-hidden shrink-0 relative">
+        <div className="w-10 h-10 overflow-hidden shrink-0 relative rounded-sm border border-outline-variant/20">
           {image ? (
             <Image
               src={image}
               alt={collection.name}
               fill
               className="object-cover"
-              sizes="36px"
+              sizes="40px"
             />
           ) : (
-            <div className="w-full h-full bg-slate-700" />
+            <div className="w-full h-full bg-surface-container-high" />
           )}
         </div>
         <div className="min-w-0">
-          <p className="font-bold text-sm truncate">{collection.name}</p>
-          <p className="text-xs text-slate-500 font-mono">
+          <p className="font-headline font-bold text-sm truncate text-on-surface group-hover:text-primary transition-colors">
+            {collection.name}
+          </p>
+          <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">
             {collection.symbol}
           </p>
         </div>
       </div>
 
-      {/* Floor */}
       <div className="text-right">
-        <p className="text-sm font-bold">
+        <p className="font-headline font-bold text-sm text-on-surface">
           {collection.floorPrice ? (
             `${collection.floorPrice} ETH`
           ) : (
-            <span className="text-slate-600">—</span>
+            <span className="text-on-surface-variant/30">—</span>
           )}
         </p>
       </div>
 
-      {/* Fl. Ch 24h */}
       <div className="text-right">
         {change !== null ? (
           <div
-            className={`inline-flex items-center gap-1 text-sm font-bold ${isPositive ? "text-green-400" : "text-red-400"}`}
+            className={`inline-flex items-center gap-1 text-sm font-bold font-headline ${
+              isPositive ? "text-primary" : "text-error"
+            }`}
           >
             {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
             {Math.abs(change).toFixed(1)}%
           </div>
         ) : (
-          <span className="text-slate-600 text-sm">—</span>
+          <span className="text-sm text-on-surface-variant/30">—</span>
         )}
       </div>
 
-      {/* Top Offer */}
       <div className="text-right">
-        <p className="text-sm text-slate-300">
+        <p className="text-sm text-on-surface-variant">
           {collection.topOffer ? (
             `${collection.topOffer} ETH`
           ) : (
-            <span className="text-slate-600">—</span>
+            <span className="text-on-surface-variant/30">—</span>
           )}
         </p>
       </div>
 
-      {/* Sales 24h */}
       <div className="text-right">
-        <p className="text-sm font-bold">{collection.sales24h}</p>
+        <p className="font-headline font-bold text-sm text-on-surface">
+          {collection.sales24h}
+        </p>
       </div>
 
-      {/* Owners */}
       <div className="text-right">
-        <p className="text-sm text-slate-300">
+        <p className="text-sm text-on-surface-variant">
           {collection.owners > 0 ? (
             collection.owners.toLocaleString("pt-BR")
           ) : (
-            <span className="text-slate-600">—</span>
+            <span className="text-on-surface-variant/30">—</span>
           )}
         </p>
       </div>
 
-      {/* Volume 24h */}
       <div className="text-right">
-        <p className="text-sm font-bold text-blue-400">
+        <p className="font-headline font-bold text-sm text-primary">
           {parseFloat(collection.volume24h) > 0 ? (
             `${collection.volume24h} ETH`
           ) : (
-            <span className="text-slate-600 font-normal">—</span>
+            <span className="font-normal text-on-surface-variant/30">—</span>
           )}
         </p>
       </div>
 
-      {/* Sparkline */}
       <div className="flex justify-end">
         <Sparkline data={collection.floorHistory} positive={isPositive} />
       </div>
@@ -174,95 +164,66 @@ function TrendingRow({
 
 function SkeletonRow({ rank }: { rank: number }) {
   return (
-    <div className="grid grid-cols-[32px_2fr_1fr_1fr_1fr_1fr_1fr_1fr_80px] items-center gap-4 px-4 py-3 border-b border-slate-800/50">
-      <span className="text-slate-600 text-sm font-mono text-right">
-        {rank}
-      </span>
+    <div className="grid grid-cols-[32px_2fr_1fr_1fr_1fr_1fr_1fr_1fr_80px] items-center gap-4 px-4 py-4 border-b border-outline-variant/5">
+      <span className="text-sm text-right text-on-surface-variant/30">{rank}</span>
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-slate-800 animate-pulse shrink-0" />
+        <div className="w-10 h-10 animate-pulse shrink-0 bg-surface-container-high rounded-sm" />
         <div className="space-y-1.5">
-          <div className="h-3.5 bg-slate-800 rounded animate-pulse w-28" />
-          <div className="h-2.5 bg-slate-800 rounded animate-pulse w-12" />
+          <div className="h-3.5 rounded-sm animate-pulse w-28 bg-surface-container-high" />
+          <div className="h-2.5 rounded-sm animate-pulse w-12 bg-surface-container-high" />
         </div>
       </div>
       {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className="h-3 bg-slate-800 rounded animate-pulse ml-auto w-16"
-        />
+        <div key={i} className="h-3 rounded-sm animate-pulse ml-auto w-16 bg-surface-container-high" />
       ))}
-      <div className="h-8 bg-slate-800 rounded animate-pulse w-16 ml-auto" />
+      <div className="h-8 rounded-sm animate-pulse w-16 ml-auto bg-surface-container-high" />
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// Componente principal
-// ─────────────────────────────────────────────
-
 const HEADERS = [
   { label: "#", align: "text-right" },
-  { label: "COLEÇÃO", align: "text-left" },
-  { label: "FLOOR", align: "text-right" },
-  { label: "FL. CH 24H", align: "text-right" },
-  { label: "TOP OFFER", align: "text-right" },
-  { label: "SALES 24H", align: "text-right" },
-  { label: "OWNERS", align: "text-right" },
-  { label: "VOLUME 24H", align: "text-right" },
-  { label: "FLOOR 24H", align: "text-right" },
+  { label: "Collection", align: "text-left" },
+  { label: "Floor", align: "text-right" },
+  { label: "24h Chg", align: "text-right" },
+  { label: "Top Offer", align: "text-right" },
+  { label: "Sales 24h", align: "text-right" },
+  { label: "Owners", align: "text-right" },
+  { label: "Vol 24h", align: "text-right" },
+  { label: "Floor 24h", align: "text-right" },
 ];
 
 export function TrendingSection() {
   const { trending, isLoading } = useTrendingCollections(10);
 
   return (
-    <section className="max-w-7xl mx-auto px-4 py-16">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-black">Trending</h2>
-        <Link
-          href="/collections"
-          className="text-xs text-slate-400 hover:text-white transition-colors font-mono tracking-wide"
-        >
-          Ver todas →
-        </Link>
+    <div className="overflow-hidden bg-surface-container-low border border-outline-variant/10">
+      <div className="grid grid-cols-[32px_2fr_1fr_1fr_1fr_1fr_1fr_1fr_80px] gap-4 px-4 py-3 border-b border-outline-variant/10">
+        {HEADERS.map((h) => (
+          <p
+            key={h.label}
+            className={`text-[10px] font-headline font-bold uppercase tracking-[0.2em] text-on-surface-variant ${h.align}`}
+          >
+            {h.label}
+          </p>
+        ))}
       </div>
 
-      {/* Tabela */}
-      <div className="bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden">
-        {/* Cabeçalho */}
-        <div className="grid grid-cols-[32px_2fr_1fr_1fr_1fr_1fr_1fr_1fr_80px] gap-4 px-4 py-3 border-b border-slate-800">
-          {HEADERS.map((h) => (
-            <p
-              key={h.label}
-              className={`text-xs text-slate-500 font-mono tracking-widest uppercase ${h.align}`}
-            >
-              {h.label}
-            </p>
-          ))}
+      {isLoading ? (
+        Array.from({ length: 5 }).map((_, i) => (
+          <SkeletonRow key={i} rank={i + 1} />
+        ))
+      ) : trending.length === 0 ? (
+        <div className="py-16 text-center">
+          <p className="text-sm text-on-surface-variant">
+            No activity in the last 24h
+          </p>
         </div>
-
-        {/* Linhas */}
-        {isLoading ? (
-          Array.from({ length: 5 }).map((_, i) => (
-            <SkeletonRow key={i} rank={i + 1} />
-          ))
-        ) : trending.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-slate-500 text-sm">
-              Nenhuma atividade nas últimas 24h
-            </p>
-          </div>
-        ) : (
-          trending.map((col, i) => (
-            <TrendingRow
-              key={col.contractAddress}
-              collection={col}
-              rank={i + 1}
-            />
-          ))
-        )}
-      </div>
-    </section>
+      ) : (
+        trending.map((col, i) => (
+          <TrendingRow key={col.contractAddress} collection={col} rank={i + 1} />
+        ))
+      )}
+    </div>
   );
 }

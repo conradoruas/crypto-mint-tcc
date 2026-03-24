@@ -1,14 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount, useReadContract } from "wagmi";
+import { useConnection, useReadContract } from "wagmi";
 import { Navbar } from "@/components/NavBar";
-import { Loader2, Plus, Layers, ShieldCheck } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Layers,
+  ShieldCheck,
+  Sparkles,
+  Shuffle,
+} from "lucide-react";
 import { useCollections, useMintToCollection } from "@/hooks/useCollections";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { formatEther } from "viem";
 import Image from "next/image";
 import Link from "next/link";
+import Footer from "@/components/Footer";
 
 const resolveIpfsUrl = (url: string) => {
   if (!url) return "";
@@ -50,53 +58,55 @@ function CollectionOption({
     <button
       onClick={onSelect}
       disabled={unavailable}
-      className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-center gap-4 ${
+      className={`w-full text-left p-4 flex items-center gap-4 transition-all border rounded-sm ${
         selected
-          ? "border-blue-500 bg-blue-500/10"
+          ? "border-primary/40 bg-primary/5"
           : unavailable
-            ? "border-slate-800 bg-slate-900/50 opacity-50 cursor-not-allowed"
-            : "border-slate-800 bg-slate-900 hover:border-slate-600 cursor-pointer"
+            ? "border-outline-variant/10 bg-surface-container-lowest opacity-50 cursor-not-allowed"
+            : "border-outline-variant/10 bg-surface-container-lowest hover:border-outline-variant/30 hover:bg-surface-container cursor-pointer"
       }`}
     >
-      <div className="w-16 h-16 rounded-xl bg-slate-800 overflow-hidden shrink-0 relative">
+      <div className="w-14 h-14 overflow-hidden shrink-0 relative border border-outline-variant/20 rounded-sm">
         {image ? (
           <Image
             src={image}
             alt={collection.name}
             fill
             className="object-cover"
-            sizes="64px"
+            sizes="56px"
           />
         ) : (
-          <div className="w-full h-full bg-slate-700" />
+          <div className="w-full h-full bg-surface-container-high" />
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-bold truncate">{collection.name}</p>
-          <span className="text-xs text-slate-500 font-mono shrink-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <p className="font-headline font-bold truncate text-on-surface">
+            {collection.name}
+          </p>
+          <span className="text-[10px] text-on-surface-variant uppercase tracking-widest shrink-0">
             {collection.symbol}
           </span>
         </div>
-        <p className="text-sm text-blue-400 font-bold mt-0.5">
+        <p className="font-headline text-sm font-bold text-primary">
           {formatEther(collection.mintPrice)} ETH
         </p>
-        <p className="text-xs text-slate-500 mt-0.5">
+        <p className="text-xs text-on-surface-variant mt-0.5">
           {collection.totalSupply?.toString() ?? "?"} /{" "}
-          {collection.maxSupply.toString()} mintados
-          {isSoldOut && <span className="text-red-400 ml-1">· Esgotado</span>}
+          {collection.maxSupply.toString()} minted
+          {isSoldOut && <span className="ml-1 text-error"> · Sold Out</span>}
           {!urisLoaded && !isSoldOut && (
-            <span className="text-yellow-400 ml-1">· Não disponível</span>
+            <span className="ml-1 text-secondary"> · Unavailable</span>
           )}
         </p>
       </div>
-      {selected && <ShieldCheck size={20} className="text-blue-400 shrink-0" />}
+      {selected && <ShieldCheck size={16} className="text-primary shrink-0" />}
     </button>
   );
 }
 
 export default function MintPage() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useConnection();
   const { collections, isLoading: isLoadingCollections } = useCollections();
   const [selectedCollection, setSelectedCollection] = useState("");
   const [mintSuccess, setMintSuccess] = useState<string | null>(null);
@@ -107,13 +117,12 @@ export default function MintPage() {
   const chosen = collections.find(
     (c) => c.contractAddress === selectedCollection,
   );
-
   if (isSuccess && hash && !mintSuccess) setMintSuccess(hash);
 
   const handleMint = async () => {
     setError(null);
     if (!address || !selectedCollection || !chosen) {
-      setError("Selecione uma coleção e conecte sua carteira.");
+      setError("Select a collection and connect your wallet.");
       return;
     }
     try {
@@ -123,46 +132,50 @@ export default function MintPage() {
         address,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro desconhecido.");
+      setError(e instanceof Error ? e.message : "Unknown error.");
     }
   };
 
-  // ─── Tela de sucesso ───
   if (mintSuccess) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white">
+      <main className="min-h-screen bg-background text-on-surface">
         <Navbar />
-        <div className="max-w-lg mx-auto px-4 py-24 text-center">
-          <div className="w-20 h-20 bg-green-500/20 border border-green-500/40 rounded-full flex items-center justify-center mx-auto mb-6">
-            <ShieldCheck size={36} className="text-green-400" />
+        <div className="max-w-lg mx-auto px-8 py-32 text-center">
+          <div className="w-20 h-20 flex items-center justify-center mx-auto mb-6 bg-primary/5 border border-primary/20 rounded-sm">
+            <ShieldCheck size={36} className="text-primary" />
           </div>
-          <h1 className="text-3xl font-black mb-3">NFT Mintado!</h1>
-          <p className="text-slate-400 mb-6">
-            Seu NFT aleatório foi mintado com sucesso.
+          <span className="text-xs font-headline font-bold tracking-[0.3em] text-primary uppercase block mb-3">
+            Transaction Confirmed
+          </span>
+          <h1 className="font-headline text-4xl font-bold tracking-tighter mb-3 uppercase">
+            NFT Minted!
+          </h1>
+          <p className="mb-6 text-sm text-on-surface-variant">
+            Your random NFT was successfully minted.
           </p>
           <a
             href={`https://sepolia.etherscan.io/tx/${mintSuccess}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-400 underline text-sm block mb-8"
+            className="block mb-8 text-sm text-primary hover:text-primary-container transition-colors font-mono underline"
           >
-            Ver transação no Etherscan
+            View on Etherscan
           </a>
           <div className="flex gap-4 justify-center">
             <Link
               href="/profile"
-              className="bg-blue-600 hover:bg-blue-700 font-bold px-6 py-3 rounded-xl transition-all"
+              className="font-headline font-bold px-6 py-3 rounded-sm bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed text-sm uppercase tracking-wider transition-all hover:brightness-110"
             >
-              Ver meu perfil
+              View Profile
             </Link>
             <button
               onClick={() => {
                 setMintSuccess(null);
                 setSelectedCollection("");
               }}
-              className="bg-slate-800 hover:bg-slate-700 font-bold px-6 py-3 rounded-xl transition-all"
+              className="font-headline font-bold px-6 py-3 rounded-sm border border-outline-variant/20 text-on-surface-variant hover:bg-surface-container transition-all text-sm uppercase tracking-wider"
             >
-              Mintar outro
+              Mint Another
             </button>
           </div>
         </div>
@@ -171,113 +184,234 @@ export default function MintPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-background text-on-surface">
       <Navbar />
-      <div className="max-w-2xl mx-auto px-4 py-16">
-        <h1 className="text-4xl font-black mb-2">Mintar NFT</h1>
-        <p className="text-slate-400 mb-10">
-          Escolha uma coleção e receba um NFT{" "}
-          <strong className="text-white">aleatório</strong> dos disponíveis.
-        </p>
+      <div className="pt-32 pb-20 max-w-[1920px] mx-auto px-8">
+        {/* Page Header */}
+        <header className="mb-16">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+            <span className="text-xs font-headline font-bold tracking-[0.3em] text-secondary uppercase">
+              Synthetic Foundry · Sepolia
+            </span>
+          </div>
+          <h1 className="font-headline text-6xl md:text-8xl font-bold tracking-tighter text-on-surface mb-4 leading-none uppercase">
+            <span className="text-primary italic"> Mint New Asset</span>
+          </h1>
+          <p className="text-on-surface-variant text-lg max-w-lg font-light leading-relaxed">
+            Choose a collection and receive a{" "}
+            <strong className="text-on-surface font-semibold">
+              random NFT
+            </strong>{" "}
+            from those available.
+          </p>
+        </header>
 
-        <div className="space-y-6">
-          {/* ─── Seleção de coleção ─── */}
-          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
-            <h2 className="font-bold mb-4 flex items-center gap-2">
-              <Layers size={18} className="text-blue-400" />
-              Escolha uma coleção
-            </h2>
+        {/* Main layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left — Form */}
+          <div className="lg:col-span-7 space-y-6">
+            {/* Collection Selector */}
+            <div className="bg-surface-container-low border border-outline-variant/10 p-8">
+              <h2 className="font-headline text-lg font-bold uppercase tracking-tight flex items-center gap-3 mb-6">
+                <Layers size={18} className="text-primary" />
+                Select Collection
+              </h2>
 
-            {isLoadingCollections ? (
-              <div className="space-y-3">
-                {[1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="h-20 bg-slate-800 rounded-2xl animate-pulse"
+              {isLoadingCollections ? (
+                <div className="space-y-3">
+                  {[1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="h-20 animate-pulse rounded-sm bg-surface-container-high border border-outline-variant/5"
+                    />
+                  ))}
+                </div>
+              ) : collections.length === 0 ? (
+                <div className="text-center py-12 border border-dashed border-outline-variant/20 rounded-sm">
+                  <Layers
+                    size={32}
+                    className="mx-auto mb-4 text-on-surface-variant/30"
                   />
-                ))}
+                  <p className="text-sm text-on-surface-variant mb-4">
+                    No collections available.
+                  </p>
+                  <Link
+                    href="/collections/create"
+                    className="inline-flex items-center gap-2 font-headline font-bold px-5 py-2.5 text-sm rounded-sm bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed uppercase tracking-wider"
+                  >
+                    <Plus size={13} /> Create Collection
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {collections.map((c) => (
+                    <CollectionOption
+                      key={c.contractAddress}
+                      collection={c}
+                      selected={selectedCollection === c.contractAddress}
+                      onSelect={() => setSelectedCollection(c.contractAddress)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Summary */}
+            {chosen && (
+              <div className="bg-surface-container-low border border-outline-variant/10 p-8">
+                <h2 className="font-headline text-lg font-bold uppercase tracking-tight mb-6">
+                  Order Summary
+                </h2>
+                <div className="space-y-4">
+                  <div className="flex justify-between text-sm border-b border-outline-variant/10 pb-4">
+                    <span className="text-on-surface-variant uppercase tracking-widest text-xs">
+                      Collection
+                    </span>
+                    <span className="font-headline font-bold">
+                      {chosen.name}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm border-b border-outline-variant/10 pb-4">
+                    <span className="text-on-surface-variant uppercase tracking-widest text-xs">
+                      NFT Received
+                    </span>
+                    <span className="text-on-surface-variant flex items-center gap-2 text-xs">
+                      <Shuffle size={12} /> Random
+                    </span>
+                  </div>
+                  <div className="flex justify-between pt-2">
+                    <span className="font-headline font-bold uppercase tracking-widest text-sm">
+                      Total
+                    </span>
+                    <span className="font-headline text-xl font-bold text-primary">
+                      {formatEther(chosen.mintPrice)} ETH
+                    </span>
+                  </div>
+                </div>
               </div>
-            ) : collections.length === 0 ? (
-              <div className="text-center py-10 border border-dashed border-slate-700 rounded-2xl">
-                <p className="text-slate-400 text-sm mb-4">
-                  Nenhuma coleção disponível.
-                </p>
-                <Link
-                  href="/collections/create"
-                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 font-bold px-5 py-2.5 rounded-xl text-sm transition-all"
-                >
-                  <Plus size={14} /> Criar coleção
-                </Link>
+            )}
+
+            {/* Error */}
+            {error && (
+              <div className="text-sm p-4 bg-error/5 border border-error/20 text-error rounded-sm">
+                {error}
               </div>
-            ) : (
-              <div className="space-y-3">
-                {collections.map((c) => (
-                  <CollectionOption
-                    key={c.contractAddress}
-                    collection={c}
-                    selected={selectedCollection === c.contractAddress}
-                    onSelect={() => setSelectedCollection(c.contractAddress)}
-                  />
-                ))}
-              </div>
+            )}
+
+            {/* CTA Button */}
+            <div className="relative group overflow-hidden">
+              <button
+                onClick={handleMint}
+                disabled={
+                  isPending ||
+                  isConfirming ||
+                  !isConnected ||
+                  !selectedCollection
+                }
+                className={`w-full relative overflow-hidden font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${
+                  isPending ||
+                  isConfirming ||
+                  !isConnected ||
+                  !selectedCollection
+                    ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
+                    : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
+                }`}
+              >
+                {/* Shimmer sweep */}
+                {!isPending &&
+                  !isConfirming &&
+                  isConnected &&
+                  selectedCollection && (
+                    <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+                  )}
+                {isPending || isConfirming ? (
+                  <>
+                    <Loader2 className="animate-spin" size={18} />
+                    {isPending ? "Awaiting Wallet..." : "Confirming..."}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={18} />
+                    {chosen
+                      ? `Mint Random NFT — ${formatEther(chosen.mintPrice)} ETH`
+                      : "Mint NFT"}
+                  </>
+                )}
+              </button>
+            </div>
+
+            {!isConnected && (
+              <p className="text-center text-sm text-on-surface-variant/50 uppercase tracking-widest">
+                Connect your wallet to mint
+              </p>
             )}
           </div>
 
-          {/* ─── Resumo ─── */}
-          {chosen && (
-            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-3">
-              <h2 className="font-bold">Resumo</h2>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Coleção</span>
-                <span className="font-medium">{chosen.name}</span>
+          {/* Right — Preview */}
+          <div className="lg:col-span-5 lg:sticky lg:top-32 space-y-6">
+            {/* NFT Preview Card */}
+            <div className="bg-surface-container-low border border-outline-variant/10">
+              <div className="px-6 pt-6 pb-2">
+                <h3 className="font-headline text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant">
+                  Live Preview
+                </h3>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">NFT recebido</span>
-                <span className="font-medium text-slate-300">Aleatório 🎲</span>
-              </div>
-              <div className="border-t border-slate-800 pt-3 flex justify-between">
-                <span className="font-bold">Total</span>
-                <span className="font-black text-blue-400">
-                  {formatEther(chosen.mintPrice)} ETH
-                </span>
+              <div className="p-4">
+                <div className="relative aspect-square bg-surface-container-high overflow-hidden rounded-sm">
+                  {chosen && resolveIpfsUrl(chosen.image) ? (
+                    <Image
+                      src={resolveIpfsUrl(chosen.image)}
+                      alt={chosen.name}
+                      fill
+                      className="object-cover grayscale"
+                      sizes="(max-width: 1024px) 100vw, 40vw"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="text-center">
+                        <Sparkles
+                          size={40}
+                          className="mx-auto mb-3 text-on-surface-variant/20"
+                        />
+                        <p className="text-xs text-on-surface-variant/30 uppercase tracking-widest">
+                          Select a collection
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="absolute top-4 left-4 glass-panel px-3 py-1.5 border border-outline-variant/20 text-[10px] font-headline font-bold uppercase tracking-widest text-on-surface-variant">
+                    #???
+                  </div>
+                </div>
+                <div className="p-4 pt-3">
+                  <p className="text-[10px] text-on-surface-variant uppercase tracking-[0.2em] mb-1">
+                    {chosen?.symbol ?? "COLLECTION"}
+                  </p>
+                  <h4 className="font-headline text-lg font-bold text-on-surface">
+                    {chosen ? `${chosen.name} · Random` : "Unknown Asset"}
+                  </h4>
+                </div>
               </div>
             </div>
-          )}
 
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/40 text-red-400 text-sm rounded-xl p-4">
-              {error}
+            {/* Creator Insight */}
+            <div className="glass-panel border-l-2 border-primary/40 border border-outline-variant/10 p-6">
+              <p className="text-[10px] font-headline font-bold text-primary uppercase tracking-[0.2em] mb-2">
+                Creator Insight
+              </p>
+              <p className="text-sm text-on-surface-variant leading-relaxed">
+                NFTs are distributed via a{" "}
+                <span className="text-on-surface font-medium">
+                  Fisher-Yates shuffle
+                </span>{" "}
+                on-chain, guaranteeing fair and verifiable randomness for every
+                mint.
+              </p>
             </div>
-          )}
-
-          <button
-            onClick={handleMint}
-            disabled={
-              isPending || isConfirming || !isConnected || !selectedCollection
-            }
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all text-white"
-          >
-            {isPending || isConfirming ? (
-              <>
-                <Loader2 className="animate-spin" size={20} />
-                {isPending ? "Aguardando MetaMask..." : "Confirmando..."}
-              </>
-            ) : (
-              <>
-                <Plus size={20} />
-                {chosen
-                  ? `Mintar NFT Aleatório — ${formatEther(chosen.mintPrice)} ETH`
-                  : "Mintar NFT"}
-              </>
-            )}
-          </button>
-
-          {!isConnected && (
-            <p className="text-center text-slate-500 text-sm">
-              Conecte sua carteira para mintar
-            </p>
-          )}
+          </div>
         </div>
+        <Footer />
       </div>
     </main>
   );
