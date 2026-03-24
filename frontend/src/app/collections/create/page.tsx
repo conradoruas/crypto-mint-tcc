@@ -22,6 +22,7 @@ import {
 import { useCreateCollection } from "@/hooks/useCollections";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
+import Footer from "@/components/Footer";
 
 const FACTORY_ADDRESS = process.env
   .NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS as `0x${string}`;
