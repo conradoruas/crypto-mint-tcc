@@ -6,7 +6,8 @@ import { useExploreAllNFTs, NFTItemWithMarket } from "@/hooks/useExploreNfts";
 import Image from "next/image";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
 
 type SortOption =
@@ -84,10 +85,11 @@ function sortNFTs(
   }
 }
 
-export default function ExplorePage() {
+function ExploreContent() {
+  const searchParams = useSearchParams();
   const { collections, isLoading: isLoadingCollections } = useCollections();
   const [selectedCollection, setSelectedCollection] = useState<string>("");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const [sort, setSort] = useState<SortOption>("default");
   const [onlyListed, setOnlyListed] = useState(false);
 
@@ -405,5 +407,13 @@ export default function ExplorePage() {
       </div>
       <Footer />
     </main>
+  );
+}
+
+export default function ExplorePage() {
+  return (
+    <Suspense>
+      <ExploreContent />
+    </Suspense>
   );
 }

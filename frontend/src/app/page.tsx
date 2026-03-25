@@ -57,15 +57,15 @@ export default function LandingPage() {
             {/* Featured NFT card */}
             <div className="hidden lg:block relative group">
               <div className="absolute -inset-4 bg-primary/10 blur-3xl group-hover:bg-primary/20 transition-all duration-700" />
-              <div className="relative aspect-square glass-panel p-4 border border-outline-variant/15 neon-glow-primary overflow-hidden" suppressHydrationWarning>
+              <div className="relative aspect-square glass-panel p-4 border border-outline-variant/15 neon-glow-primary overflow-hidden">
                 <video
+                  suppressHydrationWarning
                   src="/animation.mp4"
                   autoPlay
                   loop
                   muted
                   playsInline
                   className="w-full h-full object-cover opacity-15 scale-105 blur-[2px]"
-                  suppressHydrationWarning
                 />
               </div>
             </div>

@@ -2,14 +2,367 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Bell, Wallet } from "lucide-react";
-import { ConnectKitButton } from "connectkit";
-import { useConnection } from "wagmi";
+import {
+  Bell,
+  Wallet,
+  Copy,
+  Check,
+  ExternalLink,
+  User,
+  ShoppingCart,
+  Tag,
+  HandCoins,
+  CheckCircle,
+  Sparkles,
+  X,
+  Activity,
+} from "lucide-react";
+import { ConnectKitButton, useModal } from "connectkit";
+import { useConnection, useBalance, useDisconnect } from "wagmi";
 import { cn } from "@/lib/utils";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import {
+  useActivityFeed,
+  ActivityEvent,
+  ActivityType,
+} from "@/hooks/useActivityFeed";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { fetchAlchemyMeta, NFTMeta } from "@/lib/alchemyMeta";
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+const EVENT_CONFIG: Record<
+  ActivityType,
+  { label: string; icon: React.ReactNode; colorClass: string }
+> = {
+  sale: {
+    label: "Sale",
+    icon: <ShoppingCart size={12} />,
+    colorClass: "text-primary",
+  },
+  listing: {
+    label: "Listed",
+    icon: <Tag size={12} />,
+    colorClass: "text-secondary",
+  },
+  listing_cancelled: {
+    label: "Delisted",
+    icon: <X size={12} />,
+    colorClass: "text-on-surface-variant",
+  },
+  offer: {
+    label: "Offer",
+    icon: <HandCoins size={12} />,
+    colorClass: "text-tertiary",
+  },
+  offer_accepted: {
+    label: "Offer Accepted",
+    icon: <CheckCircle size={12} />,
+    colorClass: "text-primary",
+  },
+  offer_cancelled: {
+    label: "Offer Cancelled",
+    icon: <X size={12} />,
+    colorClass: "text-error",
+  },
+  mint: {
+    label: "Minted",
+    icon: <Sparkles size={12} />,
+    colorClass: "text-tertiary",
+  },
+};
+
+function formatTime(ts?: number) {
+  if (!ts) return "—";
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 60) return `${diff}s`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  return `${Math.floor(diff / 86400)}d`;
+}
+
+function useClickOutside(
+  ref: React.RefObject<HTMLElement | null>,
+  cb: () => void,
+) {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) cb();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ref, cb]);
+}
+
+// ── Bell (notifications) ─────────────────────────────────────────────────────
+
+const BELL_STORAGE_KEY = "bell_last_seen_ts";
+
+function BellDropdown({ address }: { address: string }) {
+  const [open, setOpen] = useState(false);
+  const [lastSeenTs, setLastSeenTs] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    return parseInt(localStorage.getItem(BELL_STORAGE_KEY) ?? "0", 10);
+  });
+  const [metaMap, setMetaMap] = useState<Map<string, NFTMeta>>(new Map());
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => setOpen(false));
+
+  const { events: allEvents, isLoading } = useActivityFeed(undefined, 200);
+
+  const userEvents = useMemo(() => {
+    const lower = address.toLowerCase();
+    return allEvents
+      .filter(
+        (e) => e.from.toLowerCase() === lower || e.to?.toLowerCase() === lower,
+      )
+      .slice(0, 8);
+  }, [allEvents, address]);
+
+  // Fetch NFT names when userEvents changes
+  const eventIds = userEvents.map((e) => `${e.nftContract}-${e.tokenId}`).join(",");
+  useEffect(() => {
+    if (!userEvents.length) return;
+    const tokens = userEvents.map((e) => ({
+      contractAddress: e.nftContract,
+      tokenId: e.tokenId,
+    }));
+    fetchAlchemyMeta(tokens).then(setMetaMap);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventIds]);
+
+  // Count events newer than last time the user opened the dropdown
+  const unread = useMemo(
+    () => userEvents.filter((e) => (e.timestamp ?? 0) > lastSeenTs).length,
+    [userEvents, lastSeenTs],
+  );
+
+  const handleOpen = () => {
+    const nowTs = Math.floor(Date.now() / 1000);
+    setOpen((v) => {
+      if (!v) {
+        // Mark as seen when opening
+        localStorage.setItem(BELL_STORAGE_KEY, String(nowTs));
+        setLastSeenTs(nowTs);
+      }
+      return !v;
+    });
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={handleOpen}
+        className={cn(
+          "relative p-2 transition-colors",
+          open ? "text-primary" : "hover:text-primary text-on-surface-variant",
+        )}
+      >
+        <Bell className="w-5 h-5" />
+        {unread > 0 && (
+          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary animate-pulse" />
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-outline-variant/20 shadow-2xl z-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant/10">
+            <span className="text-[10px] font-headline font-bold uppercase tracking-[0.2em] text-on-surface-variant">
+              Recent Activity
+            </span>
+            <Link
+              href="/profile"
+              onClick={() => setOpen(false)}
+              className="text-[10px] text-primary hover:text-primary-container transition-colors font-headline font-bold uppercase tracking-widest"
+            >
+              View all
+            </Link>
+          </div>
+
+          {isLoading && userEvents.length === 0 ? (
+            <div className="p-4 space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex gap-3 items-center">
+                  <div className="w-8 h-8 animate-pulse bg-surface-container-high rounded-sm shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-2.5 animate-pulse bg-surface-container-high rounded-sm w-3/4" />
+                    <div className="h-2 animate-pulse bg-surface-container-high rounded-sm w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : userEvents.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <Activity
+                size={28}
+                className="mx-auto mb-2 text-on-surface-variant/20"
+              />
+              <p className="text-xs text-on-surface-variant">
+                No recent activity
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-outline-variant/5 max-h-72 overflow-y-auto">
+              {userEvents.map((event: ActivityEvent) => {
+                const cfg = EVENT_CONFIG[event.type];
+                const isFrom =
+                  event.from.toLowerCase() === address.toLowerCase();
+                const metaKey = `${event.nftContract.toLowerCase()}-${event.tokenId}`;
+                const nftName = metaMap.get(metaKey)?.name ?? `#${event.tokenId.padStart(3, "0")}`;
+                return (
+                  <Link
+                    key={event.id}
+                    href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container transition-colors"
+                  >
+                    <div className={cn("shrink-0", cfg.colorClass)}>
+                      {cfg.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-headline font-bold text-on-surface truncate">
+                        {cfg.label}{" "}
+                        <span className="text-on-surface-variant font-normal">
+                          {nftName}
+                        </span>
+                      </p>
+                      <p className="text-[10px] text-on-surface-variant truncate">
+                        {isFrom ? "You → " : "→ You"}
+                        {event.priceETH
+                          ? ` · ${parseFloat(event.priceETH).toFixed(4)} ETH`
+                          : ""}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-on-surface-variant shrink-0">
+                      {formatTime(event.timestamp)}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Wallet panel ──────────────────────────────────────────────────────────────
+
+function WalletDropdown({ address }: { address: string }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { setOpen: openConnectKit } = useModal();
+  const { mutate } = useDisconnect();
+  useClickOutside(ref, () => setOpen(false));
+
+  const { data: balance } = useBalance({ address: address as `0x${string}` });
+
+  const copy = () => {
+    navigator.clipboard.writeText(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "p-2 transition-colors",
+          open ? "text-primary" : "hover:text-primary text-on-surface-variant",
+        )}
+      >
+        <Wallet className="w-5 h-5" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-72 bg-background border border-outline-variant/20 shadow-2xl z-50 overflow-hidden">
+          {/* Address */}
+          <div className="px-4 py-4 border-b border-outline-variant/10">
+            <p className="text-[10px] font-headline font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">
+              Connected Wallet
+            </p>
+            <div className="flex items-center gap-2 bg-surface-container px-3 py-2 rounded-sm">
+              <span className="font-mono text-sm text-primary flex-1 truncate">
+                {address.slice(0, 10)}...{address.slice(-8)}
+              </span>
+              <button
+                onClick={copy}
+                className="text-on-surface-variant hover:text-primary transition-colors shrink-0"
+              >
+                {copied ? (
+                  <Check size={13} className="text-primary" />
+                ) : (
+                  <Copy size={13} />
+                )}
+              </button>
+              <a
+                href={`https://sepolia.etherscan.io/address/${address}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-on-surface-variant hover:text-primary transition-colors shrink-0"
+              >
+                <ExternalLink size={13} />
+              </a>
+            </div>
+          </div>
+
+          {/* Balance */}
+          <div className="px-4 py-3 border-b border-outline-variant/10">
+            <p className="text-[10px] font-headline font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-1">
+              Balance · Sepolia
+            </p>
+            <p className="font-headline text-xl font-bold text-on-surface">
+              {balance
+                ? `${(Number(balance.value) / 1e18).toFixed(4)} ETH`
+                : "—"}
+            </p>
+          </div>
+
+          {/* Links */}
+          <div className="py-1">
+            <Link
+              href="/profile"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-container transition-colors text-sm text-on-surface"
+            >
+              <User size={14} className="text-on-surface-variant" />
+              My Profile
+            </Link>
+            <button
+              onClick={() => {
+                openConnectKit(true);
+                setOpen(false);
+              }}
+              className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-container transition-colors text-sm text-on-surface w-full text-left"
+            >
+              <Wallet size={14} className="text-on-surface-variant" />
+              Wallet Settings
+            </button>
+            <button
+              onClick={() => {
+                mutate();
+                setOpen(false);
+              }}
+              className="flex items-center gap-3 px-4 py-2.5 hover:bg-error/10 transition-colors text-sm text-error w-full text-left"
+            >
+              <X size={14} />
+              Disconnect
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Navbar ────────────────────────────────────────────────────────────────────
 
 export function Navbar() {
   const pathname = usePathname();
-  const { isConnected } = useConnection();
+  const { isConnected, address } = useConnection();
 
   const navLinks = [
     { name: "Explore", path: "/explore" },
@@ -55,23 +408,29 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-6">
-          <div className="relative hidden lg:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search assets..."
-              className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-2 pl-10 pr-4 text-sm w-64 focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/50 text-on-surface"
-            />
-          </div>
+          <GlobalSearch />
 
-          <div className="flex items-center gap-4 text-on-surface-variant">
-            <button className="hover:text-primary p-2 transition-colors">
-              <Bell className="w-5 h-5" />
-            </button>
-            <button className="hover:text-primary p-2 transition-colors">
-              <Wallet className="w-5 h-5" />
-            </button>
-          </div>
+          {isConnected && address ? (
+            <div className="flex items-center gap-1 text-on-surface-variant">
+              <BellDropdown address={address} />
+              <WalletDropdown address={address} />
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-on-surface-variant">
+              <button
+                className="p-2 text-on-surface-variant/30 cursor-not-allowed"
+                disabled
+              >
+                <Bell className="w-5 h-5" />
+              </button>
+              <button
+                className="p-2 text-on-surface-variant/30 cursor-not-allowed"
+                disabled
+              >
+                <Wallet className="w-5 h-5" />
+              </button>
+            </div>
+          )}
 
           <ConnectKitButton.Custom>
             {({ isConnected, show, truncatedAddress, ensName }) => (
