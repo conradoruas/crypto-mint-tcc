@@ -28,8 +28,8 @@ export function Navbar() {
             className="text-2xl font-bold tracking-tighter text-primary-container uppercase font-headline"
           >
             <div>
-              <span>Crypto</span>
-              <span className="text-on-surface lowercase">mint</span>
+              <span className="text-on-surface lowercase">crypto.</span>
+              <span className="lowercase">mint</span>
             </div>
           </Link>
 

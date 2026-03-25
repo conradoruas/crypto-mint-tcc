@@ -5,33 +5,13 @@ const Footer = () => {
     <footer className="w-full border-t border-outline-variant/15 mt-20 bg-background">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-12 py-16 w-full max-w-[1920px] mx-auto">
         <div>
-          <span className="text-lg font-black text-on-surface font-headline uppercase tracking-tighter mb-4 block">
-            CryptoMint
+          <span className="text-lg font-black text-on-surface font-headline lowercase tracking-tighter mb-4 block">
+            crypto.mint
           </span>
           <p className="text-on-surface-variant text-sm max-w-sm mb-8 leading-relaxed">
             The premier destination for high-fidelity synthetic assets and
             digital artifacts. Engineered for the future of value.
           </p>
-          <div className="flex gap-6">
-            <a
-              href="#"
-              className="text-on-surface-variant hover:text-secondary transition-colors text-xs font-bold uppercase tracking-widest"
-            >
-              Twitter
-            </a>
-            <a
-              href="#"
-              className="text-on-surface-variant hover:text-secondary transition-colors text-xs font-bold uppercase tracking-widest"
-            >
-              Discord
-            </a>
-            <a
-              href="#"
-              className="text-on-surface-variant hover:text-secondary transition-colors text-xs font-bold uppercase tracking-widest"
-            >
-              Telegram
-            </a>
-          </div>
         </div>
         <div className="grid grid-cols-2 gap-8">
           <div>

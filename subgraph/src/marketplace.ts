@@ -7,6 +7,7 @@ import {
   OfferCancelled,
 } from "../generated/NFTMarketplace/NFTMarketplace";
 import {
+  NFT,
   Listing,
   Offer,
   ActivityEvent,
@@ -54,9 +55,16 @@ export function handleItemListed(event: ItemListed): void {
   listing.seller = event.params.seller;
   listing.price = event.params.price;
   listing.active = true;
+  listing.nft = id;
   listing.createdAt = event.block.timestamp;
   listing.updatedAt = event.block.timestamp;
   listing.save();
+
+  let nft = NFT.load(id);
+  if (nft) {
+    nft.listing = id;
+    nft.save();
+  }
 
   let actId =
     event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
@@ -99,6 +107,13 @@ export function handleItemSold(event: ItemSold): void {
     listing.active = false;
     listing.updatedAt = event.block.timestamp;
     listing.save();
+  }
+
+  let nft = NFT.load(id);
+  if (nft) {
+    nft.owner = event.params.buyer;
+    nft.listing = null;
+    nft.save();
   }
 
   let actId =
@@ -155,6 +170,12 @@ export function handleListingCancelled(event: ListingCancelled): void {
     listing.save();
   }
 
+  let nft = NFT.load(id);
+  if (nft) {
+    nft.listing = null;
+    nft.save();
+  }
+
   let actId =
     event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
   let act = new ActivityEvent(actId);
@@ -180,6 +201,11 @@ export function handleOfferMade(event: OfferMade): void {
     "-" +
     event.params.buyer.toHexString();
 
+  let nftId =
+    event.params.nftContract.toHexString() +
+    "-" +
+    event.params.tokenId.toString();
+
   let offer = new Offer(id);
   offer.nftContract = event.params.nftContract;
   offer.tokenId = event.params.tokenId;
@@ -187,6 +213,7 @@ export function handleOfferMade(event: OfferMade): void {
   offer.amount = event.params.amount;
   offer.expiresAt = event.params.expiresAt;
   offer.active = true;
+  offer.nft = nftId;
   offer.createdAt = event.block.timestamp;
   offer.save();
 

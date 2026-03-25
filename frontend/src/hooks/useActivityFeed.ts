@@ -128,7 +128,7 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
       setRpcLoading(true);
       try {
         const latestBlock = await publicClient.getBlockNumber();
-        const fromBlock = latestBlock - BigInt(7200 * 7); // ~6h on Sepolia
+        const fromBlock = latestBlock - BigInt(7200 * 7);
 
         const allEvents: ActivityEvent[] = [];
 

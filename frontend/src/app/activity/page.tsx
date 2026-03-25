@@ -8,7 +8,7 @@ import {
 } from "@/hooks/useActivityFeed";
 import { useCollections } from "@/hooks/useCollections";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ShoppingCart,
   Tag,
@@ -21,6 +21,50 @@ import {
   ChevronDown,
 } from "lucide-react";
 import Footer from "@/components/Footer";
+
+const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
+
+type NFTMeta = { name: string; image: string };
+type MetaMap = Map<string, NFTMeta>;
+
+async function fetchNFTMetadataBatch(
+  events: ActivityEvent[],
+): Promise<MetaMap> {
+  const map: MetaMap = new Map();
+  if (!events.length || !ALCHEMY_KEY) return map;
+
+  // Deduplicate by contract+tokenId
+  const seen = new Set<string>();
+  const tokens: { contractAddress: string; tokenId: string }[] = [];
+  for (const e of events) {
+    const key = `${e.nftContract.toLowerCase()}-${e.tokenId}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      tokens.push({ contractAddress: e.nftContract, tokenId: e.tokenId });
+    }
+  }
+
+  try {
+    const res = await fetch(
+      `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTMetadataBatch`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokens, refreshCache: false }),
+      },
+    );
+    const data = await res.json();
+    for (const nft of data.nfts ?? []) {
+      const key = `${(nft.contract?.address ?? "").toLowerCase()}-${nft.tokenId}`;
+      const image =
+        nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
+      map.set(key, { name: nft.name ?? `NFT #${nft.tokenId}`, image });
+    }
+  } catch {
+    /* silently fall back to tokenId display */
+  }
+  return map;
+}
 
 const EVENT_CONFIG: Record<
   ActivityType,
@@ -81,9 +125,11 @@ function formatTime(timestamp?: number) {
 function EventRow({
   event,
   collectionName,
+  meta,
 }: {
   event: ActivityEvent;
   collectionName?: string;
+  meta?: NFTMeta;
 }) {
   const cfg = EVENT_CONFIG[event.type];
 
@@ -102,14 +148,23 @@ function EventRow({
       {/* Item */}
       <td className="py-6 px-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-sm overflow-hidden bg-surface-container-high flex-shrink-0" />
+          <div className="w-12 h-12 rounded-sm overflow-hidden bg-surface-container-high flex-shrink-0">
+            {meta?.image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={meta.image}
+                alt={meta.name}
+                className="w-full h-full object-cover"
+              />
+            )}
+          </div>
           <div>
             <div className="font-headline font-bold text-on-surface text-sm leading-none">
               <Link
                 href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
                 className="hover:text-primary transition-colors"
               >
-                #{event.tokenId.padStart(3, "0")}
+                {meta?.name ?? `#${event.tokenId.padStart(3, "0")}`}
               </Link>
             </div>
             {collectionName && (
@@ -207,11 +262,21 @@ export default function ActivityPage() {
   const [selectedCollection, setSelectedCollection] = useState<string>("");
   const [selectedTypes, setSelectedTypes] = useState<ActivityType[]>([]);
   const [showTypeFilter, setShowTypeFilter] = useState(false);
+  const [metaMap, setMetaMap] = useState<MetaMap>(new Map());
 
   const { events, isLoading } = useActivityFeed(
     selectedCollection || undefined,
     100,
   );
+
+  // Fetch NFT metadata only when the set of event IDs actually changes.
+  // Using a joined string avoids re-triggering on Apollo's array reference churn.
+  const eventIds = events.map((e) => e.id).join(",");
+  useEffect(() => {
+    if (!events.length) return;
+    fetchNFTMetadataBatch(events).then(setMetaMap);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventIds]);
 
   const displayedEvents =
     selectedTypes.length === 0
@@ -228,6 +293,9 @@ export default function ActivityPage() {
     collections.find(
       (c) => c.contractAddress.toLowerCase() === addr.toLowerCase(),
     )?.name;
+
+  const nftMeta = (nftContract: string, tokenId: string) =>
+    metaMap.get(`${nftContract.toLowerCase()}-${tokenId}`);
 
   return (
     <main className="min-h-screen bg-background text-on-surface">
@@ -253,8 +321,8 @@ export default function ActivityPage() {
         </header>
 
         {/* Filters */}
-        <section className="mb-8 overflow-x-auto">
-          <div className="flex items-center gap-2 pb-4 flex-wrap">
+        <section className="mb-8 relative z-10">
+          <div className="flex items-center gap-2 pb-4 flex-wrap overflow-x-auto">
             {/* Type pill filters */}
             <button
               onClick={() => setSelectedTypes([])}
@@ -305,7 +373,7 @@ export default function ActivityPage() {
                   />
                 </button>
                 {showTypeFilter && (
-                  <div className="absolute top-full mt-1 left-0 z-20 w-56 shadow-xl bg-surface-container border border-outline-variant/20 rounded-sm">
+                  <div className="absolute top-full mt-1 left-0 z-50 w-56 shadow-xl bg-surface-container border border-outline-variant/20 rounded-sm">
                     <button
                       onClick={() => {
                         setSelectedCollection("");
@@ -348,7 +416,7 @@ export default function ActivityPage() {
         )}
 
         {/* Ledger table */}
-        <div className="relative overflow-x-auto">
+        <div className="relative z-0 overflow-x-auto">
           <div className="absolute -top-10 -right-10 w-64 h-64 bg-primary/5 blur-[100px] pointer-events-none" />
           <table className="w-full text-left border-collapse">
             <thead>
@@ -374,7 +442,7 @@ export default function ActivityPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/5">
-              {isLoading ? (
+              {isLoading && events.length === 0 ? (
                 Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
               ) : displayedEvents.length === 0 ? (
                 <tr>
@@ -399,6 +467,7 @@ export default function ActivityPage() {
                     key={event.id}
                     event={event}
                     collectionName={collectionName(event.nftContract)}
+                    meta={nftMeta(event.nftContract, event.tokenId)}
                   />
                 ))
               )}

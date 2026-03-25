@@ -4,10 +4,7 @@ import { sepolia } from "viem/chains";
 import { useQuery } from "@apollo/client/react";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { useCollections } from "@/hooks/useCollections";
-import {
-  GET_ALL_NFTS,
-  GET_NFTS_FOR_CONTRACT,
-} from "@/lib/graphql/queries";
+import { GET_ALL_NFTS, GET_NFTS_FOR_CONTRACT } from "@/lib/graphql/queries";
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
@@ -107,14 +104,29 @@ async function fetchTopOffer(
 
 // ─── GraphQL types ───
 
-type GqlListing = { id: string; price: string; active: boolean; seller: string };
-type GqlOffer = { id: string; amount: string; buyer: string; expiresAt?: string };
+type GqlListing = {
+  id: string;
+  price: string;
+  active: boolean;
+  seller: string;
+};
+type GqlOffer = {
+  id: string;
+  amount: string;
+  buyer: string;
+  expiresAt?: string;
+};
 type GqlNFT = {
   id: string;
   tokenId: string;
   tokenUri?: string;
   owner: string;
-  collection?: { id: string; contractAddress: string; name: string; symbol: string };
+  collection?: {
+    id: string;
+    contractAddress: string;
+    name: string;
+    symbol: string;
+  };
   listing?: GqlListing | null;
   offers?: GqlOffer[];
 };
@@ -165,7 +177,9 @@ async function mergeWithAlchemy(
   const byContract = new Map<string, GqlNFT[]>();
   for (const nft of nfts) {
     const addr = (
-      nft.collection?.contractAddress ?? collectionAddress ?? ""
+      nft.collection?.contractAddress ??
+      collectionAddress ??
+      ""
     ).toLowerCase();
     if (!byContract.has(addr)) byContract.set(addr, []);
     byContract.get(addr)!.push(nft);
@@ -178,11 +192,15 @@ async function mergeWithAlchemy(
       meta: await fetchAlchemyMetadata(addr),
     })),
   );
-  const metaByContract = new Map(metaMaps.map(({ addr, meta }) => [addr, meta]));
+  const metaByContract = new Map(
+    metaMaps.map(({ addr, meta }) => [addr, meta]),
+  );
 
   return nfts.map((nft) => {
     const addr = (
-      nft.collection?.contractAddress ?? collectionAddress ?? ""
+      nft.collection?.contractAddress ??
+      collectionAddress ??
+      ""
     ).toLowerCase();
     const meta = metaByContract.get(addr)?.get(nft.tokenId);
     const activeListing = nft.listing?.active ? nft.listing : null;
@@ -211,11 +229,13 @@ export function useExploreNFTs(collectionAddress?: string) {
   const [isLoading, setIsLoading] = useState(true);
 
   // ── GraphQL path ──
-  const { data: gqlData, loading: gqlQueryLoading } =
-    useQuery<GqlNFTsData>(GET_NFTS_FOR_CONTRACT, {
+  const { data: gqlData, loading: gqlQueryLoading } = useQuery<GqlNFTsData>(
+    GET_NFTS_FOR_CONTRACT,
+    {
       skip: !SUBGRAPH_ENABLED || !collectionAddress,
       variables: { collection: collectionAddress?.toLowerCase() },
-    });
+    },
+  );
 
   useEffect(() => {
     if (!SUBGRAPH_ENABLED || !collectionAddress) return;
@@ -227,10 +247,12 @@ export function useExploreNFTs(collectionAddress?: string) {
       return;
     }
     setIsLoading(true);
-    mergeWithAlchemy(raw, collectionAddress).then((items: NFTItemWithMarket[]) => {
-      setNfts(items);
-      setIsLoading(false);
-    });
+    mergeWithAlchemy(raw, collectionAddress).then(
+      (items: NFTItemWithMarket[]) => {
+        setNfts(items);
+        setIsLoading(false);
+      },
+    );
   }, [gqlData, gqlQueryLoading, collectionAddress]);
 
   // ── RPC path ──
@@ -321,18 +343,22 @@ export function useExploreAllNFTs(collectionAddress?: string) {
   const [isLoading, setIsLoading] = useState(true);
 
   // ── GraphQL path: all NFTs ──
-  const { data: gqlAllData, loading: gqlAllLoading } =
-    useQuery<GqlNFTsData>(GET_ALL_NFTS, {
+  const { data: gqlAllData, loading: gqlAllLoading } = useQuery<GqlNFTsData>(
+    GET_ALL_NFTS,
+    {
       skip: !SUBGRAPH_ENABLED || !!collectionAddress,
       variables: { first: 200 },
-    });
+    },
+  );
 
   // ── GraphQL path: filtered by collection ──
-  const { data: gqlColData, loading: gqlColLoading } =
-    useQuery<GqlNFTsData>(GET_NFTS_FOR_CONTRACT, {
+  const { data: gqlColData, loading: gqlColLoading } = useQuery<GqlNFTsData>(
+    GET_NFTS_FOR_CONTRACT,
+    {
       skip: !SUBGRAPH_ENABLED || !collectionAddress,
       variables: { collection: collectionAddress?.toLowerCase() },
-    });
+    },
+  );
 
   useEffect(() => {
     if (!SUBGRAPH_ENABLED) return;
@@ -348,10 +374,12 @@ export function useExploreAllNFTs(collectionAddress?: string) {
       return;
     }
     setIsLoading(true);
-    mergeWithAlchemy(raw, collectionAddress).then((items: NFTItemWithMarket[]) => {
-      setNfts(items);
-      setIsLoading(false);
-    });
+    mergeWithAlchemy(raw, collectionAddress).then(
+      (items: NFTItemWithMarket[]) => {
+        setNfts(items);
+        setIsLoading(false);
+      },
+    );
   }, [gqlAllData, gqlColData, gqlAllLoading, gqlColLoading, collectionAddress]);
 
   // ── RPC path ──
