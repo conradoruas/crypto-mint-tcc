@@ -10,9 +10,90 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
-import { Pencil, User, ExternalLink, Search, X } from "lucide-react";
+import {
+  Pencil,
+  User,
+  ExternalLink,
+  Search,
+  X,
+  ShoppingCart,
+  Tag,
+  HandCoins,
+  CheckCircle,
+  Sparkles,
+  Activity,
+} from "lucide-react";
 import { fetchProfile, UserProfile } from "@/services/profile";
+import {
+  useActivityFeed,
+  ActivityEvent,
+  ActivityType,
+} from "@/hooks/useActivityFeed";
 import Footer from "@/components/Footer";
+
+const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
+
+type NFTMeta = { name: string; image: string };
+type MetaMap = Map<string, NFTMeta>;
+
+async function fetchNFTMetadataBatch(events: ActivityEvent[]): Promise<MetaMap> {
+  const map: MetaMap = new Map();
+  if (!events.length || !ALCHEMY_KEY) return map;
+  const seen = new Set<string>();
+  const tokens: { contractAddress: string; tokenId: string }[] = [];
+  for (const e of events) {
+    const key = `${e.nftContract.toLowerCase()}-${e.tokenId}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      tokens.push({ contractAddress: e.nftContract, tokenId: e.tokenId });
+    }
+  }
+  try {
+    const res = await fetch(
+      `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTMetadataBatch`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokens, refreshCache: false }),
+      },
+    );
+    const data = await res.json();
+    for (const nft of data.nfts ?? []) {
+      const key = `${(nft.contract?.address ?? "").toLowerCase()}-${nft.tokenId}`;
+      map.set(key, {
+        name: nft.name ?? `NFT #${nft.tokenId}`,
+        image: nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "",
+      });
+    }
+  } catch { /* ignore */ }
+  return map;
+}
+
+const EVENT_CONFIG: Record<
+  ActivityType,
+  { label: string; icon: React.ReactNode; colorClass: string }
+> = {
+  sale: { label: "Sale", icon: <ShoppingCart size={14} />, colorClass: "text-primary" },
+  listing: { label: "Listing", icon: <Tag size={14} />, colorClass: "text-secondary" },
+  listing_cancelled: { label: "Cancelled", icon: <X size={14} />, colorClass: "text-on-surface-variant" },
+  offer: { label: "Offer", icon: <HandCoins size={14} />, colorClass: "text-tertiary" },
+  offer_accepted: { label: "Offer Accepted", icon: <CheckCircle size={14} />, colorClass: "text-primary" },
+  offer_cancelled: { label: "Offer Cancelled", icon: <X size={14} />, colorClass: "text-error" },
+  mint: { label: "Mint", icon: <Sparkles size={14} />, colorClass: "text-tertiary" },
+};
+
+function shortAddr(addr: string) {
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+function formatTime(ts?: number) {
+  if (!ts) return "—";
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
 
 const resolveIpfsUrl = (url: string) => {
   if (!url) return "";
@@ -113,6 +194,7 @@ export default function ProfilePage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("default");
   const [activeTab, setActiveTab] = useState("Collected");
+  const [metaMap, setMetaMap] = useState<MetaMap>(new Map());
 
   const { nfts, isLoading: isLoadingNFTs } = useProfileNFTs(
     address,
@@ -128,6 +210,28 @@ export default function ProfilePage() {
     setSearch("");
     setSort("default");
   };
+
+  // Activity feed — fetch all recent events, filter to this user client-side
+  const { events: allEvents, isLoading: isLoadingActivity } = useActivityFeed(
+    undefined,
+    200,
+  );
+  const userEvents = useMemo(() => {
+    if (!address) return [];
+    const lower = address.toLowerCase();
+    return allEvents.filter(
+      (e) =>
+        e.from.toLowerCase() === lower ||
+        e.to?.toLowerCase() === lower,
+    );
+  }, [allEvents, address]);
+
+  const eventIds = userEvents.map((e) => e.id).join(",");
+  useEffect(() => {
+    if (!userEvents.length) return;
+    fetchNFTMetadataBatch(userEvents).then(setMetaMap);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventIds]);
 
   useEffect(() => {
     if (!address) return;
@@ -269,81 +373,246 @@ export default function ProfilePage() {
           ))}
         </div>
 
-        {/* Collection filter + search */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-8">
-          {!isLoadingCollections && collections.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              {[{ contractAddress: "", name: "All" }, ...collections].map(
-                (c) => {
-                  const isActive = selectedCollection === c.contractAddress;
-                  return (
-                    <button
-                      key={c.contractAddress}
-                      onClick={() => setSelectedCollection(c.contractAddress)}
-                      className={`px-4 py-2 rounded-full text-xs font-headline font-bold uppercase tracking-widest border transition-all ${
-                        isActive
-                          ? "bg-primary/10 text-primary border-primary/30"
-                          : "text-on-surface-variant border-outline-variant/15 hover:border-outline"
-                      }`}
-                    >
-                      {c.name}
-                    </button>
-                  );
-                },
-              )}
-            </div>
-          )}
+        {/* Collection filter + search — hidden on Activity tab */}
+        {activeTab !== "Activity" && (
+          <div className="flex flex-col sm:flex-row gap-3 mb-8">
+            {!isLoadingCollections && collections.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {[{ contractAddress: "", name: "All" }, ...collections].map(
+                  (c) => {
+                    const isActive = selectedCollection === c.contractAddress;
+                    return (
+                      <button
+                        key={c.contractAddress}
+                        onClick={() => setSelectedCollection(c.contractAddress)}
+                        className={`px-4 py-2 rounded-full text-xs font-headline font-bold uppercase tracking-widest border transition-all ${
+                          isActive
+                            ? "bg-primary/10 text-primary border-primary/30"
+                            : "text-on-surface-variant border-outline-variant/15 hover:border-outline"
+                        }`}
+                      >
+                        {c.name}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+            )}
 
-          {!isLoading && nfts.length > 0 && (
-            <div className="flex gap-3 sm:ml-auto">
-              <div className="relative">
-                <Search
-                  size={14}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
-                />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search..."
-                  className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-primary transition-all text-on-surface placeholder:text-on-surface-variant/50 w-48"
-                />
-                {search && (
-                  <button
-                    onClick={() => setSearch("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface"
+            {!isLoading && nfts.length > 0 && (
+              <div className="flex gap-3 sm:ml-auto">
+                <div className="relative">
+                  <Search
+                    size={14}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant"
+                  />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search..."
+                    className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-primary transition-all text-on-surface placeholder:text-on-surface-variant/50 w-48"
+                  />
+                  {search && (
+                    <button
+                      onClick={() => setSearch("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as SortOption)}
+                    className="appearance-none bg-surface-container border border-outline-variant/15 rounded-sm px-4 py-2 pr-8 text-sm focus:outline-none focus:border-primary cursor-pointer text-on-surface"
                   >
-                    <X size={12} />
+                    {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
+                      <option key={key} value={key}>
+                        {SORT_LABELS[key]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-1 px-3 py-2 rounded-sm text-xs border border-error/30 text-error bg-error/5"
+                  >
+                    <X size={12} /> Clear
                   </button>
                 )}
               </div>
-              <div className="relative">
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortOption)}
-                  className="appearance-none bg-surface-container border border-outline-variant/15 rounded-sm px-4 py-2 pr-8 text-sm focus:outline-none focus:border-primary cursor-pointer text-on-surface"
-                >
-                  {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
-                    <option key={key} value={key}>
-                      {SORT_LABELS[key]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {hasActiveFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="flex items-center gap-1 px-3 py-2 rounded-sm text-xs border border-error/30 text-error bg-error/5"
-                >
-                  <X size={12} /> Clear
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        {/* NFT Grid */}
-        {isLoading ? (
+        {/* Activity tab */}
+        {activeTab === "Activity" && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-outline-variant/10">
+                  {["Event", "Item", "Price", "From", "To", "Time"].map((h, i) => (
+                    <th
+                      key={h}
+                      className={`pb-4 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold ${
+                        i === 2 ? "text-right px-4" :
+                        i === 3 || i === 4 ? "text-center px-4" :
+                        i === 5 ? "text-right pl-4" :
+                        i === 1 ? "px-4" : "pr-4"
+                      }`}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/5">
+                {isLoadingActivity && userEvents.length === 0 ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="py-5 pr-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-5 h-5 animate-pulse bg-surface-container-high rounded-sm" />
+                          <div className="h-3 w-14 animate-pulse bg-surface-container-high rounded-sm" />
+                        </div>
+                      </td>
+                      <td className="py-5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 animate-pulse bg-surface-container-high rounded-sm shrink-0" />
+                          <div className="h-3 w-20 animate-pulse bg-surface-container-high rounded-sm" />
+                        </div>
+                      </td>
+                      <td className="py-5 px-4 text-right">
+                        <div className="h-3 w-14 animate-pulse bg-surface-container-high rounded-sm ml-auto" />
+                      </td>
+                      <td className="py-5 px-4 text-center">
+                        <div className="h-3 w-16 animate-pulse bg-surface-container-high rounded-sm mx-auto" />
+                      </td>
+                      <td className="py-5 px-4 text-center">
+                        <div className="h-3 w-16 animate-pulse bg-surface-container-high rounded-sm mx-auto" />
+                      </td>
+                      <td className="py-5 pl-4 text-right">
+                        <div className="h-3 w-10 animate-pulse bg-surface-container-high rounded-sm ml-auto" />
+                      </td>
+                    </tr>
+                  ))
+                ) : userEvents.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-20 text-center">
+                      <Activity size={40} className="mx-auto mb-4 text-on-surface-variant/30" />
+                      <p className="text-sm text-on-surface-variant">
+                        Nenhuma atividade recente encontrada.
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  userEvents.map((event) => {
+                    const cfg = EVENT_CONFIG[event.type];
+                    const metaKey = `${event.nftContract.toLowerCase()}-${event.tokenId}`;
+                    const meta = metaMap.get(metaKey);
+                    const isUser = (addr: string) =>
+                      addr.toLowerCase() === address?.toLowerCase();
+                    return (
+                      <tr
+                        key={event.id}
+                        className="group hover:bg-surface-container-low transition-colors"
+                      >
+                        {/* Event */}
+                        <td className="py-5 pr-4">
+                          <div className="flex items-center gap-2">
+                            <span className={cfg.colorClass}>{cfg.icon}</span>
+                            <span className="font-headline font-bold text-sm text-on-surface whitespace-nowrap">
+                              {cfg.label}
+                            </span>
+                          </div>
+                        </td>
+                        {/* Item */}
+                        <td className="py-5 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-sm overflow-hidden bg-surface-container-high shrink-0">
+                              {meta?.image && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={meta.image}
+                                  alt={meta.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                            </div>
+                            <Link
+                              href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
+                              className="font-headline font-bold text-sm text-on-surface hover:text-primary transition-colors whitespace-nowrap"
+                            >
+                              {meta?.name ?? `#${event.tokenId.padStart(3, "0")}`}
+                            </Link>
+                          </div>
+                        </td>
+                        {/* Price */}
+                        <td className="py-5 px-4 text-right">
+                          {event.priceETH ? (
+                            <span className="font-headline font-bold text-on-surface whitespace-nowrap">
+                              {parseFloat(event.priceETH).toFixed(4)} ETH
+                            </span>
+                          ) : (
+                            <span className="text-on-surface-variant/30">—</span>
+                          )}
+                        </td>
+                        {/* From */}
+                        <td className="py-5 px-4 text-center">
+                          <span
+                            className={`font-mono text-xs ${
+                              isUser(event.from)
+                                ? "text-primary font-bold"
+                                : "text-on-surface-variant"
+                            }`}
+                          >
+                            {isUser(event.from) ? "You" : shortAddr(event.from)}
+                          </span>
+                        </td>
+                        {/* To */}
+                        <td className="py-5 px-4 text-center">
+                          {event.to ? (
+                            <span
+                              className={`font-mono text-xs ${
+                                isUser(event.to)
+                                  ? "text-secondary font-bold"
+                                  : "text-on-surface-variant"
+                              }`}
+                            >
+                              {isUser(event.to) ? "You" : shortAddr(event.to)}
+                            </span>
+                          ) : (
+                            <span className="text-on-surface-variant/30 text-xs">—</span>
+                          )}
+                        </td>
+                        {/* Time */}
+                        <td className="py-5 pl-4 text-right">
+                          <div className="flex items-center justify-end gap-2 text-on-surface-variant text-xs whitespace-nowrap">
+                            <span>{formatTime(event.timestamp)}</span>
+                            <a
+                              href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:text-primary transition-colors"
+                            >
+                              <ExternalLink size={12} />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* NFT Grid — hidden on Activity tab */}
+        {activeTab !== "Activity" && (isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[1, 2, 3, 4].map((i) => (
               <div
@@ -423,7 +692,7 @@ export default function ProfilePage() {
               </Link>
             ))}
           </div>
-        )}
+        ))}
       </div>
       <Footer />
     </main>
