@@ -273,6 +273,63 @@ export function useCreatorCollections() {
 }
 
 // ─────────────────────────────────────────────
+// useCreatedNFTs
+// Busca todos os NFTs das coleções criadas pelo usuário
+// ─────────────────────────────────────────────
+
+export interface CreatedNFTItem extends CollectionNFTItem {
+  collectionName: string;
+}
+
+export function useCreatedNFTs(ownerAddress: string | undefined) {
+  const [nfts, setNfts] = useState<CreatedNFTItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { collections: creatorCollections, isLoading: isLoadingCollections } =
+    useCreatorCollections();
+
+  useEffect(() => {
+    if (!ownerAddress || isLoadingCollections) return;
+    if (creatorCollections.length === 0) {
+      setNfts([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchAll = async () => {
+      setIsLoading(true);
+      try {
+        const results = await Promise.all(
+          creatorCollections.map(async (col) => {
+            const res = await fetch(
+              `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${col.contractAddress}&withMetadata=true&refreshCache=false`,
+            );
+            const data = await res.json();
+            return (data.nfts ?? []).map((nft: AlchemyNFT) => ({
+              tokenId: nft.tokenId,
+              name: nft.name ?? `NFT #${nft.tokenId}`,
+              description: nft.description ?? "",
+              image: nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "",
+              nftContract: col.contractAddress,
+              collectionName: col.name,
+            }));
+          }),
+        );
+        setNfts(results.flat());
+      } catch (error) {
+        console.error("Erro ao buscar NFTs criados:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerAddress, isLoadingCollections, creatorCollections.length]);
+
+  return { nfts, isLoading };
+}
+
+// ─────────────────────────────────────────────
 // useCreateCollection
 // Cria uma nova coleção via factory
 // ─────────────────────────────────────────────

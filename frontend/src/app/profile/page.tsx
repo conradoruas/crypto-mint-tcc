@@ -5,7 +5,9 @@ import { Navbar } from "@/components/NavBar";
 import {
   useProfileNFTs,
   useCollections,
+  useCreatedNFTs,
   CollectionNFTItem,
+  CreatedNFTItem,
 } from "@/hooks/useCollections";
 import Image from "next/image";
 import Link from "next/link";
@@ -36,7 +38,9 @@ const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 type NFTMeta = { name: string; image: string };
 type MetaMap = Map<string, NFTMeta>;
 
-async function fetchNFTMetadataBatch(events: ActivityEvent[]): Promise<MetaMap> {
+async function fetchNFTMetadataBatch(
+  events: ActivityEvent[],
+): Promise<MetaMap> {
   const map: MetaMap = new Map();
   if (!events.length || !ALCHEMY_KEY) return map;
   const seen = new Set<string>();
@@ -65,7 +69,9 @@ async function fetchNFTMetadataBatch(events: ActivityEvent[]): Promise<MetaMap> 
         image: nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "",
       });
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return map;
 }
 
@@ -73,13 +79,41 @@ const EVENT_CONFIG: Record<
   ActivityType,
   { label: string; icon: React.ReactNode; colorClass: string }
 > = {
-  sale: { label: "Sale", icon: <ShoppingCart size={14} />, colorClass: "text-primary" },
-  listing: { label: "Listing", icon: <Tag size={14} />, colorClass: "text-secondary" },
-  listing_cancelled: { label: "Cancelled", icon: <X size={14} />, colorClass: "text-on-surface-variant" },
-  offer: { label: "Offer", icon: <HandCoins size={14} />, colorClass: "text-tertiary" },
-  offer_accepted: { label: "Offer Accepted", icon: <CheckCircle size={14} />, colorClass: "text-primary" },
-  offer_cancelled: { label: "Offer Cancelled", icon: <X size={14} />, colorClass: "text-error" },
-  mint: { label: "Mint", icon: <Sparkles size={14} />, colorClass: "text-tertiary" },
+  sale: {
+    label: "Sale",
+    icon: <ShoppingCart size={14} />,
+    colorClass: "text-primary",
+  },
+  listing: {
+    label: "Listing",
+    icon: <Tag size={14} />,
+    colorClass: "text-secondary",
+  },
+  listing_cancelled: {
+    label: "Cancelled",
+    icon: <X size={14} />,
+    colorClass: "text-on-surface-variant",
+  },
+  offer: {
+    label: "Offer",
+    icon: <HandCoins size={14} />,
+    colorClass: "text-tertiary",
+  },
+  offer_accepted: {
+    label: "Offer Accepted",
+    icon: <CheckCircle size={14} />,
+    colorClass: "text-primary",
+  },
+  offer_cancelled: {
+    label: "Offer Cancelled",
+    icon: <X size={14} />,
+    colorClass: "text-error",
+  },
+  mint: {
+    label: "Mint",
+    icon: <Sparkles size={14} />,
+    colorClass: "text-tertiary",
+  },
 };
 
 function shortAddr(addr: string) {
@@ -201,6 +235,9 @@ export default function ProfilePage() {
     selectedCollection || undefined,
   );
   const isLoading = isLoadingCollections || isLoadingNFTs;
+
+  const { nfts: createdNfts, isLoading: isLoadingCreated } =
+    useCreatedNFTs(address);
   const displayedNFTs = useMemo(
     () => filterAndSort(nfts, search, sort),
     [nfts, search, sort],
@@ -220,9 +257,7 @@ export default function ProfilePage() {
     if (!address) return [];
     const lower = address.toLowerCase();
     return allEvents.filter(
-      (e) =>
-        e.from.toLowerCase() === lower ||
-        e.to?.toLowerCase() === lower,
+      (e) => e.from.toLowerCase() === lower || e.to?.toLowerCase() === lower,
     );
   }, [allEvents, address]);
 
@@ -373,8 +408,8 @@ export default function ProfilePage() {
           ))}
         </div>
 
-        {/* Collection filter + search — hidden on Activity tab */}
-        {activeTab !== "Activity" && (
+        {/* Collection filter + search — Collected tab only */}
+        {activeTab === "Collected" && (
           <div className="flex flex-col sm:flex-row gap-3 mb-8">
             {!isLoadingCollections && collections.length > 0 && (
               <div className="flex gap-2 flex-wrap">
@@ -454,19 +489,26 @@ export default function ProfilePage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-outline-variant/10">
-                  {["Event", "Item", "Price", "From", "To", "Time"].map((h, i) => (
-                    <th
-                      key={h}
-                      className={`pb-4 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold ${
-                        i === 2 ? "text-right px-4" :
-                        i === 3 || i === 4 ? "text-center px-4" :
-                        i === 5 ? "text-right pl-4" :
-                        i === 1 ? "px-4" : "pr-4"
-                      }`}
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  {["Event", "Item", "Price", "From", "To", "Time"].map(
+                    (h, i) => (
+                      <th
+                        key={h}
+                        className={`pb-4 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold ${
+                          i === 2
+                            ? "text-right px-4"
+                            : i === 3 || i === 4
+                              ? "text-center px-4"
+                              : i === 5
+                                ? "text-right pl-4"
+                                : i === 1
+                                  ? "px-4"
+                                  : "pr-4"
+                        }`}
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/5">
@@ -502,7 +544,10 @@ export default function ProfilePage() {
                 ) : userEvents.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-20 text-center">
-                      <Activity size={40} className="mx-auto mb-4 text-on-surface-variant/30" />
+                      <Activity
+                        size={40}
+                        className="mx-auto mb-4 text-on-surface-variant/30"
+                      />
                       <p className="text-sm text-on-surface-variant">
                         Nenhuma atividade recente encontrada.
                       </p>
@@ -546,7 +591,8 @@ export default function ProfilePage() {
                               href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
                               className="font-headline font-bold text-sm text-on-surface hover:text-primary transition-colors whitespace-nowrap"
                             >
-                              {meta?.name ?? `#${event.tokenId.padStart(3, "0")}`}
+                              {meta?.name ??
+                                `#${event.tokenId.padStart(3, "0")}`}
                             </Link>
                           </div>
                         </td>
@@ -557,7 +603,9 @@ export default function ProfilePage() {
                               {parseFloat(event.priceETH).toFixed(4)} ETH
                             </span>
                           ) : (
-                            <span className="text-on-surface-variant/30">—</span>
+                            <span className="text-on-surface-variant/30">
+                              —
+                            </span>
                           )}
                         </td>
                         {/* From */}
@@ -585,7 +633,9 @@ export default function ProfilePage() {
                               {isUser(event.to) ? "You" : shortAddr(event.to)}
                             </span>
                           ) : (
-                            <span className="text-on-surface-variant/30 text-xs">—</span>
+                            <span className="text-on-surface-variant/30 text-xs">
+                              —
+                            </span>
                           )}
                         </td>
                         {/* Time */}
@@ -611,88 +661,167 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* NFT Grid — hidden on Activity tab */}
-        {activeTab !== "Activity" && (isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="bg-surface-container-low rounded-sm overflow-hidden border border-outline-variant/5"
-              >
-                <div className="aspect-square animate-pulse bg-surface-container-high" />
-                <div className="p-5 space-y-3">
-                  <div className="h-3 rounded-sm animate-pulse w-1/2 bg-surface-container-high" />
-                  <div className="h-4 rounded-sm animate-pulse w-3/4 bg-surface-container-high" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : nfts.length === 0 ? (
-          <div className="text-center py-20">
-            <User
-              size={48}
-              className="mx-auto mb-4 text-on-surface-variant/30"
-            />
-            <p className="text-sm text-on-surface-variant">
-              {selectedCollection
-                ? "You don't own any NFTs in this collection."
-                : collections.length === 0
-                  ? "No collections exist yet."
-                  : "You don't own any NFTs yet."}
-            </p>
-          </div>
-        ) : displayedNFTs.length === 0 ? (
-          <div className="text-center py-20 border border-dashed border-outline-variant/20">
-            <Search
-              size={40}
-              className="mx-auto mb-4 text-on-surface-variant/30"
-            />
-            <h3 className="font-headline text-lg font-bold mb-2">No results</h3>
-            <button
-              onClick={clearFilters}
-              className="inline-flex items-center gap-2 font-medium px-5 py-2.5 text-sm rounded-sm bg-surface-container border border-outline-variant/15 text-on-surface mt-4"
-            >
-              <X size={13} /> Clear Filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {displayedNFTs.map((nft: CollectionNFTItem) => (
-              <Link
-                href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
-                key={`${nft.nftContract}-${nft.tokenId}`}
-                className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] hover:bg-surface-container-high transition-all duration-300"
-              >
-                <div className="aspect-square overflow-hidden relative">
-                  {nft.image ? (
-                    <Image
-                      src={nft.image}
-                      alt={nft.name}
-                      fill
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full animate-pulse bg-surface-container-high" />
-                  )}
-                  <div className="absolute top-4 right-4 glass-panel px-3 py-1 rounded-full border border-outline-variant/30 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-xs font-bold">
-                      #{nft.tokenId.padStart(3, "0")}
-                    </span>
+        {/* Created tab */}
+        {activeTab === "Created" &&
+          (isLoadingCreated ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="bg-surface-container-low rounded-sm overflow-hidden border border-outline-variant/5"
+                >
+                  <div className="aspect-square animate-pulse bg-surface-container-high" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-3 rounded-sm animate-pulse w-1/2 bg-surface-container-high" />
+                    <div className="h-4 rounded-sm animate-pulse w-3/4 bg-surface-container-high" />
                   </div>
                 </div>
-                <div className="p-5">
-                  <p className="text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-2">
-                    {nft.tokenId.padStart(3, "0")}
-                  </p>
-                  <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
-                    {nft.name}
-                  </h3>
-                </div>
+              ))}
+            </div>
+          ) : createdNfts.length === 0 ? (
+            <div className="text-center py-20">
+              <User
+                size={48}
+                className="mx-auto mb-4 text-on-surface-variant/30"
+              />
+              <p className="text-sm text-on-surface-variant">
+                You haven&apos;t created any NFTs yet.
+              </p>
+              <Link
+                href="/collections/create"
+                className="inline-flex items-center gap-2 mt-4 font-headline font-bold px-5 py-2.5 text-sm rounded-sm bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed uppercase tracking-wider"
+              >
+                Create a Collection
               </Link>
-            ))}
-          </div>
-        ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {(createdNfts as CreatedNFTItem[]).map((nft) => (
+                <Link
+                  href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
+                  key={`${nft.nftContract}-${nft.tokenId}`}
+                  className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] hover:bg-surface-container-high transition-all duration-300"
+                >
+                  <div className="aspect-square overflow-hidden relative">
+                    {nft.image ? (
+                      <Image
+                        src={nft.image}
+                        alt={nft.name}
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full animate-pulse bg-surface-container-high" />
+                    )}
+                  </div>
+                  <div className="p-5">
+                    <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
+                      {nft.collectionName}
+                    </p>
+                    <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
+                      {nft.name}
+                    </h3>
+                    <p className="text-on-surface-variant text-xs mt-1">
+                      #{nft.tokenId.padStart(3, "0")}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ))}
+
+        {/* Collected tab NFT Grid */}
+        {activeTab === "Collected" &&
+          (isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="bg-surface-container-low rounded-sm overflow-hidden border border-outline-variant/5"
+                >
+                  <div className="aspect-square animate-pulse bg-surface-container-high" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-3 rounded-sm animate-pulse w-1/2 bg-surface-container-high" />
+                    <div className="h-4 rounded-sm animate-pulse w-3/4 bg-surface-container-high" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : nfts.length === 0 ? (
+            <div className="text-center py-20">
+              <User
+                size={48}
+                className="mx-auto mb-4 text-on-surface-variant/30"
+              />
+              <p className="text-sm text-on-surface-variant">
+                {selectedCollection
+                  ? "You don't own any NFTs in this collection."
+                  : collections.length === 0
+                    ? "No collections exist yet."
+                    : "You don't own any NFTs yet."}
+              </p>
+            </div>
+          ) : displayedNFTs.length === 0 ? (
+            <div className="text-center py-20 border border-dashed border-outline-variant/20">
+              <Search
+                size={40}
+                className="mx-auto mb-4 text-on-surface-variant/30"
+              />
+              <h3 className="font-headline text-lg font-bold mb-2">
+                No results
+              </h3>
+              <button
+                onClick={clearFilters}
+                className="inline-flex items-center gap-2 font-medium px-5 py-2.5 text-sm rounded-sm bg-surface-container border border-outline-variant/15 text-on-surface mt-4"
+              >
+                <X size={13} /> Clear Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {displayedNFTs.map((nft: CollectionNFTItem) => {
+                const collectionName =
+                  collections.find(
+                    (c) =>
+                      c.contractAddress.toLowerCase() ===
+                      nft.nftContract.toLowerCase(),
+                  )?.name ?? "";
+                return (
+                  <Link
+                    href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
+                    key={`${nft.nftContract}-${nft.tokenId}`}
+                    className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] hover:bg-surface-container-high transition-all duration-300"
+                  >
+                    <div className="aspect-square overflow-hidden relative">
+                      {nft.image ? (
+                        <Image
+                          src={nft.image}
+                          alt={nft.name}
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full animate-pulse bg-surface-container-high" />
+                      )}
+                    </div>
+                    <div className="p-5">
+                      <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
+                        {collectionName}
+                      </p>
+                      <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
+                        {nft.name}
+                      </h3>
+                      <p className="text-on-surface-variant text-xs mt-1">
+                        #{nft.tokenId.padStart(3, "0")}
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
       </div>
       <Footer />
     </main>
