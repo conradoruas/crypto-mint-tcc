@@ -248,3 +248,36 @@ export const GET_TRENDING_COLLECTIONS = gql`
     }
   }
 `;
+
+export const GET_TRENDING_DATA = gql`
+  query GetTrendingData($sevenDaysAgo: BigInt!, $now: BigInt!) {
+    activityEvents(
+      where: { type: "sale", timestamp_gt: $sevenDaysAgo }
+      orderBy: timestamp
+      orderDirection: asc
+      first: 1000
+    ) {
+      nftContract
+      price
+      timestamp
+    }
+    listings(
+      where: { active: true }
+      orderBy: price
+      orderDirection: asc
+      first: 1000
+    ) {
+      nftContract
+      price
+    }
+    offers(
+      where: { active: true, expiresAt_gt: $now }
+      orderBy: amount
+      orderDirection: desc
+      first: 1000
+    ) {
+      nftContract
+      amount
+    }
+  }
+`;

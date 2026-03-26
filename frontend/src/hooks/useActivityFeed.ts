@@ -26,9 +26,10 @@ const INFURA_KEY = process.env.NEXT_PUBLIC_INFURA_API_KEY;
 const publicClient = createPublicClient({
   chain: sepolia,
   transport: fallback([
-    http(`https://sepolia.infura.io/v3/${INFURA_KEY}`),
     http("https://rpc.ankr.com/eth_sepolia"),
-    http(),
+    http("https://ethereum-sepolia-rpc.publicnode.com"),
+    http("https://rpc2.sepolia.org"),
+    http(`https://sepolia.infura.io/v3/${INFURA_KEY}`),
   ]),
 });
 
@@ -128,55 +129,18 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
       setRpcLoading(true);
       try {
         const latestBlock = await publicClient.getBlockNumber();
-        const fromBlock = latestBlock - BigInt(7200 * 7);
+        const fromBlock = latestBlock - BigInt(7200); // ~24h at 12s/block, within 10k block limit
 
         const allEvents: ActivityEvent[] = [];
 
-        const [
-          soldLogs,
-          listedLogs,
-          cancelledLogs,
-          offerMadeLogs,
-          offerAcceptedLogs,
-          offerCancelledLogs,
-        ] = await Promise.all([
-          publicClient.getLogs({
-            address: MARKETPLACE_ADDRESS,
-            event: ITEM_SOLD_ABI,
-            fromBlock,
-            toBlock: "latest",
-          }),
-          publicClient.getLogs({
-            address: MARKETPLACE_ADDRESS,
-            event: ITEM_LISTED_ABI,
-            fromBlock,
-            toBlock: "latest",
-          }),
-          publicClient.getLogs({
-            address: MARKETPLACE_ADDRESS,
-            event: LISTING_CANCELLED_ABI,
-            fromBlock,
-            toBlock: "latest",
-          }),
-          publicClient.getLogs({
-            address: MARKETPLACE_ADDRESS,
-            event: OFFER_MADE_ABI,
-            fromBlock,
-            toBlock: "latest",
-          }),
-          publicClient.getLogs({
-            address: MARKETPLACE_ADDRESS,
-            event: OFFER_ACCEPTED_ABI,
-            fromBlock,
-            toBlock: "latest",
-          }),
-          publicClient.getLogs({
-            address: MARKETPLACE_ADDRESS,
-            event: OFFER_CANCELLED_ABI,
-            fromBlock,
-            toBlock: "latest",
-          }),
-        ]);
+        // Sequential calls to avoid burst rate limiting on free-tier RPCs
+        const logParams = { address: MARKETPLACE_ADDRESS, fromBlock, toBlock: "latest" as const };
+        const soldLogs = await publicClient.getLogs({ ...logParams, event: ITEM_SOLD_ABI });
+        const listedLogs = await publicClient.getLogs({ ...logParams, event: ITEM_LISTED_ABI });
+        const cancelledLogs = await publicClient.getLogs({ ...logParams, event: LISTING_CANCELLED_ABI });
+        const offerMadeLogs = await publicClient.getLogs({ ...logParams, event: OFFER_MADE_ABI });
+        const offerAcceptedLogs = await publicClient.getLogs({ ...logParams, event: OFFER_ACCEPTED_ABI });
+        const offerCancelledLogs = await publicClient.getLogs({ ...logParams, event: OFFER_CANCELLED_ABI });
 
         for (const log of soldLogs) {
           const { nftContract, tokenId, seller, buyer, price } = log.args as {

@@ -216,7 +216,7 @@ export function TrendingSection() {
       ) : trending.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-sm text-on-surface-variant">
-            No activity in the last 24h
+            No collections found
           </p>
         </div>
       ) : (

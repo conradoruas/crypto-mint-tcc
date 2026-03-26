@@ -76,9 +76,5 @@ type CollectionStats @entity {
   id: ID!
   collection: Collection!
   totalVolume: BigInt!
-  volume24h: BigInt!
   totalSales: BigInt!
-  sales24h: BigInt!
-  floorPrice: BigInt
-  lastSaleTimestamp: BigInt!
 }

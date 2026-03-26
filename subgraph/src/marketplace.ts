@@ -13,6 +13,7 @@ import {
   ActivityEvent,
   MarketplaceStats,
   CollectionStats,
+  Collection,
 } from "../generated/schema";
 import { BigInt } from "@graphprotocol/graph-ts";
 
@@ -35,10 +36,14 @@ function getOrCreateCollectionStats(collectionId: string): CollectionStats {
     stats = new CollectionStats(collectionId);
     stats.collection = collectionId;
     stats.totalVolume = BigInt.fromI32(0);
-    stats.volume24h = BigInt.fromI32(0);
     stats.totalSales = BigInt.fromI32(0);
-    stats.sales24h = BigInt.fromI32(0);
-    stats.lastSaleTimestamp = BigInt.fromI32(0);
+
+    // Link Collection.stats so queries from the Collection side also work
+    let collection = Collection.load(collectionId);
+    if (collection) {
+      collection.stats = collectionId;
+      collection.save();
+    }
   }
   return stats;
 }
@@ -83,16 +88,10 @@ export function handleItemListed(event: ItemListed): void {
   stats.totalListed = stats.totalListed.plus(BigInt.fromI32(1));
   stats.save();
 
-  // Track floor price for collection
+  // Ensure CollectionStats entity exists for this collection
   let colStats = getOrCreateCollectionStats(
     event.params.nftContract.toHexString()
   );
-  if (
-    colStats.floorPrice === null ||
-    event.params.price.lt(colStats.floorPrice as BigInt)
-  ) {
-    colStats.floorPrice = event.params.price;
-  }
   colStats.save();
 }
 
@@ -137,23 +136,12 @@ export function handleItemSold(event: ItemSold): void {
   stats.totalVolume = stats.totalVolume.plus(event.params.price);
   stats.save();
 
-  // Collection stats
+  // Collection stats — all-time only (24h is computed on frontend via activityEvents)
   let colStats = getOrCreateCollectionStats(
     event.params.nftContract.toHexString()
   );
   colStats.totalSales = colStats.totalSales.plus(BigInt.fromI32(1));
   colStats.totalVolume = colStats.totalVolume.plus(event.params.price);
-
-  let oneDayAgo = event.block.timestamp.minus(BigInt.fromI32(86400));
-  if (colStats.lastSaleTimestamp.gt(oneDayAgo)) {
-    colStats.volume24h = colStats.volume24h.plus(event.params.price);
-    colStats.sales24h = colStats.sales24h.plus(BigInt.fromI32(1));
-  } else {
-    // Reset 24h window
-    colStats.volume24h = event.params.price;
-    colStats.sales24h = BigInt.fromI32(1);
-  }
-  colStats.lastSaleTimestamp = event.block.timestamp;
   colStats.save();
 }
 
