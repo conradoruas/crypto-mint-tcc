@@ -6,24 +6,15 @@ import {
   useReadContract,
   useConnection,
 } from "wagmi";
-import { parseEther, formatEther, createPublicClient, http } from "viem";
-import { useCallback, useEffect, useState } from "react";
+import { parseEther, formatEther } from "viem";
+import { useCallback } from "react";
 import { useQuery } from "@apollo/client/react";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
-import { sepolia } from "viem/chains";
 import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
 
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
-
-// ✅ Separado: marketplace genérico tem seu próprio endereço
 const MARKETPLACE_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
-
-const publicClient = createPublicClient({
-  chain: sepolia,
-  transport: http("/api/rpc"),
-});
 
 // ─────────────────────────────────────────────
 // Tipos
@@ -128,7 +119,6 @@ export function useMyOffer(nftContract: string, tokenId: string) {
 // ─────────────────────────────────────────────
 
 export function useNFTOffers(nftContract: string, tokenId: string) {
-  // ── GraphQL path ──
   type GqlOffer = {
     id: string;
     buyer: string;
@@ -143,112 +133,27 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     loading: gqlLoading,
     refetch: gqlRefetch,
   } = useQuery<GqlOffersData>(GET_OFFERS_FOR_NFT, {
-    skip: !SUBGRAPH_ENABLED || !nftContract || !tokenId,
-    variables: {
-      nftContract: nftContract?.toLowerCase(),
-      tokenId: tokenId,
-    },
+    skip: !nftContract || !tokenId,
+    variables: { nftContract: nftContract?.toLowerCase(), tokenId },
   });
 
-  // ── RPC path ──
-  const [rpcOffers, setRpcOffers] = useState<OfferWithBuyer[]>([]);
-  const [rpcLoading, setRpcLoading] = useState(false);
-  const [rpcTopOffer, setRpcTopOffer] = useState<string | null>(null);
-  const [hasFetched, setHasFetched] = useState(false);
+  const refetch = useCallback(() => { gqlRefetch(); }, [gqlRefetch]);
 
-  const fetchRpcOffers = useCallback(async () => {
-    if (SUBGRAPH_ENABLED || !nftContract || !tokenId || hasFetched) return;
-    setRpcLoading(true);
-
-    try {
-      const buyers = (await publicClient.readContract({
-        address: MARKETPLACE_ADDRESS,
-        abi: NFT_MARKETPLACE_ABI,
-        functionName: "getOfferBuyers",
-        args: [nftContract as `0x${string}`, BigInt(tokenId)],
-      })) as `0x${string}`[];
-
-      if (buyers.length === 0) {
-        setRpcOffers([]);
-        setRpcTopOffer(null);
-        setHasFetched(true);
-        return;
-      }
-
-      const uniqueBuyers = [...new Set(buyers)];
-
-      const offerResults = await Promise.all(
-        uniqueBuyers.map(async (buyer) => {
-          try {
-            const offer = (await publicClient.readContract({
-              address: MARKETPLACE_ADDRESS,
-              abi: NFT_MARKETPLACE_ABI,
-              functionName: "getOffer",
-              args: [nftContract as `0x${string}`, BigInt(tokenId), buyer],
-            })) as OfferData;
-            return { ...offer, buyerAddress: buyer };
-          } catch {
-            return null;
-          }
-        }),
-      );
-
-      const now = BigInt(Math.floor(Date.now() / 1000));
-      const activeOffers = offerResults
-        .filter(
-          (o): o is OfferWithBuyer =>
-            o !== null && o.active && o.expiresAt > now,
-        )
-        .sort((a, b) => (b.amount > a.amount ? 1 : -1));
-
-      setRpcOffers(activeOffers);
-      setRpcTopOffer(
-        activeOffers.length > 0 ? formatEther(activeOffers[0].amount) : null,
-      );
-    } catch (error) {
-      console.error("Erro ao buscar ofertas:", error);
-    } finally {
-      setRpcLoading(false);
-      setHasFetched(true);
-    }
-  }, [nftContract, tokenId, hasFetched]);
-
-  useEffect(() => {
-    fetchRpcOffers();
-  }, [fetchRpcOffers]);
-
-  const refetch = useCallback(() => {
-    if (SUBGRAPH_ENABLED) {
-      gqlRefetch();
-    } else {
-      setHasFetched(false);
-    }
-  }, [gqlRefetch]);
-
-  if (SUBGRAPH_ENABLED) {
-    const now = BigInt(Math.floor(Date.now() / 1000));
-    const gqlOffers = (gqlData?.offers ?? [])
-      .filter((o) => o.active && BigInt(o.expiresAt) > now)
-      .map((o) => ({
-        buyer: o.buyer as `0x${string}`,
-        buyerAddress: o.buyer as `0x${string}`,
-        amount: BigInt(o.amount),
-        expiresAt: BigInt(o.expiresAt),
-        active: true,
-      })) as OfferWithBuyer[];
-
-    return {
-      offers: gqlOffers,
-      isLoading: gqlLoading,
-      topOffer: gqlOffers.length > 0 ? formatEther(gqlOffers[0].amount) : null,
-      refetch,
-    };
-  }
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const offers = (gqlData?.offers ?? [])
+    .filter((o) => o.active && BigInt(o.expiresAt) > now)
+    .map((o) => ({
+      buyer: o.buyer as `0x${string}`,
+      buyerAddress: o.buyer as `0x${string}`,
+      amount: BigInt(o.amount),
+      expiresAt: BigInt(o.expiresAt),
+      active: true,
+    })) as OfferWithBuyer[];
 
   return {
-    offers: rpcOffers,
-    isLoading: rpcLoading,
-    topOffer: rpcTopOffer,
+    offers,
+    isLoading: gqlLoading,
+    topOffer: offers.length > 0 ? formatEther(offers[0].amount) : null,
     refetch,
   };
 }

@@ -1,12 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { formatEther, createPublicClient, http } from "viem";
-import { sepolia } from "viem/chains";
+import { useEffect, useState } from "react";
+import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
-import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
-import { useCollections } from "@/hooks/useCollections";
 import { GET_ALL_NFTS, GET_NFTS_FOR_CONTRACT } from "@/lib/graphql/queries";
-
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 export interface NFTItem {
   tokenId: string;
@@ -20,85 +15,6 @@ export interface NFTItem {
 export interface NFTItemWithMarket extends NFTItem {
   listingPrice: string | null;
   topOffer: string | null;
-}
-
-export interface AlchemyNFT {
-  tokenId: string;
-  name?: string;
-  description?: string;
-  tokenUri?: string;
-  image?: {
-    cachedUrl?: string;
-    originalUrl?: string;
-  };
-}
-
-const MARKETPLACE_ADDRESS = process.env
-  .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
-
-const publicClient = createPublicClient({
-  chain: sepolia,
-  transport: http("/api/rpc"),
-});
-
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
-
-async function fetchTopOffer(
-  nftContract: `0x${string}`,
-  tokenId: string,
-): Promise<string | null> {
-  try {
-    const buyers = (await publicClient.readContract({
-      address: MARKETPLACE_ADDRESS,
-      abi: NFT_MARKETPLACE_ABI,
-      functionName: "getOfferBuyers",
-      args: [nftContract, BigInt(tokenId)],
-    })) as `0x${string}`[];
-
-    if (buyers.length === 0) return null;
-
-    const uniqueBuyers = [...new Set(buyers)];
-    const now = BigInt(Math.floor(Date.now() / 1000));
-
-    const offerAmounts = await Promise.all(
-      uniqueBuyers.map(async (buyer) => {
-        try {
-          const offer = (await publicClient.readContract({
-            address: MARKETPLACE_ADDRESS,
-            abi: NFT_MARKETPLACE_ABI,
-            functionName: "getOffer",
-            args: [nftContract, BigInt(tokenId), buyer],
-          })) as {
-            buyer: string;
-            amount: bigint;
-            expiresAt: bigint;
-            active: boolean;
-          };
-
-          if (offer.active && offer.expiresAt > now) return offer.amount;
-          return null;
-        } catch {
-          return null;
-        }
-      }),
-    );
-
-    const active = offerAmounts.filter((a): a is bigint => a !== null);
-    if (active.length === 0) return null;
-
-    const top = active.reduce(
-      (max, curr) => (curr > max ? curr : max),
-      active[0],
-    );
-    return formatEther(top);
-  } catch {
-    return null;
-  }
 }
 
 // ─── GraphQL types ───
@@ -131,7 +47,15 @@ type GqlNFT = {
 };
 type GqlNFTsData = { nfts: GqlNFT[] };
 
-// Fetch Alchemy metadata for a contract, returns a map tokenId -> {name, description, image}
+// ─── Helpers ───
+
+const resolveIpfsUrl = (url: string) => {
+  if (!url) return "";
+  if (url.startsWith("ipfs://"))
+    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
+  return url;
+};
+
 async function fetchAlchemyMetadata(
   contractAddress: string,
 ): Promise<Map<string, { name: string; description: string; image: string }>> {
@@ -167,12 +91,10 @@ async function fetchAlchemyMetadata(
   return map;
 }
 
-// Merge subgraph NFTs (listing/offer data) with Alchemy metadata
 async function mergeWithAlchemy(
   nfts: GqlNFT[],
   collectionAddress?: string,
 ): Promise<NFTItemWithMarket[]> {
-  // Group by contract address
   const byContract = new Map<string, GqlNFT[]>();
   for (const nft of nfts) {
     const addr = (
@@ -184,7 +106,6 @@ async function mergeWithAlchemy(
     byContract.get(addr)!.push(nft);
   }
 
-  // Fetch Alchemy metadata for all contracts in parallel
   const metaMaps = await Promise.all(
     [...byContract.keys()].map(async (addr) => ({
       addr,
@@ -228,17 +149,16 @@ export function useExploreNFTs(collectionAddress?: string) {
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // ── GraphQL path ──
   const { data: gqlData, loading: gqlQueryLoading } = useQuery<GqlNFTsData>(
     GET_NFTS_FOR_CONTRACT,
     {
-      skip: !SUBGRAPH_ENABLED || !collectionAddress,
+      skip: !collectionAddress,
       variables: { collection: collectionAddress?.toLowerCase() },
     },
   );
 
   useEffect(() => {
-    if (!SUBGRAPH_ENABLED || !collectionAddress) return;
+    if (!collectionAddress) return;
     if (gqlQueryLoading) return;
     const raw = gqlData?.nfts ?? [];
     if (raw.length === 0) {
@@ -249,7 +169,7 @@ export function useExploreNFTs(collectionAddress?: string) {
     let cancelled = false;
     setIsLoading(true);
     mergeWithAlchemy(raw, collectionAddress).then((items) => {
-      if (cancelled) return; // ← ignora resultado se desmontou
+      if (cancelled) return;
       setNfts(items);
       setIsLoading(false);
     });
@@ -257,81 +177,6 @@ export function useExploreNFTs(collectionAddress?: string) {
       cancelled = true;
     };
   }, [gqlData, gqlQueryLoading, collectionAddress]);
-
-  // ── RPC path ──
-  const nftContract = collectionAddress as `0x${string}` | undefined;
-
-  useEffect(() => {
-    if (SUBGRAPH_ENABLED) return;
-    if (!nftContract) {
-      setNfts([]);
-      setIsLoading(false);
-      return;
-    }
-
-    const fetchNFTs = async () => {
-      try {
-        const res = await fetch(
-          `/api/alchemy/getNFTsForContract?contractAddress=${nftContract}&withMetadata=true&refreshCache=false`,
-        );
-        const data = await res.json();
-
-        if (!data.nfts || data.nfts.length === 0) {
-          setNfts([]);
-          return;
-        }
-
-        const items: NFTItemWithMarket[] = await Promise.all(
-          data.nfts.map(async (nft: AlchemyNFT) => {
-            let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
-            if (!image && nft.tokenUri) {
-              try {
-                const metaRes = await fetch(resolveIpfsUrl(nft.tokenUri));
-                const meta = await metaRes.json();
-                image = resolveIpfsUrl(meta.image ?? "");
-              } catch {
-                image = "";
-              }
-            }
-
-            let listingPrice: string | null = null;
-            try {
-              const listing = (await publicClient.readContract({
-                address: MARKETPLACE_ADDRESS,
-                abi: NFT_MARKETPLACE_ABI,
-                functionName: "getListing",
-                args: [nftContract, BigInt(nft.tokenId)],
-              })) as { seller: string; price: bigint; active: boolean };
-
-              if (listing.active) listingPrice = formatEther(listing.price);
-            } catch {
-              listingPrice = null;
-            }
-
-            const topOffer = await fetchTopOffer(nftContract, nft.tokenId);
-
-            return {
-              tokenId: nft.tokenId,
-              name: nft.name ?? `NFT #${nft.tokenId}`,
-              description: nft.description ?? "",
-              image,
-              nftContract,
-              listingPrice,
-              topOffer,
-            };
-          }),
-        );
-
-        setNfts(items);
-      } catch (error) {
-        console.error("Erro ao buscar NFTs:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchNFTs();
-  }, [nftContract]);
 
   return { nfts, isLoading };
 }
@@ -341,36 +186,26 @@ export function useExploreNFTs(collectionAddress?: string) {
 // ─────────────────────────────────────────────
 
 export function useExploreAllNFTs(collectionAddress?: string) {
-  const { collections } = useCollections();
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Stable key: só muda quando os endereços das coleções realmente mudam
-  const collectionKey = useMemo(
-    () => collections.map((c) => c.contractAddress).join(","),
-    [collections],
-  );
-
-  // ── GraphQL path: all NFTs ──
   const { data: gqlAllData, loading: gqlAllLoading } = useQuery<GqlNFTsData>(
     GET_ALL_NFTS,
     {
-      skip: !SUBGRAPH_ENABLED || !!collectionAddress,
+      skip: !!collectionAddress,
       variables: { first: 200 },
     },
   );
 
-  // ── GraphQL path: filtered by collection ──
   const { data: gqlColData, loading: gqlColLoading } = useQuery<GqlNFTsData>(
     GET_NFTS_FOR_CONTRACT,
     {
-      skip: !SUBGRAPH_ENABLED || !collectionAddress,
+      skip: !collectionAddress,
       variables: { collection: collectionAddress?.toLowerCase() },
     },
   );
 
   useEffect(() => {
-    if (!SUBGRAPH_ENABLED) return;
     const loading = collectionAddress ? gqlColLoading : gqlAllLoading;
     if (loading) return;
     const raw = collectionAddress
@@ -395,86 +230,6 @@ export function useExploreAllNFTs(collectionAddress?: string) {
       cancelled = true;
     };
   }, [gqlAllData, gqlColData, gqlAllLoading, gqlColLoading, collectionAddress]);
-
-  // ── RPC path ──
-  useEffect(() => {
-    if (SUBGRAPH_ENABLED) return;
-    if (!collectionKey) {
-      setIsLoading(false);
-      return;
-    }
-
-    const targets = collectionAddress
-      ? [collectionAddress]
-      : collections.map((c) => c.contractAddress);
-
-    const fetchAll = async () => {
-      setIsLoading(true);
-      try {
-        const results = await Promise.all(
-          targets.map(async (addr) => {
-            const res = await fetch(
-              `/api/alchemy/getNFTsForContract?contractAddress=${addr}&withMetadata=true&refreshCache=false`,
-            );
-            const data = await res.json();
-
-            return Promise.all(
-              (data.nfts ?? []).map(async (nft: AlchemyNFT) => {
-                let image =
-                  nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
-                if (!image && nft.tokenUri) {
-                  try {
-                    const metaRes = await fetch(resolveIpfsUrl(nft.tokenUri));
-                    const meta = await metaRes.json();
-                    image = resolveIpfsUrl(meta.image ?? "");
-                  } catch {
-                    image = "";
-                  }
-                }
-
-                let listingPrice: string | null = null;
-                try {
-                  const listing = (await publicClient.readContract({
-                    address: MARKETPLACE_ADDRESS,
-                    abi: NFT_MARKETPLACE_ABI,
-                    functionName: "getListing",
-                    args: [addr as `0x${string}`, BigInt(nft.tokenId)],
-                  })) as { seller: string; price: bigint; active: boolean };
-                  if (listing.active) listingPrice = formatEther(listing.price);
-                } catch {
-                  listingPrice = null;
-                }
-
-                const topOffer = await fetchTopOffer(
-                  addr as `0x${string}`,
-                  nft.tokenId,
-                );
-
-                return {
-                  tokenId: nft.tokenId,
-                  name: nft.name ?? `NFT #${nft.tokenId}`,
-                  description: nft.description ?? "",
-                  image,
-                  nftContract: addr,
-                  listingPrice,
-                  topOffer,
-                } as NFTItemWithMarket;
-              }),
-            );
-          }),
-        );
-
-        setNfts(results.flat());
-      } catch (error) {
-        console.error("Erro ao buscar todos os NFTs:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionAddress, collectionKey]);
 
   return { nfts, isLoading };
 }

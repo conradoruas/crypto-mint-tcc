@@ -1,71 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  createPublicClient,
-  http,
-  formatEther,
-  parseAbiItem,
-  fallback,
-  type Log,
-} from "viem";
-import { sepolia } from "viem/chains";
+import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { useCollections } from "@/hooks/useCollections";
-import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
-import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { GET_TRENDING_DATA } from "@/lib/graphql/queries";
-
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
-
-const MARKETPLACE_ADDRESS = process.env
-  .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
-
-const rpcClient = createPublicClient({
-  chain: sepolia,
-  transport: fallback([
-    http("/api/rpc"),
-    http("https://rpc.ankr.com/eth_sepolia"),
-    http("https://ethereum-sepolia-rpc.publicnode.com"),
-    http("https://rpc2.sepolia.org"),
-  ]),
-});
-
-const ITEM_SOLD_ABI = parseAbiItem(
-  "event ItemSold(address indexed nftContract, uint256 indexed tokenId, address seller, address buyer, uint256 price)",
-);
-const ITEM_LISTED_ABI = parseAbiItem(
-  "event ItemListed(address indexed nftContract, uint256 indexed tokenId, address indexed seller, uint256 price)",
-);
-const OFFER_MADE_ABI = parseAbiItem(
-  "event OfferMade(address indexed nftContract, uint256 indexed tokenId, address indexed buyer, uint256 amount, uint256 expiresAt)",
-);
 
 // ─────────────────────────────────────────────
 // Tipos
 // ─────────────────────────────────────────────
-
-interface SoldArgs {
-  nftContract: string;
-  tokenId: bigint;
-  seller: string;
-  buyer: string;
-  price: bigint;
-}
-interface ListedArgs {
-  nftContract: string;
-  tokenId: bigint;
-  seller: string;
-  price: bigint;
-}
-interface OfferArgs {
-  nftContract: string;
-  tokenId: bigint;
-  buyer: string;
-  amount: bigint;
-  expiresAt: bigint;
-}
-type RpcLog = Omit<Log, "args"> & { args?: Record<string, unknown> };
 
 export interface TrendingCollection {
   contractAddress: string;
@@ -82,10 +25,6 @@ export interface TrendingCollection {
   floorHistory: number[];
 }
 
-// ─────────────────────────────────────────────
-// Hook principal
-// ─────────────────────────────────────────────
-
 type GqlSaleEvent = { nftContract: string; price: string; timestamp: string };
 type GqlListing = { nftContract: string; price: string };
 type GqlOffer = { nftContract: string; amount: string };
@@ -95,11 +34,14 @@ type GqlTrendingData = {
   offers: GqlOffer[];
 };
 
+// ─────────────────────────────────────────────
+// Hook principal
+// ─────────────────────────────────────────────
+
 export function useTrendingCollections(limit = 10) {
   const [trending, setTrending] = useState<TrendingCollection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // ── GraphQL path ──
   const makeQueryVars = () => {
     const now = Math.floor(Date.now() / 1000);
     return { sevenDaysAgo: (now - 7 * 86400).toString(), now: now.toString() };
@@ -118,215 +60,22 @@ export function useTrendingCollections(limit = 10) {
     loading: statsLoading,
     error: statsError,
   } = useQuery<GqlTrendingData>(GET_TRENDING_DATA, {
-    skip: !SUBGRAPH_ENABLED,
     variables: queryVars,
   });
 
-  // ── RPC path ──
   const { collections } = useCollections();
 
-  // Latest ref — keeps collections accessible inside effects without being a dependency
   const collectionsRef = useRef(collections);
   useEffect(() => {
     collectionsRef.current = collections;
   }, [collections]);
 
-  // Stable key: só muda quando os endereços das coleções realmente mudam
   const collectionKey = useMemo(
     () => collections.map((c) => c.contractAddress).join(","),
     [collections],
   );
 
   useEffect(() => {
-    if (SUBGRAPH_ENABLED) return;
-    if (!collectionKey) return;
-
-    const fetchData = async () => {
-      setIsLoading(true);
-      const cols = collectionsRef.current;
-      try {
-        const latestBlock = await rpcClient.getBlockNumber();
-        // ~24h at 12s/block, within 10k block limit for all providers
-        const fromBlock24h = latestBlock - BigInt(7200);
-
-        // Sequential to avoid burst rate limiting on free-tier RPCs
-        const logParams = {
-          address: MARKETPLACE_ADDRESS,
-          fromBlock: fromBlock24h,
-          toBlock: "latest" as const,
-        };
-        let soldLogs: RpcLog[] = [];
-        let listedLogs24h: RpcLog[] = [];
-        let offerLogs: RpcLog[] = [];
-        try {
-          soldLogs = await rpcClient.getLogs({
-            ...logParams,
-            event: ITEM_SOLD_ABI,
-          });
-          listedLogs24h = await rpcClient.getLogs({
-            ...logParams,
-            event: ITEM_LISTED_ABI,
-          });
-          offerLogs = await rpcClient.getLogs({
-            ...logParams,
-            event: OFFER_MADE_ABI,
-          });
-        } catch (e) {
-          console.warn("getLogs parcial falhou, usando arrays vazios:", e);
-        }
-        const results: TrendingCollection[] = await Promise.all(
-          cols.map(async (col) => {
-            const addr = col.contractAddress.toLowerCase();
-
-            const toSold = (l: RpcLog) => l.args as unknown as SoldArgs;
-            const toListed = (l: RpcLog) => l.args as unknown as ListedArgs;
-            const toOffer = (l: RpcLog) => l.args as unknown as OfferArgs;
-
-            const sales = soldLogs.filter(
-              (l) => toSold(l).nftContract?.toLowerCase() === addr,
-            );
-            const sales24h = sales.length;
-
-            const volume24hWei = sales.reduce(
-              (acc: bigint, l) => acc + (toSold(l).price ?? BigInt(0)),
-              BigInt(0),
-            );
-            const volume24h = parseFloat(formatEther(volume24hWei)).toFixed(4);
-
-            const floorHistory = sales
-              .map((l) => parseFloat(formatEther(toSold(l).price ?? BigInt(0))))
-              .slice(-8);
-
-            let floorChange24h: number | null = null;
-            if (floorHistory.length >= 2) {
-              const first = floorHistory[0];
-              const last = floorHistory[floorHistory.length - 1];
-              if (first > 0) floorChange24h = ((last - first) / first) * 100;
-            }
-
-            // Floor price: check active listings from 24h window via contract
-            let floorPrice: string | null = null;
-            try {
-              const colListings = listedLogs24h.filter(
-                (l) => toListed(l).nftContract?.toLowerCase() === addr,
-              );
-              const prices: bigint[] = [];
-              await Promise.all(
-                colListings.map(async (log) => {
-                  const { tokenId } = toListed(log);
-                  try {
-                    const listing = (await rpcClient.readContract({
-                      address: MARKETPLACE_ADDRESS,
-                      abi: NFT_MARKETPLACE_ABI,
-                      functionName: "getListing",
-                      args: [col.contractAddress as `0x${string}`, tokenId],
-                    })) as { active: boolean; price: bigint };
-                    if (listing.active) prices.push(listing.price);
-                  } catch {
-                    /* ignora */
-                  }
-                }),
-              );
-              if (prices.length > 0) {
-                const min = prices.reduce((a, b) => (a < b ? a : b));
-                floorPrice = parseFloat(formatEther(min)).toFixed(4);
-              }
-            } catch {
-              /* ignora */
-            }
-
-            let topOffer: string | null = null;
-            const offersSorted = offerLogs
-              .filter((l) => toOffer(l).nftContract?.toLowerCase() === addr)
-              .map((l) => toOffer(l).amount ?? BigInt(0))
-              .sort((a: bigint, b: bigint) => (b > a ? 1 : -1));
-            if (offersSorted.length > 0) {
-              topOffer = parseFloat(formatEther(offersSorted[0])).toFixed(4);
-            }
-
-            // ── Owners ──────────────────────────────────────────────
-            let owners = 0;
-            try {
-              const res = await globalThis.fetch(
-                `/api/alchemy/getOwnersForContract?contractAddress=${col.contractAddress}`,
-              );
-              const data = await res.json();
-              owners = data.owners?.length ?? 0;
-            } catch {
-              /* ignora */
-            }
-
-            // ── Listed % (active listings / total supply) ───────────
-            let listedPct: string | null = null;
-            try {
-              const totalSupply = (await rpcClient.readContract({
-                address: col.contractAddress as `0x${string}`,
-                abi: NFT_COLLECTION_ABI,
-                functionName: "totalSupply",
-              })) as bigint;
-
-              const listedCount = listedLogs24h.filter(
-                (l) => toListed(l).nftContract?.toLowerCase() === addr,
-              ).length;
-
-              if (totalSupply > BigInt(0)) {
-                listedPct =
-                  ((listedCount / Number(totalSupply)) * 100).toFixed(1) + "%";
-              }
-            } catch {
-              /* ignora */
-            }
-
-            return {
-              contractAddress: col.contractAddress,
-              name: col.name,
-              symbol: col.symbol,
-              image: col.image,
-              floorPrice,
-              floorChange24h,
-              topOffer,
-              sales24h,
-              owners,
-              listedPct,
-              volume24h,
-              floorHistory,
-            };
-          }),
-        );
-
-        const sorted = results
-          .sort((a, b) => parseFloat(b.volume24h) - parseFloat(a.volume24h))
-          .slice(0, limit);
-
-        setTrending(sorted);
-      } catch (error) {
-        console.error("Erro ao buscar trending:", error);
-        setTrending(
-          cols.slice(0, limit).map((col) => ({
-            contractAddress: col.contractAddress,
-            name: col.name,
-            symbol: col.symbol,
-            image: col.image,
-            floorPrice: null,
-            floorChange24h: null,
-            topOffer: null,
-            sales24h: 0,
-            owners: 0,
-            listedPct: null,
-            volume24h: "0.0000",
-            floorHistory: [],
-          })),
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [collectionKey, limit]);
-
-  useEffect(() => {
-    if (!SUBGRAPH_ENABLED) return;
     if (statsLoading) return;
     if (!collectionKey) return;
 
@@ -438,9 +187,5 @@ export function useTrendingCollections(limit = 10) {
     fetchOwners();
   }, [statsData, statsLoading, statsError, collectionKey, limit]);
 
-  if (SUBGRAPH_ENABLED) {
-    return { trending, isLoading: statsLoading || isLoading };
-  }
-
-  return { trending, isLoading };
+  return { trending, isLoading: statsLoading || isLoading };
 }
