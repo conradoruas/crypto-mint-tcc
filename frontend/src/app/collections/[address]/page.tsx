@@ -2,7 +2,9 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { formatEther } from "viem";
 import {
+  useBalance,
   useConnection,
   useReadContract,
   useWriteContract,
@@ -21,6 +23,7 @@ import {
   X,
   CheckCircle2,
   Upload,
+  Wallet,
 } from "lucide-react";
 import {
   useCollectionDetails,
@@ -116,7 +119,11 @@ function LoadNFTsPanel({
     if (isSuccess) onSuccess();
   }, [isSuccess, onSuccess]);
 
-  const updateNFT = (index: number, field: keyof NFTLoadDraft, value: string | File) => {
+  const updateNFT = (
+    index: number,
+    field: keyof NFTLoadDraft,
+    value: string | File,
+  ) => {
     setNftDrafts((prev) =>
       prev.map((nft, i) => {
         if (i !== index) return nft;
@@ -487,6 +494,9 @@ export default function CollectionPage() {
   const [showMintModal, setShowMintModal] = useState(false);
   const [mintSuccess, setMintSuccess] = useState<string | null>(null);
   const [loadSuccess, setLoadSuccess] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
+  const [withdrawHash, setWithdrawHash] = useState<`0x${string}` | undefined>();
 
   const details = useCollectionDetails(collectionAddress);
   const {
@@ -502,6 +512,39 @@ export default function CollectionPage() {
     query: { enabled: !!collectionAddress },
   });
   const urisLoaded = (urisLoadedData as boolean | undefined) || loadSuccess;
+
+  const { data: contractBalance, refetch: refetchBalance } = useBalance({
+    address: collectionAddress as `0x${string}`,
+    query: { enabled: !!collectionAddress },
+  });
+
+  const { mutateAsync: withdrawWrite, isPending: isWithdrawPending } =
+    useWriteContract();
+  const { isLoading: isWithdrawConfirming, isSuccess: isWithdrawConfirmed } =
+    useWaitForTransactionReceipt({ hash: withdrawHash });
+
+  useEffect(() => {
+    if (isWithdrawConfirmed) {
+      setWithdrawSuccess(true);
+      refetchBalance();
+    }
+  }, [isWithdrawConfirmed, refetchBalance]);
+
+  const handleWithdraw = async () => {
+    setWithdrawError(null);
+    try {
+      const tx = await withdrawWrite({
+        address: collectionAddress as `0x${string}`,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "withdraw",
+      });
+      setWithdrawHash(tx);
+    } catch (e) {
+      setWithdrawError(
+        e instanceof Error ? e.message : "Erro ao retirar fundos.",
+      );
+    }
+  };
 
   const isOwner =
     userAddress &&
@@ -587,20 +630,42 @@ export default function CollectionPage() {
                   )}
                 </div>
 
-                {isConnected && !isSoldOut && urisLoaded && (
-                  <button
-                    onClick={() => setShowMintModal(true)}
-                    className="flex items-center gap-2 font-bold px-6 py-3 bg-primary text-on-primary hover:bg-primary-dim transition-colors whitespace-nowrap shrink-0 neon-glow-primary"
-                  >
-                    <Plus size={16} /> Mintar NFT &mdash; {details.mintPriceEth}{" "}
-                    ETH
-                  </button>
-                )}
-                {isSoldOut && (
-                  <div className="px-6 py-3 text-sm font-bold shrink-0 bg-surface-container border border-outline-variant/20 text-on-surface-variant/40">
-                    Supply Esgotado
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-3 shrink-0">
+                  {isOwner &&
+                    contractBalance &&
+                    contractBalance.value > BigInt(0) && (
+                      <button
+                        onClick={handleWithdraw}
+                        disabled={isWithdrawPending || isWithdrawConfirming}
+                        className="flex items-center gap-2 font-bold px-6 py-3 bg-surface-container border border-secondary/30 text-secondary hover:border-secondary hover:bg-secondary/10 transition-colors whitespace-nowrap disabled:opacity-50"
+                      >
+                        {isWithdrawPending || isWithdrawConfirming ? (
+                          <Loader2 className="animate-spin" size={16} />
+                        ) : (
+                          <Wallet size={16} />
+                        )}
+                        Withdraw{" "}
+                        {parseFloat(formatEther(contractBalance.value)).toFixed(
+                          4,
+                        )}{" "}
+                        ETH
+                      </button>
+                    )}
+                  {isConnected && !isSoldOut && urisLoaded && (
+                    <button
+                      onClick={() => setShowMintModal(true)}
+                      className="flex items-center gap-2 font-bold px-6 py-3 bg-primary text-on-primary hover:bg-primary-dim transition-colors whitespace-nowrap neon-glow-primary"
+                    >
+                      <Plus size={16} /> Mintar NFT &mdash;{" "}
+                      {details.mintPriceEth} ETH
+                    </button>
+                  )}
+                  {isSoldOut && (
+                    <div className="px-6 py-3 text-sm font-bold bg-surface-container border border-outline-variant/20 text-on-surface-variant/40">
+                      Supply Esgotado
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -759,6 +824,48 @@ export default function CollectionPage() {
           </div>
           <button
             onClick={() => setMintSuccess(null)}
+            className="ml-2 text-on-surface-variant hover:text-on-surface transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Success toast — withdraw */}
+      {withdrawSuccess && (
+        <div className="fixed bottom-6 right-6 flex items-center gap-3 p-4 z-40 shadow-xl bg-surface-container border border-secondary/30">
+          <CheckCircle2 size={18} className="text-secondary shrink-0" />
+          <div>
+            <p className="font-headline font-bold text-sm text-on-surface">
+              Royalties retirados!
+            </p>
+            {withdrawHash && (
+              <a
+                href={`https://sepolia.etherscan.io/tx/${withdrawHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-secondary underline"
+              >
+                Ver no Etherscan
+              </a>
+            )}
+          </div>
+          <button
+            onClick={() => setWithdrawSuccess(false)}
+            className="ml-2 text-on-surface-variant hover:text-on-surface transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Error toast — withdraw */}
+      {withdrawError && (
+        <div className="fixed bottom-6 right-6 flex items-center gap-3 p-4 z-40 shadow-xl bg-surface-container border border-error/30">
+          <AlertTriangle size={18} className="text-error shrink-0" />
+          <p className="text-sm text-error">{withdrawError}</p>
+          <button
+            onClick={() => setWithdrawError(null)}
             className="ml-2 text-on-surface-variant hover:text-on-surface transition-colors"
           >
             <X size={14} />
