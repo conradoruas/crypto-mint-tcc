@@ -23,11 +23,9 @@ const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 const FACTORY_ADDRESS = process.env
   .NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS as `0x${string}`;
 
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
-
 const publicClient = createPublicClient({
   chain: sepolia,
-  transport: http(`https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`),
+  transport: http("/api/rpc"),
 });
 
 // ─────────────────────────────────────────────
@@ -113,7 +111,7 @@ export function useProfileNFTs(
           .join("&");
 
         const res = await fetch(
-          `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForOwner?owner=${ownerAddress}&${contractParams}&withMetadata=true`,
+          `/api/alchemy/getNFTsForOwner?owner=${ownerAddress}&${contractParams}&withMetadata=true`,
         );
         const data = await res.json();
 
@@ -303,7 +301,7 @@ export function useCreatedNFTs(ownerAddress: string | undefined) {
         const results = await Promise.all(
           creatorCollections.map(async (col) => {
             const res = await fetch(
-              `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${col.contractAddress}&withMetadata=true&refreshCache=false`,
+              `/api/alchemy/getNFTsForContract?contractAddress=${col.contractAddress}&withMetadata=true&refreshCache=false`,
             );
             const data = await res.json();
             return (data.nfts ?? []).map((nft: AlchemyNFT) => ({
@@ -423,7 +421,7 @@ export function useCollectionNFTs(collectionAddress: string | undefined) {
       setIsLoading(true);
       try {
         const res = await fetch(
-          `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${collectionAddress}&withMetadata=true&refreshCache=false`,
+          `/api/alchemy/getNFTsForContract?contractAddress=${collectionAddress}&withMetadata=true&refreshCache=false`,
         );
         const data = await res.json();
 

@@ -21,16 +21,13 @@ const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 const MARKETPLACE_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
 
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
-const INFURA_KEY = process.env.NEXT_PUBLIC_INFURA_API_KEY;
-
 const rpcClient = createPublicClient({
   chain: sepolia,
   transport: fallback([
+    http("/api/rpc"),
     http("https://rpc.ankr.com/eth_sepolia"),
     http("https://ethereum-sepolia-rpc.publicnode.com"),
     http("https://rpc2.sepolia.org"),
-    http(`https://sepolia.infura.io/v3/${INFURA_KEY}`),
   ]),
 });
 
@@ -251,7 +248,7 @@ export function useTrendingCollections(limit = 10) {
             let owners = 0;
             try {
               const res = await globalThis.fetch(
-                `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getOwnersForContract?contractAddress=${col.contractAddress}`,
+                `/api/alchemy/getOwnersForContract?contractAddress=${col.contractAddress}`,
               );
               const data = await res.json();
               owners = data.owners?.length ?? 0;
@@ -385,7 +382,7 @@ export function useTrendingCollections(limit = 10) {
         cols.map(async (col) => {
           try {
             const res = await globalThis.fetch(
-              `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getOwnersForContract?contractAddress=${col.contractAddress}`,
+              `/api/alchemy/getOwnersForContract?contractAddress=${col.contractAddress}`,
             );
             const data = await res.json();
             return data.owners?.length ?? 0;

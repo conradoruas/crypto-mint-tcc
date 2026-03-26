@@ -20,11 +20,9 @@ const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 const MARKETPLACE_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
 
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
-
 const publicClient = createPublicClient({
   chain: sepolia,
-  transport: http(`https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`),
+  transport: http("/api/rpc"),
 });
 
 // ─────────────────────────────────────────────

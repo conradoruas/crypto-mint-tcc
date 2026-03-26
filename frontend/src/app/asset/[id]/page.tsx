@@ -32,7 +32,6 @@ import {
   OfferWithBuyer,
 } from "@/hooks/useMarketplace";
 
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 
 const resolveIpfsUrl = (url: string) => {
   if (!url) return "";
@@ -222,7 +221,7 @@ export default function AssetDetail() {
     const fetchNFT = async () => {
       try {
         const res = await fetch(
-          `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTMetadata?contractAddress=${nftContract}&tokenId=${tokenId}&refreshCache=false`,
+          `/api/alchemy/getNFTMetadata?contractAddress=${nftContract}&tokenId=${tokenId}&refreshCache=false`,
         );
         const data = await res.json();
         let image = data.image?.cachedUrl ?? data.image?.originalUrl ?? "";

@@ -36,11 +36,9 @@ export interface AlchemyNFT {
 const MARKETPLACE_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
 
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
-
 const publicClient = createPublicClient({
   chain: sepolia,
-  transport: http(`https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`),
+  transport: http("/api/rpc"),
 });
 
 const resolveIpfsUrl = (url: string) => {
@@ -143,7 +141,7 @@ async function fetchAlchemyMetadata(
   >();
   try {
     const res = await fetch(
-      `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${contractAddress}&withMetadata=true&refreshCache=false`,
+      `/api/alchemy/getNFTsForContract?contractAddress=${contractAddress}&withMetadata=true&refreshCache=false`,
     );
     const data = await res.json();
     for (const nft of data.nfts ?? []) {
@@ -274,7 +272,7 @@ export function useExploreNFTs(collectionAddress?: string) {
     const fetchNFTs = async () => {
       try {
         const res = await fetch(
-          `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${nftContract}&withMetadata=true&refreshCache=false`,
+          `/api/alchemy/getNFTsForContract?contractAddress=${nftContract}&withMetadata=true&refreshCache=false`,
         );
         const data = await res.json();
 
@@ -416,7 +414,7 @@ export function useExploreAllNFTs(collectionAddress?: string) {
         const results = await Promise.all(
           targets.map(async (addr) => {
             const res = await fetch(
-              `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${addr}&withMetadata=true&refreshCache=false`,
+              `/api/alchemy/getNFTsForContract?contractAddress=${addr}&withMetadata=true&refreshCache=false`,
             );
             const data = await res.json();
 

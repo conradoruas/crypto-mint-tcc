@@ -21,15 +21,13 @@ const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 const MARKETPLACE_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
 
-const INFURA_KEY = process.env.NEXT_PUBLIC_INFURA_API_KEY;
-
 const publicClient = createPublicClient({
   chain: sepolia,
   transport: fallback([
+    http("/api/rpc"),
     http("https://rpc.ankr.com/eth_sepolia"),
     http("https://ethereum-sepolia-rpc.publicnode.com"),
     http("https://rpc2.sepolia.org"),
-    http(`https://sepolia.infura.io/v3/${INFURA_KEY}`),
   ]),
 });
 

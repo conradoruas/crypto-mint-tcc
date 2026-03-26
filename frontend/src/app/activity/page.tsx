@@ -22,8 +22,6 @@ import {
 } from "lucide-react";
 import Footer from "@/components/Footer";
 
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
-
 type NFTMeta = { name: string; image: string };
 type MetaMap = Map<string, NFTMeta>;
 
@@ -31,7 +29,7 @@ async function fetchNFTMetadataBatch(
   events: ActivityEvent[],
 ): Promise<MetaMap> {
   const map: MetaMap = new Map();
-  if (!events.length || !ALCHEMY_KEY) return map;
+  if (!events.length) return map;
 
   // Deduplicate by contract+tokenId
   const seen = new Set<string>();
@@ -46,7 +44,7 @@ async function fetchNFTMetadataBatch(
 
   try {
     const res = await fetch(
-      `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTMetadataBatch`,
+      `/api/alchemy/getNFTMetadataBatch`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

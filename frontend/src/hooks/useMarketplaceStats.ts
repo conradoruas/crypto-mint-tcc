@@ -17,11 +17,9 @@ const FACTORY_ADDRESS = process.env
 const MARKETPLACE_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
 
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
-
 const publicClient = createPublicClient({
   chain: sepolia,
-  transport: http(`https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`),
+  transport: http("/api/rpc"),
 });
 
 export interface MarketplaceStats {
@@ -94,7 +92,7 @@ export function useMarketplaceStats(): MarketplaceStats {
         for (const c of collections) {
           try {
             const res = await globalThis.fetch(
-              `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getNFTsForContract?contractAddress=${c.contractAddress}&withMetadata=false`,
+              `/api/alchemy/getNFTsForContract?contractAddress=${c.contractAddress}&withMetadata=false`,
             );
             const data = await res.json();
             const nfts = data.nfts ?? [];
