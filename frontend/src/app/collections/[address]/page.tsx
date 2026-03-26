@@ -321,7 +321,13 @@ function LoadNFTsPanel({
 
 // ─── NFT card ─────────────────────────────────────────────────────────────────
 
-function NFTCard({ nft }: { nft: CollectionNFTItem }) {
+function NFTCard({
+  nft,
+  collectionName,
+}: {
+  nft: CollectionNFTItem;
+  collectionName: string;
+}) {
   return (
     <Link
       href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
@@ -341,13 +347,16 @@ function NFTCard({ nft }: { nft: CollectionNFTItem }) {
           </div>
         )}
       </div>
-      <div className="p-3">
-        <p className="text-[10px] font-headline font-bold mb-1 uppercase tracking-widest text-primary">
-          #{nft.tokenId.padStart(3, "0")}
+      <div className="p-5">
+        <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1 truncate">
+          {collectionName}
         </p>
-        <h3 className="font-bold text-sm truncate text-on-surface group-hover:text-primary transition-colors">
+        <h3 className="font-headline font-bold text-lg truncate text-on-surface group-hover:text-primary transition-colors">
           {nft.name}
         </h3>
+        <p className="text-on-surface-variant text-xs mt-1">
+          #{nft.tokenId.padStart(3, "0")}
+        </p>
       </div>
     </Link>
   );
@@ -717,9 +726,13 @@ export default function CollectionPage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3">
             {nfts.map((nft) => (
-              <NFTCard key={nft.tokenId} nft={nft} />
+              <NFTCard
+                key={nft.tokenId}
+                nft={nft}
+                collectionName={details.name ?? ""}
+              />
             ))}
           </div>
         )}

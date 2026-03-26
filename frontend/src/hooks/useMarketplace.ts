@@ -72,10 +72,10 @@ export function useNFTListing(nftContract: string, tokenId: string) {
     query: { enabled },
   });
 
-  const refetch = () => {
+  const refetch = useCallback(() => {
     refetchListing();
     refetchOwner();
-  };
+  }, [refetchListing, refetchOwner]);
 
   const listingData = listing as ListingData | undefined;
 
@@ -247,7 +247,12 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     };
   }
 
-  return { offers: rpcOffers, isLoading: rpcLoading, topOffer: rpcTopOffer, refetch };
+  return {
+    offers: rpcOffers,
+    isLoading: rpcLoading,
+    topOffer: rpcTopOffer,
+    refetch,
+  };
 }
 
 // ─────────────────────────────────────────────

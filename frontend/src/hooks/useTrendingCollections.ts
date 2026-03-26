@@ -74,12 +74,17 @@ export function useTrendingCollections(limit = 10) {
   const [isLoading, setIsLoading] = useState(true);
 
   // ── GraphQL path ──
-  const queryVars = useMemo(() => {
+  const makeQueryVars = () => {
     const now = Math.floor(Date.now() / 1000);
-    return {
-      sevenDaysAgo: (now - 7 * 86400).toString(),
-      now: now.toString(),
-    };
+    return { sevenDaysAgo: (now - 7 * 86400).toString(), now: now.toString() };
+  };
+
+  const [queryVars, setQueryVars] = useState(makeQueryVars);
+
+  // Atualiza os timestamps a cada 5 minutos para manter a janela de 7 dias correta
+  useEffect(() => {
+    const id = setInterval(() => setQueryVars(makeQueryVars()), 5 * 60 * 1000);
+    return () => clearInterval(id);
   }, []);
 
   const {
@@ -94,9 +99,15 @@ export function useTrendingCollections(limit = 10) {
   // ── RPC path ──
   const { collections } = useCollections();
 
+  // Stable key: só muda quando os endereços das coleções realmente mudam
+  const collectionKey = useMemo(
+    () => collections.map((c) => c.contractAddress).join(","),
+    [collections],
+  );
+
   useEffect(() => {
     if (SUBGRAPH_ENABLED) return;
-    if (collections.length === 0) return;
+    if (!collectionKey) return;
 
     const fetchData = async () => {
       setIsLoading(true);
@@ -271,13 +282,13 @@ export function useTrendingCollections(limit = 10) {
 
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections.length, limit]);
+  }, [collectionKey, limit]);
 
   // ── Subgraph path: compute all stats from activityEvents + listings + offers ──
   useEffect(() => {
     if (!SUBGRAPH_ENABLED) return;
     if (statsLoading) return;
-    if (collections.length === 0) return;
+    if (!collectionKey) return;
 
     // addr → { count, volumeWei, prices (sorted by timestamp asc) }
     type SaleAgg = { count: number; volumeWei: bigint; prices: number[] };
@@ -386,7 +397,7 @@ export function useTrendingCollections(limit = 10) {
     setIsLoading(true);
     fetchOwners();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statsData, statsLoading, statsError, collections.length, limit]);
+  }, [statsData, statsLoading, statsError, collectionKey, limit]);
 
   if (SUBGRAPH_ENABLED) {
     return { trending, isLoading: statsLoading || isLoading };

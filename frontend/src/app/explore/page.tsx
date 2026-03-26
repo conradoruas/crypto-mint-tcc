@@ -365,10 +365,18 @@ function ExploreContent() {
                         For Sale
                       </div>
                     )}
+                    {nft.topOffer && (
+                      <div className="absolute top-3 right-3 glass-panel px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-secondary border border-secondary/20">
+                        Offer
+                      </div>
+                    )}
                   </div>
                   <div className="p-5 space-y-4">
                     <div className="flex justify-between items-start">
                       <div>
+                        <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
+                          {nft.collectionName}
+                        </p>
                         <h4 className="font-headline text-lg font-bold group-hover:text-primary transition-colors">
                           {nft.name}
                         </h4>
@@ -380,7 +388,7 @@ function ExploreContent() {
                     <div className="flex items-center justify-between border-t border-outline-variant/10 pt-4">
                       <div>
                         <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest">
-                          {nft.listingPrice ? "Floor Price" : "Price"}
+                          Price
                         </span>
                         <span className="font-headline font-bold text-on-surface">
                           {nft.listingPrice ? (
@@ -391,6 +399,11 @@ function ExploreContent() {
                             </span>
                           )}
                         </span>
+                        {nft.topOffer && (
+                          <span className="block text-[10px] text-secondary font-bold uppercase tracking-widest mt-0.5">
+                            Offer {nft.topOffer} ETH
+                          </span>
+                        )}
                       </div>
                       {nft.listingPrice && (
                         <button className="bg-primary/10 text-primary hover:bg-primary hover:text-on-primary-fixed px-4 py-2 rounded-sm text-xs font-black uppercase tracking-widest transition-all">

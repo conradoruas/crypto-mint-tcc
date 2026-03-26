@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createPublicClient,
   http,
@@ -120,10 +120,17 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
   const [rpcLoading, setRpcLoading] = useState(true);
   const { collections } = useCollections();
 
+  // Stable key derived from collection addresses — only changes when content changes,
+  // not on every render (useCollections returns a new array reference each time)
+  const collectionKey = useMemo(
+    () => collections.map((c) => c.contractAddress).join(","),
+    [collections],
+  );
+
   useEffect(() => {
     if (SUBGRAPH_ENABLED) return;
     // Only wait for collections when filtering by one (needed to find mint events)
-    if (filterContract && collections.length === 0) return;
+    if (filterContract && !collectionKey) return;
 
     const fetch = async () => {
       setRpcLoading(true);
@@ -346,7 +353,7 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
 
     fetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections.length, filterContract, limit]);
+  }, [collectionKey, filterContract, limit]);
 
   if (SUBGRAPH_ENABLED) {
     const rawEvents: GqlEvent[] =

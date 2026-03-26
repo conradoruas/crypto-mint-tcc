@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatEther, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { useQuery } from "@apollo/client/react";
@@ -14,6 +14,7 @@ export interface NFTItem {
   description: string;
   image: string;
   nftContract: string;
+  collectionName?: string;
 }
 
 export interface NFTItemWithMarket extends NFTItem {
@@ -216,6 +217,7 @@ async function mergeWithAlchemy(
         ? formatEther(BigInt(activeListing.price))
         : null,
       topOffer: topOfferRaw ? formatEther(BigInt(topOfferRaw)) : null,
+      collectionName: nft.collection?.name ?? "",
     } as NFTItemWithMarket;
   });
 }
@@ -246,13 +248,16 @@ export function useExploreNFTs(collectionAddress?: string) {
       setIsLoading(false);
       return;
     }
+    let cancelled = false;
     setIsLoading(true);
-    mergeWithAlchemy(raw, collectionAddress).then(
-      (items: NFTItemWithMarket[]) => {
-        setNfts(items);
-        setIsLoading(false);
-      },
-    );
+    mergeWithAlchemy(raw, collectionAddress).then((items) => {
+      if (cancelled) return; // ← ignora resultado se desmontou
+      setNfts(items);
+      setIsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [gqlData, gqlQueryLoading, collectionAddress]);
 
   // ── RPC path ──
@@ -342,6 +347,12 @@ export function useExploreAllNFTs(collectionAddress?: string) {
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Stable key: só muda quando os endereços das coleções realmente mudam
+  const collectionKey = useMemo(
+    () => collections.map((c) => c.contractAddress).join(","),
+    [collections],
+  );
+
   // ── GraphQL path: all NFTs ──
   const { data: gqlAllData, loading: gqlAllLoading } = useQuery<GqlNFTsData>(
     GET_ALL_NFTS,
@@ -373,19 +384,24 @@ export function useExploreAllNFTs(collectionAddress?: string) {
       setIsLoading(false);
       return;
     }
+    let cancelled = false;
     setIsLoading(true);
     mergeWithAlchemy(raw, collectionAddress).then(
       (items: NFTItemWithMarket[]) => {
+        if (cancelled) return;
         setNfts(items);
         setIsLoading(false);
       },
     );
+    return () => {
+      cancelled = true;
+    };
   }, [gqlAllData, gqlColData, gqlAllLoading, gqlColLoading, collectionAddress]);
 
   // ── RPC path ──
   useEffect(() => {
     if (SUBGRAPH_ENABLED) return;
-    if (collections.length === 0) {
+    if (!collectionKey) {
       setIsLoading(false);
       return;
     }
@@ -460,7 +476,7 @@ export function useExploreAllNFTs(collectionAddress?: string) {
 
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionAddress, collections.length]);
+  }, [collectionAddress, collectionKey]);
 
   return { nfts, isLoading };
 }

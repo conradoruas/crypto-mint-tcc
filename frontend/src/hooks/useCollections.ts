@@ -53,6 +53,7 @@ export interface CollectionNFTItem {
   description: string;
   image: string;
   nftContract: string;
+  collectionName?: string;
 }
 
 interface AlchemyNFT {
@@ -132,8 +133,8 @@ export function useProfileNFTs(
               name: nft.name ?? `NFT #${nft.tokenId}`,
               description: nft.description ?? "",
               image,
-              nftContract:
-                (nft as any).contract?.address ?? collectionAddress ?? "",
+              nftContract: nft.contract?.address ?? collectionAddress ?? "",
+              collectionName: nft.collection?.name ?? "",
             };
           }),
         );
