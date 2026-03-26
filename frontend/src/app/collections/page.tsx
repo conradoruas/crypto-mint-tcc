@@ -6,8 +6,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { formatEther } from "viem";
 import { Plus, Image as ImageIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Footer from "@/components/Footer";
+import { useQuery } from "@apollo/client/react";
+import { GET_TRENDING_COLLECTIONS, GET_TRENDING_DATA } from "@/lib/graphql/queries";
+
+const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 const resolveIpfsUrl = (url: string) => {
   if (!url) return "";
@@ -125,16 +129,94 @@ function SkeletonCard() {
 
 type FilterOption = "Trending" | "Top" | "Recent";
 
+type GqlCollectionStats = {
+  id: string;
+  contractAddress: string;
+  stats?: { totalVolume: string; totalSales: string } | null;
+};
+type GqlTrendingCollectionsData = { collections: GqlCollectionStats[] };
+
+function sortCollections(
+  collections: CollectionInfo[],
+  filter: FilterOption,
+  volume24hMap: Map<string, bigint>,
+  totalVolumeMap: Map<string, bigint>,
+): CollectionInfo[] {
+  const sorted = [...collections];
+  switch (filter) {
+    case "Trending":
+      return sorted.sort((a, b) => {
+        const va = volume24hMap.get(a.contractAddress.toLowerCase()) ?? BigInt(0);
+        const vb = volume24hMap.get(b.contractAddress.toLowerCase()) ?? BigInt(0);
+        return vb > va ? 1 : vb < va ? -1 : 0;
+      });
+    case "Top":
+      return sorted.sort((a, b) => {
+        const va = totalVolumeMap.get(a.contractAddress.toLowerCase()) ?? BigInt(0);
+        const vb = totalVolumeMap.get(b.contractAddress.toLowerCase()) ?? BigInt(0);
+        return vb > va ? 1 : vb < va ? -1 : 0;
+      });
+    case "Recent":
+      return sorted.sort((a, b) =>
+        b.createdAt > a.createdAt ? 1 : b.createdAt < a.createdAt ? -1 : 0,
+      );
+  }
+}
+
+type GqlSaleEvent = { nftContract: string; price: string; timestamp: string };
+type GqlTrendingData = { activityEvents: GqlSaleEvent[] };
+
 export default function CollectionsPage() {
   const { collections, isLoading } = useCollections();
   const [filter, setFilter] = useState<FilterOption>("Trending");
   const [search, setSearch] = useState("");
 
-  const filtered = collections.filter(
-    (c) =>
-      search.trim() === "" ||
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.symbol.toLowerCase().includes(search.toLowerCase()),
+  const trendingVars = useMemo(() => {
+    const now = Math.floor(Date.now() / 1000);
+    return { sevenDaysAgo: (now - 7 * 86400).toString(), now: now.toString() };
+  }, []);
+
+  const { data: trendingData } = useQuery<GqlTrendingData>(GET_TRENDING_DATA, {
+    skip: !SUBGRAPH_ENABLED,
+    variables: trendingVars,
+  });
+
+  const { data: statsData } = useQuery<GqlTrendingCollectionsData>(
+    GET_TRENDING_COLLECTIONS,
+    { skip: !SUBGRAPH_ENABLED },
+  );
+
+  const volume24hMap = useMemo(() => {
+    const map = new Map<string, bigint>();
+    const oneDayAgo = Math.floor(Date.now() / 1000) - 86400;
+    for (const ev of trendingData?.activityEvents ?? []) {
+      if (Number(ev.timestamp) <= oneDayAgo) continue;
+      const addr = ev.nftContract.toLowerCase();
+      map.set(addr, (map.get(addr) ?? BigInt(0)) + BigInt(ev.price ?? "0"));
+    }
+    return map;
+  }, [trendingData]);
+
+  const totalVolumeMap = useMemo(() => {
+    const map = new Map<string, bigint>();
+    for (const col of statsData?.collections ?? []) {
+      if (col.stats?.totalVolume) {
+        map.set(col.contractAddress.toLowerCase(), BigInt(col.stats.totalVolume));
+      }
+    }
+    return map;
+  }, [statsData]);
+
+  const filtered = sortCollections(
+    collections.filter(
+      (c) =>
+        search.trim() === "" ||
+        c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.symbol.toLowerCase().includes(search.toLowerCase()),
+    ),
+    filter,
+    volume24hMap,
+    totalVolumeMap,
   );
 
   return (

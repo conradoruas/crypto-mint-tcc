@@ -231,19 +231,9 @@ export const GET_TRENDING_COLLECTIONS = gql`
     collections(orderBy: createdAt, orderDirection: desc) {
       id
       contractAddress
-      name
-      symbol
-      image
-      mintPrice
-      maxSupply
-      totalSupply
       stats {
         totalVolume
-        volume24h
         totalSales
-        sales24h
-        floorPrice
-        lastSaleTimestamp
       }
     }
   }
