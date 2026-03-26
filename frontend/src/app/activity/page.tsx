@@ -43,19 +43,15 @@ async function fetchNFTMetadataBatch(
   }
 
   try {
-    const res = await fetch(
-      `/api/alchemy/getNFTMetadataBatch`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tokens, refreshCache: false }),
-      },
-    );
+    const res = await fetch(`/api/alchemy/getNFTMetadataBatch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tokens, refreshCache: false }),
+    });
     const data = await res.json();
     for (const nft of data.nfts ?? []) {
       const key = `${(nft.contract?.address ?? "").toLowerCase()}-${nft.tokenId}`;
-      const image =
-        nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
+      const image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
       map.set(key, { name: nft.name ?? `NFT #${nft.tokenId}`, image });
     }
   } catch {
@@ -276,15 +272,25 @@ export default function ActivityPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventIds]);
 
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
   const displayedEvents =
     selectedTypes.length === 0
       ? events
       : events.filter((e) => selectedTypes.includes(e.type));
 
+  const totalPages = Math.ceil(displayedEvents.length / PAGE_SIZE);
+  const paginatedEvents = displayedEvents.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
+
   const toggleType = (type: ActivityType) => {
     setSelectedTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
     );
+    setPage(1);
   };
 
   const collectionName = (addr: string) =>
@@ -376,6 +382,7 @@ export default function ActivityPage() {
                       onClick={() => {
                         setSelectedCollection("");
                         setShowTypeFilter(false);
+                        setPage(1);
                       }}
                       className="w-full flex items-center px-4 py-3 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all border-b border-outline-variant/10"
                     >
@@ -387,6 +394,7 @@ export default function ActivityPage() {
                         onClick={() => {
                           setSelectedCollection(c.contractAddress);
                           setShowTypeFilter(false);
+                          setPage(1);
                         }}
                         className={`w-full flex items-center px-4 py-3 text-sm transition-all border-b border-outline-variant/10 last:border-0 ${
                           selectedCollection === c.contractAddress
@@ -460,7 +468,7 @@ export default function ActivityPage() {
                   </td>
                 </tr>
               ) : (
-                displayedEvents.map((event) => (
+                paginatedEvents.map((event) => (
                   <EventRow
                     key={event.id}
                     event={event}
@@ -472,6 +480,64 @@ export default function ActivityPage() {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
+            <p className="text-xs text-on-surface-variant uppercase tracking-widest">
+              {(page - 1) * PAGE_SIZE + 1}–
+              {Math.min(page * PAGE_SIZE, displayedEvents.length)} of{" "}
+              {displayedEvents.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(
+                  (p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1,
+                )
+                .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                    acc.push("…");
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, idx) =>
+                  p === "…" ? (
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="px-2 text-on-surface-variant/40 text-xs"
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p as number)}
+                      className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${
+                        page === p
+                          ? "bg-primary text-on-primary border-primary"
+                          : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ),
+                )}
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       <Footer />
     </main>

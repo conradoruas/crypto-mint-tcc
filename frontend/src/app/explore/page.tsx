@@ -6,7 +6,7 @@ import { useExploreAllNFTs, NFTItemWithMarket } from "@/hooks/useExploreNfts";
 import Image from "next/image";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers } from "lucide-react";
-import { useState, useMemo, Suspense } from "react";
+import { useState, useMemo, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
 
@@ -85,6 +85,8 @@ function sortNFTs(
   }
 }
 
+const PAGE_SIZE = 8;
+
 function ExploreContent() {
   const searchParams = useSearchParams();
   const { collections, isLoading: isLoadingCollections } = useCollections();
@@ -92,6 +94,7 @@ function ExploreContent() {
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const [sort, setSort] = useState<SortOption>("default");
   const [onlyListed, setOnlyListed] = useState(false);
+  const [page, setPage] = useState(1);
 
   const { nfts, isLoading: isLoadingNFTs } = useExploreAllNFTs(
     selectedCollection || undefined,
@@ -102,6 +105,16 @@ function ExploreContent() {
     const filtered = filterNFTs(nfts, search, onlyListed);
     return sortNFTs(filtered, sort);
   }, [nfts, search, onlyListed, sort]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, onlyListed, sort, selectedCollection]);
+
+  const totalPages = Math.ceil(displayedNFTs.length / PAGE_SIZE);
+  const paginatedNFTs = displayedNFTs.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
 
   const hasActiveFilters = search !== "" || sort !== "default" || onlyListed;
   const clearFilters = () => {
@@ -341,7 +354,7 @@ function ExploreContent() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-              {displayedNFTs.map((nft) => (
+              {paginatedNFTs.map((nft) => (
                 <Link
                   href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
                   key={`${nft.nftContract}-${nft.tokenId}`}
@@ -414,6 +427,66 @@ function ExploreContent() {
                   </div>
                 </Link>
               ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-12 pt-6 border-t border-outline-variant/10">
+              <p className="text-xs text-on-surface-variant uppercase tracking-widest">
+                {(page - 1) * PAGE_SIZE + 1}–
+                {Math.min(page * PAGE_SIZE, displayedNFTs.length)} of{" "}
+                {displayedNFTs.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  Prev
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(
+                    (p) =>
+                      p === 1 || p === totalPages || Math.abs(p - page) <= 1,
+                  )
+                  .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                      acc.push("…");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, idx) =>
+                    p === "…" ? (
+                      <span
+                        key={`ellipsis-${idx}`}
+                        className="px-2 text-on-surface-variant/40 text-xs"
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p as number)}
+                        className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${
+                          page === p
+                            ? "bg-primary text-on-primary border-primary"
+                            : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ),
+                  )}
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </section>

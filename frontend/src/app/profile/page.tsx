@@ -51,14 +51,11 @@ async function fetchNFTMetadataBatch(
     }
   }
   try {
-    const res = await fetch(
-      `/api/alchemy/getNFTMetadataBatch`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tokens, refreshCache: false }),
-      },
-    );
+    const res = await fetch(`/api/alchemy/getNFTMetadataBatch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tokens, refreshCache: false }),
+    });
     const data = await res.json();
     for (const nft of data.nfts ?? []) {
       const key = `${(nft.contract?.address ?? "").toLowerCase()}-${nft.tokenId}`;
@@ -227,6 +224,11 @@ export default function ProfilePage() {
   const [sort, setSort] = useState<SortOption>("default");
   const [activeTab, setActiveTab] = useState("Collected");
   const [metaMap, setMetaMap] = useState<MetaMap>(new Map());
+  const [collectedPage, setCollectedPage] = useState(1);
+  const [createdPage, setCreatedPage] = useState(1);
+  const [activityPage, setActivityPage] = useState(1);
+  const NFT_PAGE_SIZE = 8;
+  const ACTIVITY_PAGE_SIZE = 10;
 
   const { nfts, isLoading: isLoadingNFTs } = useProfileNFTs(
     address,
@@ -244,7 +246,24 @@ export default function ProfilePage() {
   const clearFilters = () => {
     setSearch("");
     setSort("default");
+    setCollectedPage(1);
   };
+
+  useEffect(() => {
+    setCollectedPage(1);
+  }, [search, sort, selectedCollection]);
+
+  const collectedTotalPages = Math.ceil(displayedNFTs.length / NFT_PAGE_SIZE);
+  const paginatedCollected = displayedNFTs.slice(
+    (collectedPage - 1) * NFT_PAGE_SIZE,
+    collectedPage * NFT_PAGE_SIZE,
+  );
+
+  const createdTotalPages = Math.ceil(createdNfts.length / NFT_PAGE_SIZE);
+  const paginatedCreated = (createdNfts as CreatedNFTItem[]).slice(
+    (createdPage - 1) * NFT_PAGE_SIZE,
+    createdPage * NFT_PAGE_SIZE,
+  );
 
   // Activity feed — fetch all recent events, filter to this user client-side
   const { events: allEvents, isLoading: isLoadingActivity } = useActivityFeed(
@@ -258,6 +277,12 @@ export default function ProfilePage() {
       (e) => e.from.toLowerCase() === lower || e.to?.toLowerCase() === lower,
     );
   }, [allEvents, address]);
+
+  const activityTotalPages = Math.ceil(userEvents.length / ACTIVITY_PAGE_SIZE);
+  const paginatedActivity = userEvents.slice(
+    (activityPage - 1) * ACTIVITY_PAGE_SIZE,
+    activityPage * ACTIVITY_PAGE_SIZE,
+  );
 
   const eventIds = userEvents.map((e) => e.id).join(",");
   useEffect(() => {
@@ -552,7 +577,7 @@ export default function ProfilePage() {
                     </td>
                   </tr>
                 ) : (
-                  userEvents.map((event) => {
+                  paginatedActivity.map((event) => {
                     const cfg = EVENT_CONFIG[event.type];
                     const metaKey = `${event.nftContract.toLowerCase()}-${event.tokenId}`;
                     const meta = metaMap.get(metaKey);
@@ -656,6 +681,69 @@ export default function ProfilePage() {
                 )}
               </tbody>
             </table>
+            {activityTotalPages > 1 && (
+              <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
+                <p className="text-xs text-on-surface-variant uppercase tracking-widest">
+                  {(activityPage - 1) * ACTIVITY_PAGE_SIZE + 1}–
+                  {Math.min(
+                    activityPage * ACTIVITY_PAGE_SIZE,
+                    userEvents.length,
+                  )}{" "}
+                  of {userEvents.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setActivityPage((p) => Math.max(1, p - 1))}
+                    disabled={activityPage === 1}
+                    className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Prev
+                  </button>
+                  {Array.from({ length: activityTotalPages }, (_, i) => i + 1)
+                    .filter(
+                      (p) =>
+                        p === 1 ||
+                        p === activityTotalPages ||
+                        Math.abs(p - activityPage) <= 1,
+                    )
+                    .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                        acc.push("…");
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, idx) =>
+                      p === "…" ? (
+                        <span
+                          key={`e-${idx}`}
+                          className="px-2 text-on-surface-variant/40 text-xs"
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => setActivityPage(p as number)}
+                          className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${activityPage === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
+                        >
+                          {p}
+                        </button>
+                      ),
+                    )}
+                  <button
+                    onClick={() =>
+                      setActivityPage((p) =>
+                        Math.min(activityTotalPages, p + 1),
+                      )
+                    }
+                    disabled={activityPage === activityTotalPages}
+                    className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -693,40 +781,102 @@ export default function ProfilePage() {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {(createdNfts as CreatedNFTItem[]).map((nft) => (
-                <Link
-                  href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
-                  key={`${nft.nftContract}-${nft.tokenId}`}
-                  className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] hover:bg-surface-container-high transition-all duration-300"
-                >
-                  <div className="aspect-square overflow-hidden relative">
-                    {nft.image ? (
-                      <Image
-                        src={nft.image}
-                        alt={nft.name}
-                        fill
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full animate-pulse bg-surface-container-high" />
-                    )}
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {paginatedCreated.map((nft) => (
+                  <Link
+                    href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
+                    key={`${nft.nftContract}-${nft.tokenId}`}
+                    className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] hover:bg-surface-container-high transition-all duration-300"
+                  >
+                    <div className="aspect-square overflow-hidden relative">
+                      {nft.image ? (
+                        <Image
+                          src={nft.image}
+                          alt={nft.name}
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full animate-pulse bg-surface-container-high" />
+                      )}
+                    </div>
+                    <div className="p-5">
+                      <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
+                        {nft.collectionName}
+                      </p>
+                      <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
+                        {nft.name}
+                      </h3>
+                      <p className="text-on-surface-variant text-xs mt-1">
+                        #{nft.tokenId.padStart(3, "0")}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              {createdTotalPages > 1 && (
+                <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
+                  <p className="text-xs text-on-surface-variant uppercase tracking-widest">
+                    {(createdPage - 1) * NFT_PAGE_SIZE + 1}–
+                    {Math.min(createdPage * NFT_PAGE_SIZE, createdNfts.length)}{" "}
+                    of {createdNfts.length}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setCreatedPage((p) => Math.max(1, p - 1))}
+                      disabled={createdPage === 1}
+                      className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: createdTotalPages }, (_, i) => i + 1)
+                      .filter(
+                        (p) =>
+                          p === 1 ||
+                          p === createdTotalPages ||
+                          Math.abs(p - createdPage) <= 1,
+                      )
+                      .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                        if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                          acc.push("…");
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((p, idx) =>
+                        p === "…" ? (
+                          <span
+                            key={`e-${idx}`}
+                            className="px-2 text-on-surface-variant/40 text-xs"
+                          >
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={p}
+                            onClick={() => setCreatedPage(p as number)}
+                            className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${createdPage === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
+                          >
+                            {p}
+                          </button>
+                        ),
+                      )}
+                    <button
+                      onClick={() =>
+                        setCreatedPage((p) =>
+                          Math.min(createdTotalPages, p + 1),
+                        )
+                      }
+                      disabled={createdPage === createdTotalPages}
+                      className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      Next
+                    </button>
                   </div>
-                  <div className="p-5">
-                    <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
-                      {nft.collectionName}
-                    </p>
-                    <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
-                      {nft.name}
-                    </h3>
-                    <p className="text-on-surface-variant text-xs mt-1">
-                      #{nft.tokenId.padStart(3, "0")}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                </div>
+              )}
+            </>
           ))}
 
         {/* Collected tab NFT Grid */}
@@ -777,48 +927,118 @@ export default function ProfilePage() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {displayedNFTs.map((nft: CollectionNFTItem) => {
-                const collectionName =
-                  collections.find(
-                    (c) =>
-                      c.contractAddress.toLowerCase() ===
-                      nft.nftContract.toLowerCase(),
-                  )?.name ?? "";
-                return (
-                  <Link
-                    href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
-                    key={`${nft.nftContract}-${nft.tokenId}`}
-                    className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] hover:bg-surface-container-high transition-all duration-300"
-                  >
-                    <div className="aspect-square overflow-hidden relative">
-                      {nft.image ? (
-                        <Image
-                          src={nft.image}
-                          alt={nft.name}
-                          fill
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full animate-pulse bg-surface-container-high" />
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {paginatedCollected.map((nft: CollectionNFTItem) => {
+                  const collectionName =
+                    collections.find(
+                      (c) =>
+                        c.contractAddress.toLowerCase() ===
+                        nft.nftContract.toLowerCase(),
+                    )?.name ?? "";
+                  return (
+                    <Link
+                      href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
+                      key={`${nft.nftContract}-${nft.tokenId}`}
+                      className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] hover:bg-surface-container-high transition-all duration-300"
+                    >
+                      <div className="aspect-square overflow-hidden relative">
+                        {nft.image ? (
+                          <Image
+                            src={nft.image}
+                            alt={nft.name}
+                            fill
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full animate-pulse bg-surface-container-high" />
+                        )}
+                      </div>
+                      <div className="p-5">
+                        <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
+                          {collectionName}
+                        </p>
+                        <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
+                          {nft.name}
+                        </h3>
+                        <p className="text-on-surface-variant text-xs mt-1">
+                          #{nft.tokenId.padStart(3, "0")}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+              {collectedTotalPages > 1 && (
+                <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
+                  <p className="text-xs text-on-surface-variant uppercase tracking-widest">
+                    {(collectedPage - 1) * NFT_PAGE_SIZE + 1}–
+                    {Math.min(
+                      collectedPage * NFT_PAGE_SIZE,
+                      displayedNFTs.length,
+                    )}{" "}
+                    of {displayedNFTs.length}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() =>
+                        setCollectedPage((p) => Math.max(1, p - 1))
+                      }
+                      disabled={collectedPage === 1}
+                      className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      Prev
+                    </button>
+                    {Array.from(
+                      { length: collectedTotalPages },
+                      (_, i) => i + 1,
+                    )
+                      .filter(
+                        (p) =>
+                          p === 1 ||
+                          p === collectedTotalPages ||
+                          Math.abs(p - collectedPage) <= 1,
+                      )
+                      .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                        if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                          acc.push("…");
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((p, idx) =>
+                        p === "…" ? (
+                          <span
+                            key={`e-${idx}`}
+                            className="px-2 text-on-surface-variant/40 text-xs"
+                          >
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={p}
+                            onClick={() => setCollectedPage(p as number)}
+                            className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${collectedPage === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
+                          >
+                            {p}
+                          </button>
+                        ),
                       )}
-                    </div>
-                    <div className="p-5">
-                      <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
-                        {collectionName}
-                      </p>
-                      <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
-                        {nft.name}
-                      </h3>
-                      <p className="text-on-surface-variant text-xs mt-1">
-                        #{nft.tokenId.padStart(3, "0")}
-                      </p>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+                    <button
+                      onClick={() =>
+                        setCollectedPage((p) =>
+                          Math.min(collectedTotalPages, p + 1),
+                        )
+                      }
+                      disabled={collectedPage === collectedTotalPages}
+                      className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           ))}
       </div>
       <Footer />

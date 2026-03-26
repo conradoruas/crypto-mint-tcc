@@ -6,10 +6,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { formatEther } from "viem";
 import { Plus, Image as ImageIcon } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Footer from "@/components/Footer";
 import { useQuery } from "@apollo/client/react";
-import { GET_TRENDING_COLLECTIONS, GET_TRENDING_DATA } from "@/lib/graphql/queries";
+import {
+  GET_TRENDING_COLLECTIONS,
+  GET_TRENDING_DATA,
+} from "@/lib/graphql/queries";
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
@@ -146,14 +149,18 @@ function sortCollections(
   switch (filter) {
     case "Trending":
       return sorted.sort((a, b) => {
-        const va = volume24hMap.get(a.contractAddress.toLowerCase()) ?? BigInt(0);
-        const vb = volume24hMap.get(b.contractAddress.toLowerCase()) ?? BigInt(0);
+        const va =
+          volume24hMap.get(a.contractAddress.toLowerCase()) ?? BigInt(0);
+        const vb =
+          volume24hMap.get(b.contractAddress.toLowerCase()) ?? BigInt(0);
         return vb > va ? 1 : vb < va ? -1 : 0;
       });
     case "Top":
       return sorted.sort((a, b) => {
-        const va = totalVolumeMap.get(a.contractAddress.toLowerCase()) ?? BigInt(0);
-        const vb = totalVolumeMap.get(b.contractAddress.toLowerCase()) ?? BigInt(0);
+        const va =
+          totalVolumeMap.get(a.contractAddress.toLowerCase()) ?? BigInt(0);
+        const vb =
+          totalVolumeMap.get(b.contractAddress.toLowerCase()) ?? BigInt(0);
         return vb > va ? 1 : vb < va ? -1 : 0;
       });
     case "Recent":
@@ -166,10 +173,13 @@ function sortCollections(
 type GqlSaleEvent = { nftContract: string; price: string; timestamp: string };
 type GqlTrendingData = { activityEvents: GqlSaleEvent[] };
 
+const PAGE_SIZE = 8;
+
 export default function CollectionsPage() {
   const { collections, isLoading } = useCollections();
   const [filter, setFilter] = useState<FilterOption>("Trending");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const trendingVars = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
@@ -201,7 +211,10 @@ export default function CollectionsPage() {
     const map = new Map<string, bigint>();
     for (const col of statsData?.collections ?? []) {
       if (col.stats?.totalVolume) {
-        map.set(col.contractAddress.toLowerCase(), BigInt(col.stats.totalVolume));
+        map.set(
+          col.contractAddress.toLowerCase(),
+          BigInt(col.stats.totalVolume),
+        );
       }
     }
     return map;
@@ -218,6 +231,13 @@ export default function CollectionsPage() {
     volume24hMap,
     totalVolumeMap,
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, search]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <main className="min-h-screen bg-background text-on-surface">
@@ -336,91 +356,75 @@ export default function CollectionsPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {/* First card featured (larger) */}
-            {filtered.length > 0 && (
-              <div className="md:col-span-2 group relative overflow-hidden bg-surface-container-low transition-all duration-500 hover:bg-surface-container">
-                <div className="aspect-[21/9] overflow-hidden relative bg-surface-container-high">
-                  {resolveIpfsUrl(filtered[0].image) ? (
-                    <Image
-                      src={resolveIpfsUrl(filtered[0].image)}
-                      alt={filtered[0].name}
-                      fill
-                      className="object-cover transition-transform duration-700 group-hover:scale-105"
-                      sizes="(max-width: 1024px) 100vw, 66vw"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <ImageIcon
-                        size={48}
-                        className="text-on-surface-variant/30"
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="absolute top-6 right-6">
-                  <span className="glass-panel px-4 py-2 border border-primary/20 text-primary text-[10px] uppercase font-headline font-black tracking-widest">
-                    Featured
-                  </span>
-                </div>
-                <div className="p-8 flex flex-col md:flex-row justify-between items-end gap-6">
-                  <div className="flex gap-6 items-center">
-                    <div className="relative shrink-0">
-                      <div className="w-20 h-20 rounded-sm border-2 border-primary overflow-hidden bg-surface-container-high relative shadow-[0_0_15px_rgba(143,245,255,0.3)]">
-                        {resolveIpfsUrl(filtered[0].image) ? (
-                          <Image
-                            src={resolveIpfsUrl(filtered[0].image)}
-                            alt={filtered[0].name}
-                            fill
-                            className="object-cover"
-                            sizes="80px"
-                          />
-                        ) : null}
-                      </div>
-                    </div>
-                    <div>
-                      <Link
-                        href={`/collections/${filtered[0].contractAddress}`}
-                      >
-                        <h3 className="font-headline text-3xl font-bold text-on-surface group-hover:text-primary transition-colors">
-                          {filtered[0].name}
-                        </h3>
-                      </Link>
-                      <p className="text-on-surface-variant uppercase text-xs tracking-[0.2em] mt-1">
-                        {filtered[0].symbol}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-10 border-l border-outline-variant/20 pl-8 shrink-0">
-                    <div className="text-right">
-                      <p className="text-[10px] text-on-surface-variant uppercase tracking-widest mb-1">
-                        Mint Price
-                      </p>
-                      <p className="font-headline text-xl font-bold text-primary">
-                        {formatEther(filtered[0].mintPrice)} ETH
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] text-on-surface-variant uppercase tracking-widest mb-1">
-                        Max Supply
-                      </p>
-                      <p className="font-headline text-xl font-bold text-on-surface">
-                        {filtered[0].maxSupply.toString()}
-                      </p>
-                    </div>
-                  </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {paginated.map((collection) => (
+                <CollectionCard
+                  key={collection.contractAddress}
+                  collection={collection}
+                />
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-12 pt-6 border-t border-outline-variant/10">
+                <p className="text-xs text-on-surface-variant uppercase tracking-widest">
+                  {(page - 1) * PAGE_SIZE + 1}–
+                  {Math.min(page * PAGE_SIZE, filtered.length)} of{" "}
+                  {filtered.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Prev
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(
+                      (p) =>
+                        p === 1 || p === totalPages || Math.abs(p - page) <= 1,
+                    )
+                    .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                        acc.push("…");
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, idx) =>
+                      p === "…" ? (
+                        <span
+                          key={`ellipsis-${idx}`}
+                          className="px-2 text-on-surface-variant/40 text-xs"
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => setPage(p as number)}
+                          className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${
+                            page === p
+                              ? "bg-primary text-on-primary border-primary"
+                              : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ),
+                    )}
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Next
+                  </button>
                 </div>
               </div>
             )}
-
-            {/* Remaining cards */}
-            {filtered.slice(1).map((collection) => (
-              <CollectionCard
-                key={collection.contractAddress}
-                collection={collection}
-              />
-            ))}
-          </div>
+          </>
         )}
       </div>
       <Footer />
