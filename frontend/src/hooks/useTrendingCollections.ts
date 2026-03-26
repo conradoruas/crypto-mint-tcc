@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { createPublicClient, http, formatEther, parseAbiItem, fallback } from "viem";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  createPublicClient,
+  http,
+  formatEther,
+  parseAbiItem,
+  fallback,
+  type Log,
+} from "viem";
 import { sepolia } from "viem/chains";
 import { useQuery } from "@apollo/client/react";
 import { useCollections } from "@/hooks/useCollections";
@@ -40,6 +47,28 @@ const OFFER_MADE_ABI = parseAbiItem(
 // ─────────────────────────────────────────────
 // Tipos
 // ─────────────────────────────────────────────
+
+interface SoldArgs {
+  nftContract: string;
+  tokenId: bigint;
+  seller: string;
+  buyer: string;
+  price: bigint;
+}
+interface ListedArgs {
+  nftContract: string;
+  tokenId: bigint;
+  seller: string;
+  price: bigint;
+}
+interface OfferArgs {
+  nftContract: string;
+  tokenId: bigint;
+  buyer: string;
+  amount: bigint;
+  expiresAt: bigint;
+}
+type RpcLog = Omit<Log, "args"> & { args?: Record<string, unknown> };
 
 export interface TrendingCollection {
   contractAddress: string;
@@ -99,6 +128,12 @@ export function useTrendingCollections(limit = 10) {
   // ── RPC path ──
   const { collections } = useCollections();
 
+  // Latest ref — keeps collections accessible inside effects without being a dependency
+  const collectionsRef = useRef(collections);
+  useEffect(() => {
+    collectionsRef.current = collections;
+  }, [collections]);
+
   // Stable key: só muda quando os endereços das coleções realmente mudam
   const collectionKey = useMemo(
     () => collections.map((c) => c.contractAddress).join(","),
@@ -111,49 +146,58 @@ export function useTrendingCollections(limit = 10) {
 
     const fetchData = async () => {
       setIsLoading(true);
+      const cols = collectionsRef.current;
       try {
         const latestBlock = await rpcClient.getBlockNumber();
         // ~24h at 12s/block, within 10k block limit for all providers
         const fromBlock24h = latestBlock - BigInt(7200);
 
         // Sequential to avoid burst rate limiting on free-tier RPCs
-        const logParams = { address: MARKETPLACE_ADDRESS, fromBlock: fromBlock24h, toBlock: "latest" as const };
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let soldLogs: any[] = [];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let listedLogs24h: any[] = [];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let offerLogs: any[] = [];
+        const logParams = {
+          address: MARKETPLACE_ADDRESS,
+          fromBlock: fromBlock24h,
+          toBlock: "latest" as const,
+        };
+        let soldLogs: RpcLog[] = [];
+        let listedLogs24h: RpcLog[] = [];
+        let offerLogs: RpcLog[] = [];
         try {
-          soldLogs = await rpcClient.getLogs({ ...logParams, event: ITEM_SOLD_ABI });
-          listedLogs24h = await rpcClient.getLogs({ ...logParams, event: ITEM_LISTED_ABI });
-          offerLogs = await rpcClient.getLogs({ ...logParams, event: OFFER_MADE_ABI });
+          soldLogs = await rpcClient.getLogs({
+            ...logParams,
+            event: ITEM_SOLD_ABI,
+          });
+          listedLogs24h = await rpcClient.getLogs({
+            ...logParams,
+            event: ITEM_LISTED_ABI,
+          });
+          offerLogs = await rpcClient.getLogs({
+            ...logParams,
+            event: OFFER_MADE_ABI,
+          });
         } catch (e) {
           console.warn("getLogs parcial falhou, usando arrays vazios:", e);
         }
-
         const results: TrendingCollection[] = await Promise.all(
-          collections.map(async (col) => {
+          cols.map(async (col) => {
             const addr = col.contractAddress.toLowerCase();
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const sales = soldLogs.filter((l: any) =>
-              (l.args as { nftContract: string }).nftContract?.toLowerCase() === addr,
+            const toSold = (l: RpcLog) => l.args as unknown as SoldArgs;
+            const toListed = (l: RpcLog) => l.args as unknown as ListedArgs;
+            const toOffer = (l: RpcLog) => l.args as unknown as OfferArgs;
+
+            const sales = soldLogs.filter(
+              (l) => toSold(l).nftContract?.toLowerCase() === addr,
             );
             const sales24h = sales.length;
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const volume24hWei = sales.reduce((acc: bigint, l: any) =>
-              acc + ((l.args as { price: bigint }).price ?? BigInt(0)),
+            const volume24hWei = sales.reduce(
+              (acc: bigint, l) => acc + (toSold(l).price ?? BigInt(0)),
               BigInt(0),
             );
             const volume24h = parseFloat(formatEther(volume24hWei)).toFixed(4);
 
             const floorHistory = sales
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              .map((l: any) =>
-                parseFloat(formatEther((l.args as { price: bigint }).price ?? BigInt(0))),
-              )
+              .map((l) => parseFloat(formatEther(toSold(l).price ?? BigInt(0))))
               .slice(-8);
 
             let floorChange24h: number | null = null;
@@ -166,15 +210,13 @@ export function useTrendingCollections(limit = 10) {
             // Floor price: check active listings from 24h window via contract
             let floorPrice: string | null = null;
             try {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const colListings = listedLogs24h.filter((l: any) =>
-                (l.args as { nftContract: string }).nftContract?.toLowerCase() === addr,
+              const colListings = listedLogs24h.filter(
+                (l) => toListed(l).nftContract?.toLowerCase() === addr,
               );
               const prices: bigint[] = [];
               await Promise.all(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                colListings.map(async (log: any) => {
-                  const { tokenId } = log.args as { tokenId: bigint };
+                colListings.map(async (log) => {
+                  const { tokenId } = toListed(log);
                   try {
                     const listing = (await rpcClient.readContract({
                       address: MARKETPLACE_ADDRESS,
@@ -183,23 +225,23 @@ export function useTrendingCollections(limit = 10) {
                       args: [col.contractAddress as `0x${string}`, tokenId],
                     })) as { active: boolean; price: bigint };
                     if (listing.active) prices.push(listing.price);
-                  } catch { /* ignora */ }
+                  } catch {
+                    /* ignora */
+                  }
                 }),
               );
               if (prices.length > 0) {
                 const min = prices.reduce((a, b) => (a < b ? a : b));
                 floorPrice = parseFloat(formatEther(min)).toFixed(4);
               }
-            } catch { /* ignora */ }
+            } catch {
+              /* ignora */
+            }
 
             let topOffer: string | null = null;
             const offersSorted = offerLogs
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              .filter((l: any) =>
-                (l.args as { nftContract: string }).nftContract?.toLowerCase() === addr,
-              )
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              .map((l: any) => (l.args as { amount: bigint }).amount ?? BigInt(0))
+              .filter((l) => toOffer(l).nftContract?.toLowerCase() === addr)
+              .map((l) => toOffer(l).amount ?? BigInt(0))
               .sort((a: bigint, b: bigint) => (b > a ? 1 : -1));
             if (offersSorted.length > 0) {
               topOffer = parseFloat(formatEther(offersSorted[0])).toFixed(4);
@@ -213,7 +255,9 @@ export function useTrendingCollections(limit = 10) {
               );
               const data = await res.json();
               owners = data.owners?.length ?? 0;
-            } catch { /* ignora */ }
+            } catch {
+              /* ignora */
+            }
 
             // ── Listed % (active listings / total supply) ───────────
             let listedPct: string | null = null;
@@ -224,15 +268,17 @@ export function useTrendingCollections(limit = 10) {
                 functionName: "totalSupply",
               })) as bigint;
 
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const listedCount = listedLogs24h.filter((l: any) =>
-                (l.args as { nftContract: string }).nftContract?.toLowerCase() === addr,
+              const listedCount = listedLogs24h.filter(
+                (l) => toListed(l).nftContract?.toLowerCase() === addr,
               ).length;
 
               if (totalSupply > BigInt(0)) {
-                listedPct = ((listedCount / Number(totalSupply)) * 100).toFixed(1) + "%";
+                listedPct =
+                  ((listedCount / Number(totalSupply)) * 100).toFixed(1) + "%";
               }
-            } catch { /* ignora */ }
+            } catch {
+              /* ignora */
+            }
 
             return {
               contractAddress: col.contractAddress,
@@ -258,9 +304,8 @@ export function useTrendingCollections(limit = 10) {
         setTrending(sorted);
       } catch (error) {
         console.error("Erro ao buscar trending:", error);
-        // Fallback: show collections with basic info even if data fetch failed
         setTrending(
-          collections.slice(0, limit).map((col) => ({
+          cols.slice(0, limit).map((col) => ({
             contractAddress: col.contractAddress,
             name: col.name,
             symbol: col.symbol,
@@ -281,32 +326,32 @@ export function useTrendingCollections(limit = 10) {
     };
 
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionKey, limit]);
 
-  // ── Subgraph path: compute all stats from activityEvents + listings + offers ──
   useEffect(() => {
     if (!SUBGRAPH_ENABLED) return;
     if (statsLoading) return;
     if (!collectionKey) return;
 
-    // addr → { count, volumeWei, prices (sorted by timestamp asc) }
     type SaleAgg = { count: number; volumeWei: bigint; prices: number[] };
     const salesByAddr = new Map<string, SaleAgg>();
     const floorByAddr = new Map<string, string>();
     const topOfferByAddr = new Map<string, string>();
 
     if (!statsError && statsData) {
-      // Events span 7 days — filter in JS for 24h stats, use full set for sparkline
       const oneDayAgo = Math.floor(Date.now() / 1000) - 86400;
       for (const ev of statsData.activityEvents) {
         const addr = ev.nftContract.toLowerCase();
         const priceWei = BigInt(ev.price ?? "0");
         const priceEth = parseFloat(formatEther(priceWei));
-        const agg = salesByAddr.get(addr) ?? { count: 0, volumeWei: BigInt(0), prices: [] };
-        // prices array uses all 7-day events (for sparkline history)
+        const agg = salesByAddr.get(addr) ?? {
+          count: 0,
+          volumeWei: BigInt(0),
+          prices: [],
+        };
+
         agg.prices.push(priceEth);
-        // count & volume only accumulate events within last 24h
+
         if (Number(ev.timestamp) > oneDayAgo) {
           agg.count += 1;
           agg.volumeWei += priceWei;
@@ -314,7 +359,6 @@ export function useTrendingCollections(limit = 10) {
         salesByAddr.set(addr, agg);
       }
 
-      // Floor price: minimum active listing per collection
       for (const listing of statsData.listings) {
         const addr = listing.nftContract.toLowerCase();
         const priceEth = parseFloat(formatEther(BigInt(listing.price)));
@@ -324,7 +368,6 @@ export function useTrendingCollections(limit = 10) {
         }
       }
 
-      // Top offer: highest non-expired active offer per collection (query already desc)
       for (const offer of statsData.offers) {
         const addr = offer.nftContract.toLowerCase();
         if (!topOfferByAddr.has(addr)) {
@@ -337,8 +380,9 @@ export function useTrendingCollections(limit = 10) {
     }
 
     const fetchOwners = async () => {
+      const cols = collectionsRef.current;
       const ownerCounts = await Promise.all(
-        collections.map(async (col) => {
+        cols.map(async (col) => {
           try {
             const res = await globalThis.fetch(
               `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/getOwnersForContract?contractAddress=${col.contractAddress}`,
@@ -351,7 +395,7 @@ export function useTrendingCollections(limit = 10) {
         }),
       );
 
-      const mapped: TrendingCollection[] = collections
+      const mapped: TrendingCollection[] = cols
         .map((col, i) => {
           const addr = col.contractAddress.toLowerCase();
           const agg = salesByAddr.get(addr);
@@ -363,7 +407,6 @@ export function useTrendingCollections(limit = 10) {
             ? parseFloat(formatEther(agg.volumeWei)).toFixed(4)
             : "0.0000";
 
-          // Floor change: first vs last sale price in 24h window
           const floorHistory = agg?.prices.slice(-8) ?? [];
           let floorChange24h: number | null = null;
           if (floorHistory.length >= 2) {
@@ -396,7 +439,6 @@ export function useTrendingCollections(limit = 10) {
 
     setIsLoading(true);
     fetchOwners();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statsData, statsLoading, statsError, collectionKey, limit]);
 
   if (SUBGRAPH_ENABLED) {

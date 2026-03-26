@@ -116,7 +116,7 @@ function LoadNFTsPanel({
     if (isSuccess) onSuccess();
   }, [isSuccess, onSuccess]);
 
-  const updateNFT = (index: number, field: keyof NFTLoadDraft, value: any) => {
+  const updateNFT = (index: number, field: keyof NFTLoadDraft, value: string | File) => {
     setNftDrafts((prev) =>
       prev.map((nft, i) => {
         if (i !== index) return nft;
@@ -212,9 +212,10 @@ function LoadNFTsPanel({
                   id={`nft-load-file-${index}`}
                   className="hidden"
                   accept="image/*"
-                  onChange={(e) =>
-                    updateNFT(index, "file", e.target.files?.[0])
-                  }
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) updateNFT(index, "file", file);
+                  }}
                   disabled={busy}
                 />
                 <label
@@ -226,6 +227,7 @@ function LoadNFTsPanel({
                   } transition-all`}
                 >
                   {nft.previewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={nft.previewUrl}
                       alt="preview"
