@@ -13,6 +13,7 @@ import { useQuery } from "@apollo/client/react";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
 import { GET_COLLECTIONS } from "@/lib/graphql/queries";
+import type { AlchemyNFT } from "@/types/alchemy";
 
 // ─────────────────────────────────────────────
 // Endereços
@@ -54,18 +55,6 @@ export interface CollectionNFTItem {
   collectionName?: string;
 }
 
-interface AlchemyNFT {
-  tokenId: string;
-  name?: string;
-  description?: string;
-  tokenUri?: string;
-  contract?: { address: string };
-  collection?: { name?: string };
-  image?: {
-    cachedUrl?: string;
-    originalUrl?: string;
-  };
-}
 
 const resolveIpfsUrl = (url: string) => {
   if (!url) return "";

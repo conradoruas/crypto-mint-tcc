@@ -28,47 +28,10 @@ import {
 import { fetchProfile, UserProfile } from "@/services/profile";
 import {
   useActivityFeed,
-  ActivityEvent,
   ActivityType,
 } from "@/hooks/useActivityFeed";
 import Footer from "@/components/Footer";
-
-type NFTMeta = { name: string; image: string };
-type MetaMap = Map<string, NFTMeta>;
-
-async function fetchNFTMetadataBatch(
-  events: ActivityEvent[],
-): Promise<MetaMap> {
-  const map: MetaMap = new Map();
-  if (!events.length) return map;
-  const seen = new Set<string>();
-  const tokens: { contractAddress: string; tokenId: string }[] = [];
-  for (const e of events) {
-    const key = `${e.nftContract.toLowerCase()}-${e.tokenId}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      tokens.push({ contractAddress: e.nftContract, tokenId: e.tokenId });
-    }
-  }
-  try {
-    const res = await fetch(`/api/alchemy/getNFTMetadataBatch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tokens, refreshCache: false }),
-    });
-    const data = await res.json();
-    for (const nft of data.nfts ?? []) {
-      const key = `${(nft.contract?.address ?? "").toLowerCase()}-${nft.tokenId}`;
-      map.set(key, {
-        name: nft.name ?? `NFT #${nft.tokenId}`,
-        image: nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "",
-      });
-    }
-  } catch {
-    /* ignore */
-  }
-  return map;
-}
+import { fetchAlchemyMetaForEvents, type MetaMap } from "@/lib/alchemyMeta";
 
 const EVENT_CONFIG: Record<
   ActivityType,
@@ -287,7 +250,7 @@ export default function ProfilePage() {
   const eventIds = userEvents.map((e) => e.id).join(",");
   useEffect(() => {
     if (!userEvents.length) return;
-    fetchNFTMetadataBatch(userEvents).then(setMetaMap);
+    fetchAlchemyMetaForEvents(userEvents).then(setMetaMap);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventIds]);
 
