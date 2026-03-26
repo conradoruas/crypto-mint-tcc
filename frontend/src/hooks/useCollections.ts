@@ -62,6 +62,7 @@ interface AlchemyNFT {
   description?: string;
   tokenUri?: string;
   contract?: { address: string };
+  collection?: { name?: string };
   image?: {
     cachedUrl?: string;
     originalUrl?: string;
