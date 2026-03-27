@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useConnection } from "wagmi";
 import { fetchAlchemyMeta } from "@/lib/alchemyMeta";
 import type { CollectionNFTItem, FavoriteRef } from "@/types/nft";
@@ -34,29 +34,28 @@ function writeFavorites(address: string, favs: FavoriteRef[]) {
 
 export function useIsFavorited(nftContract: string, tokenId: string) {
   const { address } = useConnection();
-  const [isFavorited, setIsFavorited] = useState(false);
 
-  const refetch = useCallback(() => {
-    if (!address) { setIsFavorited(false); return; }
+  const subscribe = useCallback((onStoreChange: () => void) => {
+    window.addEventListener("storage", onStoreChange);
+    return () => window.removeEventListener("storage", onStoreChange);
+  }, []);
+
+  const getSnapshot = useCallback(() => {
+    if (!address) return false;
+
     const favs = readFavorites(address);
-    setIsFavorited(
-      favs.some(
-        (f) =>
-          f.nftContract.toLowerCase() === nftContract.toLowerCase() &&
-          f.tokenId === tokenId,
-      ),
+    return favs.some(
+      (f) =>
+        f.nftContract.toLowerCase() === nftContract.toLowerCase() &&
+        f.tokenId === tokenId,
     );
   }, [address, nftContract, tokenId]);
 
-  useEffect(() => { refetch(); }, [refetch]);
+  const isFavorited = useSyncExternalStore(subscribe, getSnapshot, () => false);
 
-  useEffect(() => {
-    if (!address) return;
-    const key = storageKey(address);
-    const handler = (e: StorageEvent) => { if (e.key === key) refetch(); };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, [address, refetch]);
+  const refetch = useCallback(() => {
+    window.dispatchEvent(new Event("storage"));
+  }, []);
 
   return { isFavorited, isLoading: false, refetch };
 }
@@ -99,9 +98,15 @@ export function useUserFavorites(userAddress: string | undefined) {
   const [isLoading, setIsLoading] = useState(false);
 
   const load = useCallback(async () => {
-    if (!userAddress) { setFavorites([]); return; }
+    if (!userAddress) {
+      setFavorites([]);
+      return;
+    }
     const refs = readFavorites(userAddress);
-    if (refs.length === 0) { setFavorites([]); return; }
+    if (refs.length === 0) {
+      setFavorites([]);
+      return;
+    }
 
     setIsLoading(true);
     const tokens = refs.map((r) => ({
@@ -124,13 +129,52 @@ export function useUserFavorites(userAddress: string | undefined) {
     setIsLoading(false);
   }, [userAddress]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!userAddress) {
+        if (!cancelled) setFavorites([]);
+        return;
+      }
+      const refs = readFavorites(userAddress);
+      if (refs.length === 0) {
+        if (!cancelled) setFavorites([]);
+        return;
+      }
+      if (!cancelled) setIsLoading(true);
+      const tokens = refs.map((r) => ({
+        contractAddress: r.nftContract,
+        tokenId: r.tokenId,
+      }));
+      const metaMap = await fetchAlchemyMeta(tokens);
+      const items: CollectionNFTItem[] = refs.map((ref) => {
+        const key = `${ref.nftContract.toLowerCase()}-${ref.tokenId}`;
+        const meta = metaMap.get(key);
+        return {
+          tokenId: ref.tokenId,
+          name: meta?.name ?? `NFT #${ref.tokenId}`,
+          description: "",
+          image: meta?.image ?? "",
+          nftContract: ref.nftContract,
+        };
+      });
+      if (!cancelled) {
+        setFavorites(items);
+        setIsLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [userAddress]);
 
-  // Re-sincroniza quando localStorage muda (outra aba ou toggle)
   useEffect(() => {
     if (!userAddress) return;
     const key = storageKey(userAddress);
-    const handler = (e: StorageEvent) => { if (e.key === key) load(); };
+    const handler = (e: StorageEvent) => {
+      if (e.key === key) load();
+    };
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
   }, [userAddress, load]);
