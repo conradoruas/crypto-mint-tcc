@@ -37,6 +37,8 @@ import {
 } from "@/hooks/useMarketplace";
 import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
+import { listPriceSchema, offerAmountSchema, getZodErrors } from "@/lib/schemas";
+import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
 
 // ─── Price History Chart ──────────────────────────────────────────────────────
 
@@ -544,6 +546,8 @@ export default function AssetDetail() {
   const { isFavorited } = useIsFavorited(nftContract ?? "", tokenId);
   const { toggleFavorite } = useFavorite();
   const [copied, setCopied] = useState(false);
+  const [listErrors, setListErrors] = useState<ListPriceErrors>({});
+  const [offerErrors, setOfferErrors] = useState<OfferAmountErrors>({});
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -640,10 +644,9 @@ export default function AssetDetail() {
   }, [isOfferAccepted]);
 
   const handleList = async () => {
-    if (!listPrice || parseFloat(listPrice) < 0.0001) {
-      setTxMsg({ type: "error", text: "Minimum price is 0.0001 ETH." });
-      return;
-    }
+    const errors = getZodErrors(listPriceSchema, { price: listPrice }) as ListPriceErrors;
+    setListErrors(errors);
+    if (errors.price) return;
     try {
       setTxMsg(null);
       await listNFT(nftContract, tokenId, listPrice);
@@ -678,10 +681,9 @@ export default function AssetDetail() {
   };
 
   const handleMakeOffer = async () => {
-    if (!offerAmount || parseFloat(offerAmount) < 0.0001) {
-      setTxMsg({ type: "error", text: "Minimum offer is 0.0001 ETH." });
-      return;
-    }
+    const errors = getZodErrors(offerAmountSchema, { amount: offerAmount }) as OfferAmountErrors;
+    setOfferErrors(errors);
+    if (errors.amount) return;
     try {
       setTxMsg(null);
       await makeOffer(nftContract, tokenId, offerAmount);
@@ -900,9 +902,12 @@ export default function AssetDetail() {
                         min="0.0001"
                         placeholder="Price in ETH (e.g. 0.05)"
                         value={listPrice}
-                        onChange={(e) => setListPrice(e.target.value)}
-                        className={inputClass}
+                        onChange={(e) => { setListPrice(e.target.value); setListErrors({}); }}
+                        className={listErrors.price ? `${inputClass} !border-error/40` : inputClass}
                       />
+                      {listErrors.price && (
+                        <p className="text-xs text-error mt-1.5">{listErrors.price}</p>
+                      )}
                       <div className="flex gap-3">
                         <button
                           onClick={handleList}
@@ -993,9 +998,12 @@ export default function AssetDetail() {
                     min="0.0001"
                     placeholder="Amount in ETH (e.g. 0.08)"
                     value={offerAmount}
-                    onChange={(e) => setOfferAmount(e.target.value)}
-                    className={inputClass}
+                    onChange={(e) => { setOfferAmount(e.target.value); setOfferErrors({}); }}
+                    className={offerErrors.amount ? `${inputClass} !border-error/40` : inputClass}
                   />
+                  {offerErrors.amount && (
+                    <p className="text-xs text-error mt-1.5">{offerErrors.amount}</p>
+                  )}
                   <p className="text-xs text-on-surface-variant/50 uppercase tracking-widest">
                     ETH will be held in escrow for 7 days.
                   </p>

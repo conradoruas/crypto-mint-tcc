@@ -12,6 +12,11 @@ import {
   saveProfileHash,
   UserProfile,
 } from "@/services/profile";
+import {
+  editProfileSchema,
+  getZodErrors,
+  EditProfileErrors,
+} from "@/lib/schemas";
 
 const resolveIpfsUrl = (url: string) => {
   if (!url) return "";
@@ -40,6 +45,7 @@ export default function EditProfilePage() {
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<EditProfileErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +69,9 @@ export default function EditProfilePage() {
 
   const handleSave = async () => {
     if (!address) return;
+    const errors = getZodErrors(editProfileSchema, { name: name.trim() }) as EditProfileErrors;
+    setFieldErrors(errors);
+    if (errors.name) return;
     setError(null);
     setIsSaving(true);
     try {
@@ -182,14 +191,18 @@ export default function EditProfilePage() {
               <input
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); setFieldErrors((p) => ({ ...p, name: undefined })); }}
                 maxLength={32}
                 placeholder="Your name..."
                 className="w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40"
               />
-              <p className="text-xs mt-1.5 text-right text-on-surface-variant/30 font-mono">
-                {name.length}/32
-              </p>
+              {fieldErrors.name ? (
+                <p className="text-xs text-error mt-1.5">{fieldErrors.name}</p>
+              ) : (
+                <p className="text-xs mt-1.5 text-right text-on-surface-variant/30 font-mono">
+                  {name.length}/32
+                </p>
+              )}
             </div>
 
             {/* Wallet (read-only) */}

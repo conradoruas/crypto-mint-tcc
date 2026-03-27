@@ -23,6 +23,11 @@ import { useCreateCollection } from "@/hooks/useCollections";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
 import Footer from "@/components/Footer";
+import {
+  createCollectionSchema,
+  getZodErrors,
+  type CreateCollectionErrors,
+} from "@/lib/schemas";
 
 const FACTORY_ADDRESS = process.env
   .NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS as `0x${string}`;
@@ -72,6 +77,14 @@ async function uploadMetadata(
 const inputClass =
   "w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40";
 
+const inputErrorClass =
+  "w-full bg-surface-container-lowest border border-error/40 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-error transition-all placeholder:text-on-surface-variant/40";
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p className="mt-1.5 text-xs text-error">{msg}</p>;
+}
+
 export default function CreateCollectionPage() {
   const router = useRouter();
   const { address, isConnected } = useConnection();
@@ -87,6 +100,7 @@ export default function CreateCollectionPage() {
   const [isUploadingNFTs, setIsUploadingNFTs] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<CreateCollectionErrors>({});
 
   const {
     createCollection,
@@ -160,10 +174,14 @@ export default function CreateCollectionPage() {
 
   const handleCreateCollection = async () => {
     setError(null);
-    if (!name || !symbol) {
-      setError("Name and symbol are required.");
-      return;
-    }
+    const errors = getZodErrors(createCollectionSchema, {
+      name,
+      symbol,
+      description: description || undefined,
+      mintPrice,
+    }) as CreateCollectionErrors;
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     if (!coverFile) {
       setError("Select a cover image.");
       return;
@@ -178,10 +196,6 @@ export default function CreateCollectionPage() {
     }
     if (nfts.some((n) => !n.name || !n.file)) {
       setError("All NFTs need a name and image.");
-      return;
-    }
-    if (parseFloat(mintPrice) < 0.0001) {
-      setError("Minimum price is 0.0001 ETH.");
       return;
     }
     try {
@@ -490,10 +504,11 @@ export default function CreateCollectionPage() {
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className={inputClass}
+                  onChange={(e) => { setName(e.target.value); setFieldErrors((p) => ({ ...p, name: undefined })); }}
+                  className={fieldErrors.name ? inputErrorClass : inputClass}
                   placeholder="e.g. Cyber Monkeys"
                 />
+                <FieldError msg={fieldErrors.name} />
               </div>
               <div>
                 <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
@@ -502,11 +517,12 @@ export default function CreateCollectionPage() {
                 <input
                   type="text"
                   value={symbol}
-                  onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                  onChange={(e) => { setSymbol(e.target.value.toUpperCase()); setFieldErrors((p) => ({ ...p, symbol: undefined })); }}
                   maxLength={8}
-                  className={`${inputClass} uppercase`}
+                  className={`${fieldErrors.symbol ? inputErrorClass : inputClass} uppercase`}
                   placeholder="e.g. CYBM"
                 />
+                <FieldError msg={fieldErrors.symbol} />
               </div>
             </div>
 
@@ -517,10 +533,11 @@ export default function CreateCollectionPage() {
               </label>
               <textarea
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className={`${inputClass} h-24 resize-none`}
+                onChange={(e) => { setDescription(e.target.value); setFieldErrors((p) => ({ ...p, description: undefined })); }}
+                className={`${fieldErrors.description ? inputErrorClass : inputClass} h-24 resize-none`}
                 placeholder="Describe your collection..."
               />
+              <FieldError msg={fieldErrors.description} />
             </div>
 
             {/* Mint price */}
@@ -533,10 +550,11 @@ export default function CreateCollectionPage() {
                 step="0.0001"
                 min="0.0001"
                 value={mintPrice}
-                onChange={(e) => setMintPrice(e.target.value)}
-                className={inputClass}
+                onChange={(e) => { setMintPrice(e.target.value); setFieldErrors((p) => ({ ...p, mintPrice: undefined })); }}
+                className={fieldErrors.mintPrice ? inputErrorClass : inputClass}
                 placeholder="0.0001"
               />
+              <FieldError msg={fieldErrors.mintPrice} />
             </div>
 
             {/* Info callout */}

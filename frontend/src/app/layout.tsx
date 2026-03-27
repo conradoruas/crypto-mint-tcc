@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Manrope } from "next/font/google";
 import { Web3Provider } from "@/components/Web3Provider";
 import { ApolloProvider } from "@/components/ApolloProvider";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 import "./globals.css";
 
@@ -38,7 +39,9 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <ApolloProvider>
           <Web3Provider>
-            <div className="min-h-full flex flex-col">{children}</div>
+            <ErrorBoundary>
+              <div className="min-h-full flex flex-col">{children}</div>
+            </ErrorBoundary>
           </Web3Provider>
         </ApolloProvider>
       </body>
