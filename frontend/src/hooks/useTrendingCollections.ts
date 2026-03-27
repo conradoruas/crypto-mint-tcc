@@ -47,21 +47,21 @@ export function useTrendingCollections(limit = 10) {
     return { sevenDaysAgo: (now - 7 * 86400).toString(), now: now.toString() };
   };
 
-  const [queryVars, setQueryVars] = useState(makeQueryVars);
-
-  // Atualiza os timestamps a cada 5 minutos para manter a janela de 7 dias correta
-  useEffect(() => {
-    const id = setInterval(() => setQueryVars(makeQueryVars()), 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, []);
-
   const {
     data: statsData,
     loading: statsLoading,
     error: statsError,
+    refetch,
   } = useQuery<GqlTrendingData>(GET_TRENDING_DATA, {
-    variables: queryVars,
+    variables: makeQueryVars(),
+    pollInterval: 5 * 60 * 1000,
   });
+
+  // Atualiza os timestamps das variáveis a cada poll para manter a janela de 7 dias correta
+  useEffect(() => {
+    const id = setInterval(() => refetch(makeQueryVars()), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [refetch]);
 
   const { collections } = useCollections();
 
@@ -86,8 +86,9 @@ export function useTrendingCollections(limit = 10) {
 
     if (!statsError && statsData) {
       const oneDayAgo = Math.floor(Date.now() / 1000) - 86400;
-      for (const ev of statsData.activityEvents) {
-        const addr = ev.nftContract.toLowerCase();
+      for (const ev of statsData.activityEvents ?? []) {
+        const addr = (ev.nftContract ?? "").toLowerCase();
+        if (!addr) continue;
         const priceWei = BigInt(ev.price ?? "0");
         const priceEth = parseFloat(formatEther(priceWei));
         const agg = salesByAddr.get(addr) ?? {
@@ -105,8 +106,9 @@ export function useTrendingCollections(limit = 10) {
         salesByAddr.set(addr, agg);
       }
 
-      for (const listing of statsData.listings) {
-        const addr = listing.nftContract.toLowerCase();
+      for (const listing of statsData.listings ?? []) {
+        const addr = (listing.nftContract ?? "").toLowerCase();
+        if (!addr || !listing.price) continue;
         const priceEth = parseFloat(formatEther(BigInt(listing.price)));
         const current = floorByAddr.get(addr);
         if (!current || priceEth < parseFloat(current)) {
@@ -114,8 +116,9 @@ export function useTrendingCollections(limit = 10) {
         }
       }
 
-      for (const offer of statsData.offers) {
-        const addr = offer.nftContract.toLowerCase();
+      for (const offer of statsData.offers ?? []) {
+        const addr = (offer.nftContract ?? "").toLowerCase();
+        if (!addr || !offer.amount) continue;
         if (!topOfferByAddr.has(addr)) {
           topOfferByAddr.set(
             addr,

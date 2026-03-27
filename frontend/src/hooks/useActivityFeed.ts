@@ -56,6 +56,7 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
     {
       skip: !!filterContract,
       variables: { first: limit },
+      pollInterval: 30_000,
     },
   );
 
@@ -63,6 +64,7 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
     useQuery<GqlActivityData>(GET_ACTIVITY_FEED, {
       skip: !filterContract,
       variables: { first: limit, nftContract: filterContract },
+      pollInterval: 30_000,
     });
 
   const rawEvents: GqlEvent[] =

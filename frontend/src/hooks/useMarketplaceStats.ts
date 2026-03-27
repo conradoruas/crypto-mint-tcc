@@ -23,8 +23,10 @@ type GqlStatsData = {
 };
 
 export function useMarketplaceStats(): MarketplaceStats {
-  const { data: gqlData, loading: gqlLoading } =
-    useQuery<GqlStatsData>(GET_MARKETPLACE_STATS);
+  const { data: gqlData, loading: gqlLoading } = useQuery<GqlStatsData>(
+    GET_MARKETPLACE_STATS,
+    { pollInterval: 60_000 },
+  );
 
   const s = gqlData?.marketplaceStats;
   return {
