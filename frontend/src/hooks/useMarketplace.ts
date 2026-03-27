@@ -12,7 +12,11 @@ import { useQuery } from "@apollo/client/react";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
-import type { ListingData, OfferData, OfferWithBuyer } from "@/types/marketplace";
+import type {
+  ListingData,
+  OfferData,
+  OfferWithBuyer,
+} from "@/types/marketplace";
 import { ensureAddress, parseAddress } from "@/lib/schemas";
 import { MARKETPLACE_ADDRESS } from "@/lib/env";
 
@@ -65,8 +69,7 @@ export function useNFTListing(nftContract: string, tokenId: string) {
 // ─────────────────────────────────────────────
 
 export function useMyOffer(nftContract: string, tokenId: string) {
-  const { address } = useConnection(); // ✅ corrigido
-
+  const { address } = useConnection();
   const { data: offer, refetch } = useReadContract({
     address: MARKETPLACE_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
@@ -119,7 +122,9 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     variables: { nftContract: nftContract?.toLowerCase(), tokenId },
   });
 
-  const refetch = useCallback(() => { gqlRefetch(); }, [gqlRefetch]);
+  const refetch = useCallback(() => {
+    gqlRefetch();
+  }, [gqlRefetch]);
 
   const now = BigInt(Math.floor(Date.now() / 1000));
   const offers: OfferWithBuyer[] = (gqlData?.offers ?? [])
@@ -127,7 +132,15 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     .flatMap((o) => {
       const buyer = parseAddress(o.buyer);
       if (!buyer) return [];
-      return [{ buyer, buyerAddress: buyer, amount: BigInt(o.amount), expiresAt: BigInt(o.expiresAt), active: true as const }];
+      return [
+        {
+          buyer,
+          buyerAddress: buyer,
+          amount: BigInt(o.amount),
+          expiresAt: BigInt(o.expiresAt),
+          active: true as const,
+        },
+      ];
     });
 
   return {
@@ -143,7 +156,10 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
 // ─────────────────────────────────────────────
 
 export function useListNFT() {
-  const { mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
+  const { data: hash, mutateAsync, isPending } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+  });
 
   const listNFT = async (
     nftContract: `0x${string}`,
@@ -152,7 +168,6 @@ export function useListNFT() {
   ) => {
     // Aprovação no contrato da COLEÇÃO
     await mutateAsync({
-      // ✅ corrigido
       address: nftContract,
       abi: NFT_COLLECTION_ABI,
       functionName: "setApprovalForAll",
@@ -160,9 +175,8 @@ export function useListNFT() {
       gas: BigInt(100000),
     });
 
-    // Listagem no MARKETPLACE
+    // Listagem no MARKETPLACE — hash rastreado via useWaitForTransactionReceipt
     await mutateAsync({
-      // ✅ corrigido
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "listItem",
@@ -171,7 +185,7 @@ export function useListNFT() {
     });
   };
 
-  return { listNFT, isPending };
+  return { listNFT, isPending, isConfirming, isSuccess, hash };
 }
 
 // ─────────────────────────────────────────────
@@ -179,7 +193,7 @@ export function useListNFT() {
 // ─────────────────────────────────────────────
 
 export function useBuyNFT() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
+  const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
@@ -190,7 +204,6 @@ export function useBuyNFT() {
     priceInEth: string,
   ) => {
     await mutateAsync({
-      // ✅ corrigido
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "buyItem",
@@ -208,11 +221,13 @@ export function useBuyNFT() {
 // ─────────────────────────────────────────────
 
 export function useCancelListing() {
-  const { mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
+  const { data: hash, mutateAsync, isPending } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+  });
 
   const cancelListing = async (nftContract: `0x${string}`, tokenId: string) => {
     await mutateAsync({
-      // ✅ corrigido
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "cancelListing",
@@ -221,7 +236,7 @@ export function useCancelListing() {
     });
   };
 
-  return { cancelListing, isPending };
+  return { cancelListing, isPending, isConfirming, isSuccess, hash };
 }
 
 // ─────────────────────────────────────────────
@@ -229,7 +244,7 @@ export function useCancelListing() {
 // ─────────────────────────────────────────────
 
 export function useMakeOffer() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
+  const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
@@ -240,7 +255,6 @@ export function useMakeOffer() {
     amountInEth: string,
   ) => {
     await mutateAsync({
-      // ✅ corrigido
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "makeOffer",
@@ -258,7 +272,7 @@ export function useMakeOffer() {
 // ─────────────────────────────────────────────
 
 export function useAcceptOffer() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
+  const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
@@ -270,7 +284,6 @@ export function useAcceptOffer() {
   ) => {
     // Aprovação no contrato da COLEÇÃO
     await mutateAsync({
-      // ✅ corrigido
       address: nftContract,
       abi: NFT_COLLECTION_ABI,
       functionName: "setApprovalForAll",
@@ -279,7 +292,6 @@ export function useAcceptOffer() {
     });
 
     await mutateAsync({
-      // ✅ corrigido
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "acceptOffer",
@@ -296,14 +308,13 @@ export function useAcceptOffer() {
 // ─────────────────────────────────────────────
 
 export function useCancelOffer() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
+  const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
   const cancelOffer = async (nftContract: `0x${string}`, tokenId: string) => {
     await mutateAsync({
-      // ✅ corrigido
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "cancelOffer",
@@ -320,7 +331,10 @@ export function useCancelOffer() {
 // ─────────────────────────────────────────────
 
 export function useReclaimExpiredOffer() {
-  const { mutateAsync, isPending } = useWriteContract(); // ✅ corrigido
+  const { data: hash, mutateAsync, isPending } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+  });
 
   const reclaimOffer = async (
     nftContract: `0x${string}`,
@@ -336,5 +350,5 @@ export function useReclaimExpiredOffer() {
     });
   };
 
-  return { reclaimOffer, isPending };
+  return { reclaimOffer, isPending, isConfirming, isSuccess, hash };
 }
