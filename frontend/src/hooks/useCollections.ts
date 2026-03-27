@@ -8,7 +8,7 @@ import {
 } from "wagmi";
 import { parseEther, formatEther, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@apollo/client/react";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
@@ -64,6 +64,7 @@ export function useProfileNFTs(
 
         if (contractList.length === 0) {
           setNfts([]);
+          setIsLoading(false);
           return;
         }
 
@@ -112,7 +113,7 @@ export function useProfileNFTs(
     } else {
       setIsLoading(false);
     }
-  }, [ownerAddress, collectionAddress, collections.length]);
+  }, [ownerAddress, collectionAddress, collections]);
 
   return { nfts, isLoading };
 }
@@ -137,6 +138,8 @@ export function useCollections() {
     createdAt?: string;
     totalSupply?: string;
   };
+
+  // ── GraphQL path ──
   const {
     data: gqlData,
     loading: gqlLoading,
@@ -188,9 +191,9 @@ export function useCollections() {
     fetchSupplies();
   }, [raw]);
 
-  if (SUBGRAPH_ENABLED) {
-    const collections: CollectionInfo[] = (gqlData?.collections ?? []).map(
-      (c) => ({
+  const collections = useMemo(() => {
+    if (SUBGRAPH_ENABLED) {
+      return (gqlData?.collections ?? []).map((c) => ({
         contractAddress: c.contractAddress as `0x${string}`,
         creator: c.creator as `0x${string}`,
         name: c.name,
@@ -201,19 +204,15 @@ export function useCollections() {
         mintPrice: BigInt(c.mintPrice ?? 0),
         createdAt: BigInt(c.createdAt ?? 0),
         totalSupply: BigInt(c.totalSupply ?? 0),
-      }),
-    );
-    return {
-      collections,
-      isLoading: gqlLoading,
-      refetch: gqlRefetch as () => void,
-    };
-  }
+      }));
+    }
+    return rpcCollections;
+  }, [gqlData?.collections, rpcCollections]);
 
   return {
-    collections: rpcCollections,
-    isLoading: rpcLoading || isLoadingSupply,
-    refetch: rpcRefetch as () => void,
+    collections,
+    isLoading: SUBGRAPH_ENABLED ? gqlLoading : rpcLoading || isLoadingSupply,
+    refetch: (SUBGRAPH_ENABLED ? gqlRefetch : rpcRefetch) as () => void,
   };
 }
 
