@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Navbar } from "@/components/NavBar";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
 import type { ActivityEvent, ActivityType } from "@/types/marketplace";
@@ -59,13 +60,14 @@ function EventRow({
       {/* Item */}
       <td className="py-6 px-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-sm overflow-hidden bg-surface-container-high flex-shrink-0">
+          <div className="w-12 h-12 rounded-sm overflow-hidden bg-surface-container-high flex-shrink-0 relative">
             {meta?.image && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={meta.image}
-                alt={meta.name}
-                className="w-full h-full object-cover"
+                alt={meta.name || "NFT Image"}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               />
             )}
           </div>

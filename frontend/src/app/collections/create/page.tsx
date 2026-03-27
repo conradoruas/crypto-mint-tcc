@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -469,11 +470,12 @@ export default function CreateCollectionPage() {
               >
                 {coverPreview ? (
                   <div className="relative h-40">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <Image
                       src={coverPreview}
-                      alt="preview"
-                      className="h-full mx-auto object-cover rounded-sm"
+                      alt="Cover Preview"
+                      fill
+                      className="object-contain rounded-sm"
+                      sizes="(max-width: 768px) 100vw, 400px"
                     />
                   </div>
                 ) : (
@@ -498,28 +500,40 @@ export default function CreateCollectionPage() {
             {/* Name + Symbol */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="col-name" className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+                <label
+                  htmlFor="col-name"
+                  className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant"
+                >
                   Name *
                 </label>
                 <input
                   id="col-name"
                   type="text"
                   value={name}
-                  onChange={(e) => { setName(e.target.value); setFieldErrors((p) => ({ ...p, name: undefined })); }}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setFieldErrors((p) => ({ ...p, name: undefined }));
+                  }}
                   className={fieldErrors.name ? inputErrorClass : inputClass}
                   placeholder="e.g. Cyber Monkeys"
                 />
                 <FieldError msg={fieldErrors.name} />
               </div>
               <div>
-                <label htmlFor="col-symbol" className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+                <label
+                  htmlFor="col-symbol"
+                  className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant"
+                >
                   Symbol *
                 </label>
                 <input
                   id="col-symbol"
                   type="text"
                   value={symbol}
-                  onChange={(e) => { setSymbol(e.target.value.toUpperCase()); setFieldErrors((p) => ({ ...p, symbol: undefined })); }}
+                  onChange={(e) => {
+                    setSymbol(e.target.value.toUpperCase());
+                    setFieldErrors((p) => ({ ...p, symbol: undefined }));
+                  }}
                   maxLength={8}
                   className={`${fieldErrors.symbol ? inputErrorClass : inputClass} uppercase`}
                   placeholder="e.g. CYBM"
@@ -530,13 +544,19 @@ export default function CreateCollectionPage() {
 
             {/* Description */}
             <div>
-              <label htmlFor="col-description" className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+              <label
+                htmlFor="col-description"
+                className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant"
+              >
                 Description
               </label>
               <textarea
                 id="col-description"
                 value={description}
-                onChange={(e) => { setDescription(e.target.value); setFieldErrors((p) => ({ ...p, description: undefined })); }}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  setFieldErrors((p) => ({ ...p, description: undefined }));
+                }}
                 className={`${fieldErrors.description ? inputErrorClass : inputClass} h-24 resize-none`}
                 placeholder="Describe your collection..."
               />
@@ -545,7 +565,10 @@ export default function CreateCollectionPage() {
 
             {/* Mint price */}
             <div>
-              <label htmlFor="col-mint-price" className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+              <label
+                htmlFor="col-mint-price"
+                className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant"
+              >
                 Mint Price (ETH) *
               </label>
               <input
@@ -554,7 +577,10 @@ export default function CreateCollectionPage() {
                 step="0.0001"
                 min="0.0001"
                 value={mintPrice}
-                onChange={(e) => { setMintPrice(e.target.value); setFieldErrors((p) => ({ ...p, mintPrice: undefined })); }}
+                onChange={(e) => {
+                  setMintPrice(e.target.value);
+                  setFieldErrors((p) => ({ ...p, mintPrice: undefined }));
+                }}
                 className={fieldErrors.mintPrice ? inputErrorClass : inputClass}
                 placeholder="0.0001"
               />
@@ -623,7 +649,7 @@ export default function CreateCollectionPage() {
                     className="p-4 bg-surface-container border border-outline-variant/10 rounded-sm"
                   >
                     <div className="flex items-start gap-4">
-                      <div className="shrink-0">
+                      <div className="shrink-0 relative">
                         <input
                           type="file"
                           id={`nft-file-${nft.id}`}
@@ -646,11 +672,12 @@ export default function CreateCollectionPage() {
                           }`}
                         >
                           {nft.previewUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
+                            <Image
                               src={nft.previewUrl}
-                              alt="preview"
-                              className="w-full h-full object-cover"
+                              alt="NFT Preview"
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 768px) 100vw, 300px"
                             />
                           ) : (
                             <Upload

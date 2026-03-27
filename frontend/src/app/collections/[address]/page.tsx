@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { formatEther } from "viem";
@@ -228,12 +229,15 @@ function LoadNFTsPanel({
                   } transition-all`}
                 >
                   {nft.previewUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={nft.previewUrl}
-                      alt="preview"
-                      className="w-full h-full object-cover"
-                    />
+                    <div className="relative w-full h-full">
+                      <Image
+                        src={nft.previewUrl}
+                        alt="NFT Preview"
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      />
+                    </div>
                   ) : (
                     <div className="text-center p-2">
                       <Upload
@@ -338,11 +342,12 @@ function NFTCard({
     >
       <div className="aspect-square relative bg-surface-container-high">
         {nft.image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={nft.image}
-            alt={nft.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            alt={nft.name || "NFT Image"}
+            fill
+            className="object-cover group-hover:scale-105 transition-transform duration-500"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -543,7 +548,6 @@ export default function CollectionPage() {
     }
   };
 
-
   const isOwner =
     userAddress &&
     details.owner &&
@@ -570,11 +574,13 @@ export default function CollectionPage() {
       <div className="relative">
         <div className="h-48 md:h-64 relative overflow-hidden bg-surface-container-low">
           {bannerImage && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={bannerImage}
-              alt={details.name ?? ""}
-              className="w-full h-full object-cover opacity-20 blur-sm scale-110"
+              alt={details.name ?? "Collection Banner"}
+              fill
+              className="object-cover opacity-20 blur-sm scale-110"
+              sizes="100vw"
+              priority
             />
           )}
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/80" />
@@ -588,11 +594,13 @@ export default function CollectionPage() {
             {/* Avatar */}
             <div className="w-24 h-24 md:w-32 md:h-32 shrink-0 relative border-4 border-background bg-surface-container-high overflow-hidden">
               {bannerImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={bannerImage}
-                  alt={details.name ?? ""}
-                  className="w-full h-full object-cover"
+                  alt={details.name ?? "Collection Avatar"}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 192px, 256px"
+                  priority
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">

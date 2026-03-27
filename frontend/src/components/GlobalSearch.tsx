@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X, Layers, Image as ImageIcon } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useCollections } from "@/hooks/useCollections";
 import { useQuery } from "@apollo/client/react";
@@ -182,11 +183,12 @@ export function GlobalSearch() {
                     >
                       <div className="w-9 h-9 shrink-0 bg-surface-container-high overflow-hidden">
                         {c.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          <Image
                             src={resolveIpfsUrl(c.image)}
-                            alt={c.name}
-                            className="w-full h-full object-cover"
+                            alt={c.name || "Collection Image"}
+                            fill
+                            className="object-cover"
+                            sizes="36px"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
@@ -237,13 +239,14 @@ export function GlobalSearch() {
                         onClick={clear}
                         className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container transition-colors"
                       >
-                        <div className="w-9 h-9 shrink-0 bg-surface-container-high overflow-hidden flex items-center justify-center">
+                        <div className="w-9 h-9 shrink-0 bg-surface-container-high overflow-hidden flex items-center justify-center relative">
                           {meta?.image ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
+                            <Image
                               src={meta.image}
-                              alt={meta.name}
-                              className="w-full h-full object-cover"
+                              alt={meta.name || "NFT Thumbnail"}
+                              fill
+                              className="object-cover"
+                              sizes="36px"
                             />
                           ) : (
                             <ImageIcon

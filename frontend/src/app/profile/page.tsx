@@ -507,13 +507,14 @@ export default function ProfilePage() {
                         {/* Item */}
                         <td className="py-5 px-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-sm overflow-hidden bg-surface-container-high shrink-0">
+                            <div className="w-10 h-10 rounded-sm overflow-hidden bg-surface-container-high shrink-0 relative">
                               {meta?.image && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
+                                <Image
                                   src={meta.image}
-                                  alt={meta.name}
-                                  className="w-full h-full object-cover"
+                                  alt={meta.name || "NFT Thumbnail"}
+                                  fill
+                                  className="object-cover"
+                                  sizes="120px"
                                 />
                               )}
                             </div>
