@@ -231,19 +231,34 @@ function ExploreContent() {
   const [onlyListed, setOnlyListed] = useState(false);
   const [page, setPage] = useState(1);
 
+  const hasActiveFilters = search !== "" || sort !== "default" || onlyListed;
+
+  // When filters are active, fetch all NFTs so client-side filtering spans every page.
+  // When no filters, use normal server-side pagination.
+  const fetchPage = hasActiveFilters ? 1 : page;
+  // The Graph caps `first` at 1000; the hook adds +1 internally, so max fetchSize is 999.
+  const fetchSize = hasActiveFilters ? 999 : PAGE_SIZE;
+
   const {
     nfts,
     isLoading: isLoadingNFTs,
     hasMore,
-  } = useExploreAllNFTs(selectedCollection || undefined, page, PAGE_SIZE);
+  } = useExploreAllNFTs(selectedCollection || undefined, fetchPage, fetchSize);
   const isLoading = isLoadingCollections || isLoadingNFTs;
 
-  const displayedNFTs = useMemo(() => {
+  const allFilteredNFTs = useMemo(() => {
     const filtered = filterNFTs(nfts, search, onlyListed);
     return sortNFTs(filtered, sort);
   }, [nfts, search, onlyListed, sort]);
 
-  const hasActiveFilters = search !== "" || sort !== "default" || onlyListed;
+  // Client-side pagination of filtered results (only when filters are active).
+  const totalFilteredPages = hasActiveFilters
+    ? Math.ceil(allFilteredNFTs.length / PAGE_SIZE)
+    : undefined;
+  const displayedNFTs = hasActiveFilters
+    ? allFilteredNFTs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : allFilteredNFTs;
+
   const clearFilters = () => {
     setSearch("");
     setSort("default");
@@ -512,10 +527,10 @@ function ExploreContent() {
           )}
 
           {/* Pagination */}
-          {(page > 1 || hasMore) && (
+          {(page > 1 || (hasActiveFilters ? (totalFilteredPages ?? 1) > 1 : hasMore)) && (
             <div className="flex items-center justify-between mt-12 pt-6 border-t border-outline-variant/10">
               <p className="text-xs text-on-surface-variant uppercase tracking-widest">
-                Page {page}
+                Page {page}{totalFilteredPages ? ` / ${totalFilteredPages}` : ""}
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -527,7 +542,7 @@ function ExploreContent() {
                 </button>
                 <button
                   onClick={() => setPage((p) => p + 1)}
-                  disabled={!hasMore}
+                  disabled={hasActiveFilters ? page >= (totalFilteredPages ?? 1) : !hasMore}
                   className="px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
                   Next

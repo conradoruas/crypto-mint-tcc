@@ -223,6 +223,12 @@ export function useExploreAllNFTs(
     },
   );
 
+  // Mirror Apollo's loading state immediately so the page never shows stale data.
+  useEffect(() => {
+    const loading = collectionAddress ? gqlColLoading : gqlAllLoading;
+    if (loading) setIsLoading(true);
+  }, [gqlAllLoading, gqlColLoading, collectionAddress]);
+
   useEffect(() => {
     const loading = collectionAddress ? gqlColLoading : gqlAllLoading;
     if (loading) return;
