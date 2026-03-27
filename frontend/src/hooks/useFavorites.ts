@@ -10,6 +10,7 @@ function storageKey(address: string) {
 }
 
 function readFavorites(address: string): FavoriteRef[] {
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(storageKey(address));
     return raw ? (JSON.parse(raw) as FavoriteRef[]) : [];
@@ -19,6 +20,7 @@ function readFavorites(address: string): FavoriteRef[] {
 }
 
 function writeFavorites(address: string, favs: FavoriteRef[]) {
+  if (typeof window === "undefined") return;
   localStorage.setItem(storageKey(address), JSON.stringify(favs));
   // Notifica outras instâncias do hook na mesma aba
   window.dispatchEvent(
