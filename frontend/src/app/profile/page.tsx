@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { fetchProfile, UserProfile } from "@/services/profile";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
+import { usePaginationState } from "@/hooks/usePaginationState";
 import { getEventConfig } from "@/lib/eventConfig";
 import Footer from "@/components/Footer";
 import { fetchAlchemyMetaForEvents, type MetaMap } from "@/lib/alchemyMeta";
@@ -138,12 +139,12 @@ export default function ProfilePage() {
   const [sort, setSort] = useState<SortOption>("default");
   const [activeTab, setActiveTab] = useState("Collected");
   const [metaMap, setMetaMap] = useState<MetaMap>(new Map());
-  const [collectedPage, setCollectedPage] = useState(1);
-  const [favoritesPage, setFavoritesPage] = useState(1);
-  const [createdPage, setCreatedPage] = useState(1);
-  const [activityPage, setActivityPage] = useState(1);
   const NFT_PAGE_SIZE = 8;
   const ACTIVITY_PAGE_SIZE = 10;
+  const collectedPag = usePaginationState(NFT_PAGE_SIZE);
+  const favoritesPag = usePaginationState(NFT_PAGE_SIZE);
+  const createdPag = usePaginationState(NFT_PAGE_SIZE);
+  const activityPag = usePaginationState(ACTIVITY_PAGE_SIZE);
 
   const { nfts, isLoading: isLoadingNFTs } = useProfileNFTs(
     address,
@@ -163,24 +164,17 @@ export default function ProfilePage() {
   const clearFilters = () => {
     setSearch("");
     setSort("default");
-    setCollectedPage(1);
+    collectedPag.reset();
   };
 
   useEffect(() => {
-    setCollectedPage(1);
-  }, [search, sort, selectedCollection]);
+    collectedPag.reset();
+  }, [search, sort, selectedCollection]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const collectedTotalPages = Math.ceil(displayedNFTs.length / NFT_PAGE_SIZE);
-  const paginatedCollected = displayedNFTs.slice(
-    (collectedPage - 1) * NFT_PAGE_SIZE,
-    collectedPage * NFT_PAGE_SIZE,
-  );
-
-  const createdTotalPages = Math.ceil(createdNfts.length / NFT_PAGE_SIZE);
-  const paginatedCreated = (createdNfts as CreatedNFTItem[]).slice(
-    (createdPage - 1) * NFT_PAGE_SIZE,
-    createdPage * NFT_PAGE_SIZE,
-  );
+  const { items: paginatedCollected, totalPages: collectedTotalPages } =
+    collectedPag.paginate(displayedNFTs);
+  const { items: paginatedCreated, totalPages: createdTotalPages } =
+    createdPag.paginate(createdNfts as CreatedNFTItem[]);
 
   // Activity feed — fetch all recent events, filter to this user client-side
   const { events: allEvents, isLoading: isLoadingActivity } = useActivityFeed(
@@ -195,11 +189,10 @@ export default function ProfilePage() {
     );
   }, [allEvents, address]);
 
-  const activityTotalPages = Math.ceil(userEvents.length / ACTIVITY_PAGE_SIZE);
-  const paginatedActivity = userEvents.slice(
-    (activityPage - 1) * ACTIVITY_PAGE_SIZE,
-    activityPage * ACTIVITY_PAGE_SIZE,
-  );
+  const { items: paginatedActivity, totalPages: activityTotalPages } =
+    activityPag.paginate(userEvents);
+  const { items: paginatedFavorites, totalPages: favTotalPages } =
+    favoritesPag.paginate(favorites);
 
   const eventIds = userEvents.map((e) => e.id).join(",");
   useEffect(() => {
@@ -601,17 +594,14 @@ export default function ProfilePage() {
             {activityTotalPages > 1 && (
               <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
                 <p className="text-xs text-on-surface-variant uppercase tracking-widest">
-                  {(activityPage - 1) * ACTIVITY_PAGE_SIZE + 1}–
-                  {Math.min(
-                    activityPage * ACTIVITY_PAGE_SIZE,
-                    userEvents.length,
-                  )}{" "}
+                  {(activityPag.page - 1) * ACTIVITY_PAGE_SIZE + 1}–
+                  {Math.min(activityPag.page * ACTIVITY_PAGE_SIZE, userEvents.length)}{" "}
                   of {userEvents.length}
                 </p>
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => setActivityPage((p) => Math.max(1, p - 1))}
-                    disabled={activityPage === 1}
+                    onClick={() => activityPag.prev()}
+                    disabled={activityPag.page === 1}
                     className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                   >
                     Prev
@@ -621,7 +611,7 @@ export default function ProfilePage() {
                       (p) =>
                         p === 1 ||
                         p === activityTotalPages ||
-                        Math.abs(p - activityPage) <= 1,
+                        Math.abs(p - activityPag.page) <= 1,
                     )
                     .reduce<(number | "…")[]>((acc, p, idx, arr) => {
                       if (idx > 0 && p - (arr[idx - 1] as number) > 1)
@@ -631,29 +621,22 @@ export default function ProfilePage() {
                     }, [])
                     .map((p, idx) =>
                       p === "…" ? (
-                        <span
-                          key={`e-${idx}`}
-                          className="px-2 text-on-surface-variant/40 text-xs"
-                        >
+                        <span key={`e-${idx}`} className="px-2 text-on-surface-variant/40 text-xs">
                           …
                         </span>
                       ) : (
                         <button
                           key={p}
-                          onClick={() => setActivityPage(p as number)}
-                          className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${activityPage === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
+                          onClick={() => activityPag.goTo(p as number)}
+                          className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${activityPag.page === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
                         >
                           {p}
                         </button>
                       ),
                     )}
                   <button
-                    onClick={() =>
-                      setActivityPage((p) =>
-                        Math.min(activityTotalPages, p + 1),
-                      )
-                    }
-                    disabled={activityPage === activityTotalPages}
+                    onClick={() => activityPag.next(activityTotalPages)}
+                    disabled={activityPag.page === activityTotalPages}
                     className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                   >
                     Next
@@ -691,105 +674,94 @@ export default function ProfilePage() {
                 You haven&apos;t saved any NFTs yet.
               </p>
             </div>
-          ) : (() => {
-            const favTotalPages = Math.ceil(favorites.length / NFT_PAGE_SIZE);
-            const paginatedFavorites = favorites.slice(
-              (favoritesPage - 1) * NFT_PAGE_SIZE,
-              favoritesPage * NFT_PAGE_SIZE,
-            );
-            return (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {paginatedFavorites.map((nft) => (
-                    <Link
-                      href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
-                      key={`${nft.nftContract}-${nft.tokenId}`}
-                      className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] hover:bg-surface-container-high transition-all duration-300"
-                    >
-                      <div className="aspect-square overflow-hidden relative">
-                        {nft.image ? (
-                          <Image
-                            src={nft.image}
-                            alt={nft.name}
-                            fill
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full animate-pulse bg-surface-container-high" />
-                        )}
-                      </div>
-                      <div className="p-5">
-                        <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
-                          {nft.name}
-                        </h3>
-                        <p className="text-on-surface-variant text-xs mt-1">
-                          #{nft.tokenId.padStart(3, "0")}
-                        </p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-                {favTotalPages > 1 && (
-                  <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
-                    <p className="text-xs text-on-surface-variant uppercase tracking-widest">
-                      {(favoritesPage - 1) * NFT_PAGE_SIZE + 1}–
-                      {Math.min(favoritesPage * NFT_PAGE_SIZE, favorites.length)}{" "}
-                      of {favorites.length}
-                    </p>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setFavoritesPage((p) => Math.max(1, p - 1))}
-                        disabled={favoritesPage === 1}
-                        className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      >
-                        Prev
-                      </button>
-                      {Array.from({ length: favTotalPages }, (_, i) => i + 1)
-                        .filter(
-                          (p) =>
-                            p === 1 ||
-                            p === favTotalPages ||
-                            Math.abs(p - favoritesPage) <= 1,
-                        )
-                        .reduce<(number | "…")[]>((acc, p, idx, arr) => {
-                          if (idx > 0 && p - (arr[idx - 1] as number) > 1)
-                            acc.push("…");
-                          acc.push(p);
-                          return acc;
-                        }, [])
-                        .map((p, idx) =>
-                          p === "…" ? (
-                            <span
-                              key={`e-${idx}`}
-                              className="px-2 text-on-surface-variant/40 text-xs"
-                            >
-                              …
-                            </span>
-                          ) : (
-                            <button
-                              key={p}
-                              onClick={() => setFavoritesPage(p as number)}
-                              className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${favoritesPage === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
-                            >
-                              {p}
-                            </button>
-                          ),
-                        )}
-                      <button
-                        onClick={() => setFavoritesPage((p) => Math.min(favTotalPages, p + 1))}
-                        disabled={favoritesPage === favTotalPages}
-                        className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      >
-                        Next
-                      </button>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {paginatedFavorites.map((nft) => (
+                  <Link
+                    href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
+                    key={`${nft.nftContract}-${nft.tokenId}`}
+                    className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] hover:bg-surface-container-high transition-all duration-300"
+                  >
+                    <div className="aspect-square overflow-hidden relative">
+                      {nft.image ? (
+                        <Image
+                          src={nft.image}
+                          alt={nft.name}
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full animate-pulse bg-surface-container-high" />
+                      )}
                     </div>
+                    <div className="p-5">
+                      <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
+                        {nft.name}
+                      </h3>
+                      <p className="text-on-surface-variant text-xs mt-1">
+                        #{nft.tokenId.padStart(3, "0")}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              {favTotalPages > 1 && (
+                <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
+                  <p className="text-xs text-on-surface-variant uppercase tracking-widest">
+                    {(favoritesPag.page - 1) * NFT_PAGE_SIZE + 1}–
+                    {Math.min(favoritesPag.page * NFT_PAGE_SIZE, favorites.length)}{" "}
+                    of {favorites.length}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => favoritesPag.prev()}
+                      disabled={favoritesPag.page === 1}
+                      className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: favTotalPages }, (_, i) => i + 1)
+                      .filter(
+                        (p) =>
+                          p === 1 ||
+                          p === favTotalPages ||
+                          Math.abs(p - favoritesPag.page) <= 1,
+                      )
+                      .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                        if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                          acc.push("…");
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((p, idx) =>
+                        p === "…" ? (
+                          <span key={`e-${idx}`} className="px-2 text-on-surface-variant/40 text-xs">
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={p}
+                            onClick={() => favoritesPag.goTo(p as number)}
+                            className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${favoritesPag.page === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
+                          >
+                            {p}
+                          </button>
+                        ),
+                      )}
+                    <button
+                      onClick={() => favoritesPag.next(favTotalPages)}
+                      disabled={favoritesPag.page === favTotalPages}
+                      className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      Next
+                    </button>
                   </div>
-                )}
-              </>
-            );
-          })()
-          )}
+                </div>
+              )}
+            </>
+          ))}
 
         {/* Created tab */}
         {activeTab === "Created" &&
@@ -863,14 +835,14 @@ export default function ProfilePage() {
               {createdTotalPages > 1 && (
                 <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
                   <p className="text-xs text-on-surface-variant uppercase tracking-widest">
-                    {(createdPage - 1) * NFT_PAGE_SIZE + 1}–
-                    {Math.min(createdPage * NFT_PAGE_SIZE, createdNfts.length)}{" "}
+                    {(createdPag.page - 1) * NFT_PAGE_SIZE + 1}–
+                    {Math.min(createdPag.page * NFT_PAGE_SIZE, createdNfts.length)}{" "}
                     of {createdNfts.length}
                   </p>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setCreatedPage((p) => Math.max(1, p - 1))}
-                      disabled={createdPage === 1}
+                      onClick={() => createdPag.prev()}
+                      disabled={createdPag.page === 1}
                       className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                     >
                       Prev
@@ -880,7 +852,7 @@ export default function ProfilePage() {
                         (p) =>
                           p === 1 ||
                           p === createdTotalPages ||
-                          Math.abs(p - createdPage) <= 1,
+                          Math.abs(p - createdPag.page) <= 1,
                       )
                       .reduce<(number | "…")[]>((acc, p, idx, arr) => {
                         if (idx > 0 && p - (arr[idx - 1] as number) > 1)
@@ -899,20 +871,16 @@ export default function ProfilePage() {
                         ) : (
                           <button
                             key={p}
-                            onClick={() => setCreatedPage(p as number)}
-                            className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${createdPage === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
+                            onClick={() => createdPag.goTo(p as number)}
+                            className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${createdPag.page === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
                           >
                             {p}
                           </button>
                         ),
                       )}
                     <button
-                      onClick={() =>
-                        setCreatedPage((p) =>
-                          Math.min(createdTotalPages, p + 1),
-                        )
-                      }
-                      disabled={createdPage === createdTotalPages}
+                      onClick={() => createdPag.next(createdTotalPages)}
+                      disabled={createdPag.page === createdTotalPages}
                       className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                     >
                       Next
@@ -1017,19 +985,17 @@ export default function ProfilePage() {
               {collectedTotalPages > 1 && (
                 <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
                   <p className="text-xs text-on-surface-variant uppercase tracking-widest">
-                    {(collectedPage - 1) * NFT_PAGE_SIZE + 1}–
+                    {(collectedPag.page - 1) * NFT_PAGE_SIZE + 1}–
                     {Math.min(
-                      collectedPage * NFT_PAGE_SIZE,
+                      collectedPag.page * NFT_PAGE_SIZE,
                       displayedNFTs.length,
                     )}{" "}
                     of {displayedNFTs.length}
                   </p>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() =>
-                        setCollectedPage((p) => Math.max(1, p - 1))
-                      }
-                      disabled={collectedPage === 1}
+                      onClick={() => collectedPag.prev()}
+                      disabled={collectedPag.page === 1}
                       className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                     >
                       Prev
@@ -1042,7 +1008,7 @@ export default function ProfilePage() {
                         (p) =>
                           p === 1 ||
                           p === collectedTotalPages ||
-                          Math.abs(p - collectedPage) <= 1,
+                          Math.abs(p - collectedPag.page) <= 1,
                       )
                       .reduce<(number | "…")[]>((acc, p, idx, arr) => {
                         if (idx > 0 && p - (arr[idx - 1] as number) > 1)
@@ -1061,20 +1027,16 @@ export default function ProfilePage() {
                         ) : (
                           <button
                             key={p}
-                            onClick={() => setCollectedPage(p as number)}
-                            className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${collectedPage === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
+                            onClick={() => collectedPag.goTo(p as number)}
+                            className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${collectedPag.page === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
                           >
                             {p}
                           </button>
                         ),
                       )}
                     <button
-                      onClick={() =>
-                        setCollectedPage((p) =>
-                          Math.min(collectedTotalPages, p + 1),
-                        )
-                      }
-                      disabled={collectedPage === collectedTotalPages}
+                      onClick={() => collectedPag.next(collectedTotalPages)}
+                      disabled={collectedPag.page === collectedTotalPages}
                       className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                     >
                       Next
