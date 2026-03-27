@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useConnection } from "wagmi";
 import { formatEther } from "viem";
 import { Navbar } from "@/components/NavBar";
@@ -36,7 +36,237 @@ import {
   OfferWithBuyer,
 } from "@/hooks/useMarketplace";
 import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
+import { useActivityFeed } from "@/hooks/useActivityFeed";
 
+// ─── Price History Chart ──────────────────────────────────────────────────────
+
+const W = 500;
+const H = 130;
+const PAD = { top: 8, right: 16, bottom: 28, left: 44 };
+const PLOT_W = W - PAD.left - PAD.right;
+const PLOT_H = H - PAD.top - PAD.bottom;
+
+function fmtDate(ts: number) {
+  return new Date(ts * 1000).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function PriceHistory({
+  nftContract,
+  tokenId,
+}: {
+  nftContract: string;
+  tokenId: string;
+}) {
+  const { events, isLoading } = useActivityFeed(nftContract, 200);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    price: string;
+    date: string;
+  } | null>(null);
+
+  const sales = useMemo(
+    () =>
+      events
+        .filter((e) => e.type === "sale" && e.tokenId === tokenId && e.priceETH)
+        .map((e) => ({
+          price: parseFloat(e.priceETH!),
+          ts: e.timestamp ?? 0,
+          txHash: e.txHash,
+        }))
+        .sort((a, b) => a.ts - b.ts),
+    [events, tokenId],
+  );
+
+  if (isLoading) {
+    return (
+      <div className="h-[130px] animate-pulse bg-surface-container-high rounded-sm" />
+    );
+  }
+  if (sales.length < 2) {
+    return (
+      <div className="h-[130px] flex items-center justify-center text-xs text-on-surface-variant/40 uppercase tracking-widest border border-dashed border-outline-variant/15 rounded-sm">
+        No sales recorded yet
+      </div>
+    );
+  }
+
+  const minP = Math.min(...sales.map((s) => s.price));
+  const maxP = Math.max(...sales.map((s) => s.price));
+  const minTs = sales[0].ts;
+  const maxTs = sales[sales.length - 1].ts;
+  const rangeP = maxP - minP || 1;
+  const rangeTs = maxTs - minTs || 1;
+
+  const sx = (ts: number) => PAD.left + ((ts - minTs) / rangeTs) * PLOT_W;
+  const sy = (p: number) => PAD.top + (1 - (p - minP) / rangeP) * PLOT_H;
+
+  const pts = sales.map((s) => ({ ...s, cx: sx(s.ts), cy: sy(s.price) }));
+  const linePath = pts
+    .map((p, i) => `${i === 0 ? "M" : "L"}${p.cx},${p.cy}`)
+    .join(" ");
+  const areaPath = `${linePath} L${pts[pts.length - 1].cx},${PAD.top + PLOT_H} L${pts[0].cx},${PAD.top + PLOT_H} Z`;
+
+  const yTicks = [minP, (minP + maxP) / 2, maxP];
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = svgRef.current!.getBoundingClientRect();
+    const mouseX = ((e.clientX - rect.left) / rect.width) * W;
+    let closest = pts[0];
+    let minDist = Math.abs(pts[0].cx - mouseX);
+    for (const p of pts) {
+      const d = Math.abs(p.cx - mouseX);
+      if (d < minDist) {
+        minDist = d;
+        closest = p;
+      }
+    }
+    setTooltip({
+      x: (closest.cx / W) * 100,
+      y: (closest.cy / H) * 100,
+      price: closest.price.toFixed(4),
+      date: fmtDate(closest.ts),
+    });
+  };
+
+  return (
+    <div className="relative">
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setTooltip(null)}
+      >
+        <defs>
+          <linearGradient id="priceAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop
+              offset="0%"
+              stopColor="var(--color-primary)"
+              stopOpacity="0.25"
+            />
+            <stop
+              offset="100%"
+              stopColor="var(--color-primary)"
+              stopOpacity="0.01"
+            />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines + Y labels */}
+        {yTicks.map((tick, i) => {
+          const y = sy(tick);
+          return (
+            <g key={i}>
+              <line
+                x1={PAD.left}
+                y1={y}
+                x2={W - PAD.right}
+                y2={y}
+                stroke="currentColor"
+                strokeOpacity="0.06"
+                strokeWidth="1"
+              />
+              <text
+                x={PAD.left - 6}
+                y={y + 3.5}
+                textAnchor="end"
+                fontSize="9"
+                fill="currentColor"
+                fillOpacity="0.4"
+              >
+                {tick.toFixed(3)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* X axis labels */}
+        <text
+          x={PAD.left}
+          y={H - 4}
+          fontSize="9"
+          fill="currentColor"
+          fillOpacity="0.4"
+        >
+          {fmtDate(minTs)}
+        </text>
+        <text
+          x={W - PAD.right}
+          y={H - 4}
+          fontSize="9"
+          textAnchor="end"
+          fill="currentColor"
+          fillOpacity="0.4"
+        >
+          {fmtDate(maxTs)}
+        </text>
+
+        {/* Area fill */}
+        <path d={areaPath} fill="url(#priceAreaGrad)" />
+
+        {/* Line */}
+        <path
+          d={linePath}
+          fill="none"
+          stroke="var(--color-primary)"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* Dots */}
+        {pts.map((p, i) => (
+          <circle
+            key={i}
+            cx={p.cx}
+            cy={p.cy}
+            r="3"
+            fill="var(--color-primary)"
+            stroke="var(--color-background)"
+            strokeWidth="1.5"
+          />
+        ))}
+
+        {/* Crosshair on hover */}
+        {tooltip && (
+          <line
+            x1={(tooltip.x / 100) * W}
+            y1={PAD.top}
+            x2={(tooltip.x / 100) * W}
+            y2={PAD.top + PLOT_H}
+            stroke="var(--color-primary)"
+            strokeOpacity="0.3"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+          />
+        )}
+      </svg>
+
+      {/* Tooltip */}
+      {tooltip && (
+        <div
+          className="pointer-events-none absolute z-10 px-2.5 py-1.5 rounded-sm bg-surface-container-high border border-outline-variant/20 shadow-md text-xs"
+          style={{
+            left: `clamp(0%, calc(${tooltip.x}% - 48px), calc(100% - 96px))`,
+            top: `calc(${tooltip.y}% - 38px)`,
+          }}
+        >
+          <p className="font-headline font-bold text-primary">
+            {tooltip.price} ETH
+          </p>
+          <p className="text-on-surface-variant">{tooltip.date}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const resolveIpfsUrl = (url: string) => {
   if (!url) return "";
@@ -139,7 +369,10 @@ function ExpiresIn({ expiresAt }: { expiresAt: Date }) {
   return (
     <span className="flex items-center gap-1 text-xs text-on-surface-variant">
       <Clock size={11} />
-      {expiresAt.toLocaleDateString("en-US", { day: "2-digit", month: "short" })}
+      {expiresAt.toLocaleDateString("en-US", {
+        day: "2-digit",
+        month: "short",
+      })}
     </span>
   );
 }
@@ -164,15 +397,16 @@ function OffersTable({
     return () => clearInterval(id);
   }, []);
 
-  const liveOffers = offers.filter(
-    (o) => Number(o.expiresAt) * 1000 > now,
-  );
+  const liveOffers = offers.filter((o) => Number(o.expiresAt) * 1000 > now);
 
   if (isLoading) {
     return (
       <div className="space-y-2">
         {[1, 2].map((i) => (
-          <div key={i} className="h-12 animate-pulse rounded-sm bg-surface-container-high" />
+          <div
+            key={i}
+            className="h-12 animate-pulse rounded-sm bg-surface-container-high"
+          />
         ))}
       </div>
     );
@@ -210,7 +444,8 @@ function OffersTable({
                   )}
                 </p>
                 <p className="text-xs text-on-surface-variant font-mono">
-                  {offer.buyerAddress.slice(0, 6)}...{offer.buyerAddress.slice(-4)}
+                  {offer.buyerAddress.slice(0, 6)}...
+                  {offer.buyerAddress.slice(-4)}
                 </p>
               </div>
             </div>
@@ -261,16 +496,50 @@ export default function AssetDetail() {
     hash?: string;
   } | null>(null);
 
-  const { owner, isListed, price, refetch: refetchListing } = useNFTListing(nftContract ?? "", tokenId);
-  const { hasActiveOffer, offerAmount: myOfferAmount, expiresAt, refetch: refetchMyOffer } = useMyOffer(nftContract ?? "", tokenId);
-  const { offers, isLoading: isLoadingOffers, topOffer, refetch: refetchOffers } = useNFTOffers(nftContract ?? "", tokenId);
+  const {
+    owner,
+    isListed,
+    price,
+    refetch: refetchListing,
+  } = useNFTListing(nftContract ?? "", tokenId);
+  const {
+    hasActiveOffer,
+    offerAmount: myOfferAmount,
+    expiresAt,
+    refetch: refetchMyOffer,
+  } = useMyOffer(nftContract ?? "", tokenId);
+  const {
+    offers,
+    isLoading: isLoadingOffers,
+    topOffer,
+    refetch: refetchOffers,
+  } = useNFTOffers(nftContract ?? "", tokenId);
 
   const { listNFT, isPending: isListing } = useListNFT();
-  const { buyNFT, isPending: isBuying, isConfirming: isBuyConfirming, isSuccess: isBought, hash: buyHash } = useBuyNFT();
+  const {
+    buyNFT,
+    isPending: isBuying,
+    isConfirming: isBuyConfirming,
+    isSuccess: isBought,
+    hash: buyHash,
+  } = useBuyNFT();
   const { cancelListing, isPending: isCancelling } = useCancelListing();
-  const { makeOffer, isPending: isMakingOffer, isConfirming: isOfferConfirming, isSuccess: isOfferMade } = useMakeOffer();
-  const { acceptOffer, isPending: isAccepting, isSuccess: isOfferAccepted } = useAcceptOffer();
-  const { cancelOffer, isPending: isCancellingOffer, isSuccess: isOfferCancelled } = useCancelOffer();
+  const {
+    makeOffer,
+    isPending: isMakingOffer,
+    isConfirming: isOfferConfirming,
+    isSuccess: isOfferMade,
+  } = useMakeOffer();
+  const {
+    acceptOffer,
+    isPending: isAccepting,
+    isSuccess: isOfferAccepted,
+  } = useAcceptOffer();
+  const {
+    cancelOffer,
+    isPending: isCancellingOffer,
+    isSuccess: isOfferCancelled,
+  } = useCancelOffer();
 
   const { isFavorited } = useIsFavorited(nftContract ?? "", tokenId);
   const { toggleFavorite } = useFavorite();
@@ -292,12 +561,20 @@ export default function AssetDetail() {
     }
   };
 
-  const isOwner = address && owner && address.toLowerCase() === owner.toLowerCase();
+  const isOwner =
+    address && owner && address.toLowerCase() === owner.toLowerCase();
 
-  const refetchAll = () => { refetchListing(); refetchMyOffer(); refetchOffers(); };
+  const refetchAll = () => {
+    refetchListing();
+    refetchMyOffer();
+    refetchOffers();
+  };
 
   useEffect(() => {
-    if (!nftContract) { setIsLoadingNft(false); return; }
+    if (!nftContract) {
+      setIsLoadingNft(false);
+      return;
+    }
     const fetchNFT = async () => {
       try {
         const res = await fetch(
@@ -310,7 +587,13 @@ export default function AssetDetail() {
           const meta = await metaRes.json();
           image = resolveIpfsUrl(meta.image ?? "");
         }
-        setNft({ tokenId: data.tokenId, name: data.name ?? `NFT #${tokenId}`, description: data.description ?? "", image, nftContract });
+        setNft({
+          tokenId: data.tokenId,
+          name: data.name ?? `NFT #${tokenId}`,
+          description: data.description ?? "",
+          image,
+          nftContract,
+        });
       } catch (error) {
         console.error("Error fetching NFT:", error);
       } finally {
@@ -320,51 +603,109 @@ export default function AssetDetail() {
     fetchNFT();
   }, [tokenId, nftContract]);
 
-
   useEffect(() => {
-    if (isBought) { setTxMsg({ type: "success", text: "NFT purchased successfully!", hash: buyHash }); refetchAll(); }
+    if (isBought) {
+      setTxMsg({
+        type: "success",
+        text: "NFT purchased successfully!",
+        hash: buyHash,
+      });
+      refetchAll();
+    }
   }, [isBought]);
   useEffect(() => {
-    if (isOfferMade) { setTxMsg({ type: "success", text: "Offer sent! ETH is held in escrow for 7 days." }); setShowOfferForm(false); setOfferAmount(""); refetchMyOffer(); refetchOffers(); }
+    if (isOfferMade) {
+      setTxMsg({
+        type: "success",
+        text: "Offer sent! ETH is held in escrow for 7 days.",
+      });
+      setShowOfferForm(false);
+      setOfferAmount("");
+      refetchMyOffer();
+      refetchOffers();
+    }
   }, [isOfferMade]);
   useEffect(() => {
-    if (isOfferCancelled) { setTxMsg({ type: "success", text: "Offer cancelled. ETH returned." }); refetchMyOffer(); refetchOffers(); }
+    if (isOfferCancelled) {
+      setTxMsg({ type: "success", text: "Offer cancelled. ETH returned." });
+      refetchMyOffer();
+      refetchOffers();
+    }
   }, [isOfferCancelled]);
   useEffect(() => {
-    if (isOfferAccepted) { setTxMsg({ type: "success", text: "Offer accepted! NFT transferred." }); refetchAll(); }
+    if (isOfferAccepted) {
+      setTxMsg({ type: "success", text: "Offer accepted! NFT transferred." });
+      refetchAll();
+    }
   }, [isOfferAccepted]);
 
   const handleList = async () => {
-    if (!listPrice || parseFloat(listPrice) < 0.0001) { setTxMsg({ type: "error", text: "Minimum price is 0.0001 ETH." }); return; }
-    try { setTxMsg(null); await listNFT(nftContract, tokenId, listPrice); setShowListForm(false); setListPrice(""); setTxMsg({ type: "success", text: "NFT listed successfully!" }); refetchListing(); }
-    catch { setTxMsg({ type: "error", text: "Error listing NFT." }); }
+    if (!listPrice || parseFloat(listPrice) < 0.0001) {
+      setTxMsg({ type: "error", text: "Minimum price is 0.0001 ETH." });
+      return;
+    }
+    try {
+      setTxMsg(null);
+      await listNFT(nftContract, tokenId, listPrice);
+      setShowListForm(false);
+      setListPrice("");
+      setTxMsg({ type: "success", text: "NFT listed successfully!" });
+      refetchListing();
+    } catch {
+      setTxMsg({ type: "error", text: "Error listing NFT." });
+    }
   };
 
   const handleBuy = async () => {
     if (!price) return;
-    try { setTxMsg(null); await buyNFT(nftContract, tokenId, price); }
-    catch { setTxMsg({ type: "error", text: "Error buying NFT." }); }
+    try {
+      setTxMsg(null);
+      await buyNFT(nftContract, tokenId, price);
+    } catch {
+      setTxMsg({ type: "error", text: "Error buying NFT." });
+    }
   };
 
   const handleCancelListing = async () => {
-    try { setTxMsg(null); await cancelListing(nftContract, tokenId); setTxMsg({ type: "success", text: "Listing cancelled." }); refetchListing(); }
-    catch { setTxMsg({ type: "error", text: "Error cancelling listing." }); }
+    try {
+      setTxMsg(null);
+      await cancelListing(nftContract, tokenId);
+      setTxMsg({ type: "success", text: "Listing cancelled." });
+      refetchListing();
+    } catch {
+      setTxMsg({ type: "error", text: "Error cancelling listing." });
+    }
   };
 
   const handleMakeOffer = async () => {
-    if (!offerAmount || parseFloat(offerAmount) < 0.0001) { setTxMsg({ type: "error", text: "Minimum offer is 0.0001 ETH." }); return; }
-    try { setTxMsg(null); await makeOffer(nftContract, tokenId, offerAmount); }
-    catch { setTxMsg({ type: "error", text: "Error sending offer." }); }
+    if (!offerAmount || parseFloat(offerAmount) < 0.0001) {
+      setTxMsg({ type: "error", text: "Minimum offer is 0.0001 ETH." });
+      return;
+    }
+    try {
+      setTxMsg(null);
+      await makeOffer(nftContract, tokenId, offerAmount);
+    } catch {
+      setTxMsg({ type: "error", text: "Error sending offer." });
+    }
   };
 
   const handleAcceptOffer = async (buyerAddress: `0x${string}`) => {
-    try { setTxMsg(null); await acceptOffer(nftContract, tokenId, buyerAddress); }
-    catch { setTxMsg({ type: "error", text: "Error accepting offer." }); }
+    try {
+      setTxMsg(null);
+      await acceptOffer(nftContract, tokenId, buyerAddress);
+    } catch {
+      setTxMsg({ type: "error", text: "Error accepting offer." });
+    }
   };
 
   const handleCancelOffer = async () => {
-    try { setTxMsg(null); await cancelOffer(nftContract, tokenId); }
-    catch { setTxMsg({ type: "error", text: "Error cancelling offer." }); }
+    try {
+      setTxMsg(null);
+      await cancelOffer(nftContract, tokenId);
+    } catch {
+      setTxMsg({ type: "error", text: "Error cancelling offer." });
+    }
   };
 
   if (!nftContract) {
@@ -395,7 +736,6 @@ export default function AssetDetail() {
     <main className="min-h-screen bg-background text-on-surface">
       <Navbar />
       <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-8 grid grid-cols-1 md:grid-cols-2 gap-12">
-
         {/* Image */}
         <div className="relative overflow-hidden aspect-square bg-surface-container-high border border-outline-variant/10 rounded-sm">
           {nft.image ? (
@@ -434,9 +774,13 @@ export default function AssetDetail() {
               {owner && (
                 <div className="flex items-center gap-2 text-sm bg-surface-container px-3 py-1.5 rounded-sm border border-outline-variant/15">
                   <ShieldCheck size={13} className="text-primary" />
-                  <span className="text-on-surface-variant text-xs uppercase tracking-widest">Owner</span>
+                  <span className="text-on-surface-variant text-xs uppercase tracking-widest">
+                    Owner
+                  </span>
                   <span className="font-headline font-bold text-sm font-mono text-on-surface">
-                    {isOwner ? "You" : `${owner.slice(0, 6)}...${owner.slice(-4)}`}
+                    {isOwner
+                      ? "You"
+                      : `${owner.slice(0, 6)}...${owner.slice(-4)}`}
                   </span>
                 </div>
               )}
@@ -449,7 +793,10 @@ export default function AssetDetail() {
                       : "bg-surface-container border-outline-variant/15 text-on-surface-variant hover:border-outline"
                   }`}
                 >
-                  <Heart size={13} className={isFavorited ? "fill-error" : ""} />
+                  <Heart
+                    size={13}
+                    className={isFavorited ? "fill-error" : ""}
+                  />
                   {isFavorited ? "Saved" : "Save"}
                 </button>
               )}
@@ -457,7 +804,11 @@ export default function AssetDetail() {
                 onClick={handleShare}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-outline-variant/15 bg-surface-container text-on-surface-variant hover:border-outline transition-all text-xs font-bold uppercase tracking-widest"
               >
-                {copied ? <Check size={13} className="text-primary" /> : <Share2 size={13} />}
+                {copied ? (
+                  <Check size={13} className="text-primary" />
+                ) : (
+                  <Share2 size={13} />
+                )}
                 {copied ? "Copied!" : "Share"}
               </button>
             </div>
@@ -500,7 +851,11 @@ export default function AssetDetail() {
                         : "bg-error/5 border-error/20 text-error hover:bg-error/10"
                     }`}
                   >
-                    {isCancelling ? <Loader2 className="animate-spin" size={18} /> : <X size={18} />}
+                    {isCancelling ? (
+                      <Loader2 className="animate-spin" size={18} />
+                    ) : (
+                      <X size={18} />
+                    )}
                     {isCancelling ? "Cancelling..." : "Cancel Listing"}
                   </button>
                 ) : (
@@ -517,8 +872,16 @@ export default function AssetDetail() {
                       {!(isBuying || isBuyConfirming) && (
                         <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
                       )}
-                      {isBuying || isBuyConfirming ? <Loader2 className="animate-spin" size={18} /> : <ShoppingCart size={18} />}
-                      {isBuying ? "Awaiting wallet..." : isBuyConfirming ? "Confirming..." : "Buy Now"}
+                      {isBuying || isBuyConfirming ? (
+                        <Loader2 className="animate-spin" size={18} />
+                      ) : (
+                        <ShoppingCart size={18} />
+                      )}
+                      {isBuying
+                        ? "Awaiting wallet..."
+                        : isBuyConfirming
+                          ? "Confirming..."
+                          : "Buy Now"}
                     </button>
                   </div>
                 )}
@@ -550,8 +913,14 @@ export default function AssetDetail() {
                               : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110"
                           }`}
                         >
-                          {isListing ? <Loader2 className="animate-spin" size={16} /> : <Tag size={16} />}
-                          {isListing ? "Approving & Listing..." : "Confirm Listing"}
+                          {isListing ? (
+                            <Loader2 className="animate-spin" size={16} />
+                          ) : (
+                            <Tag size={16} />
+                          )}
+                          {isListing
+                            ? "Approving & Listing..."
+                            : "Confirm Listing"}
                         </button>
                         <button
                           onClick={() => setShowListForm(false)}
@@ -606,8 +975,14 @@ export default function AssetDetail() {
                         : "bg-error/5 border-error/20 text-error hover:bg-error/10"
                     }`}
                   >
-                    {isCancellingOffer ? <Loader2 className="animate-spin" size={16} /> : <X size={16} />}
-                    {isCancellingOffer ? "Cancelling..." : "Cancel Offer & Reclaim ETH"}
+                    {isCancellingOffer ? (
+                      <Loader2 className="animate-spin" size={16} />
+                    ) : (
+                      <X size={16} />
+                    )}
+                    {isCancellingOffer
+                      ? "Cancelling..."
+                      : "Cancel Offer & Reclaim ETH"}
                   </button>
                 </div>
               ) : showOfferForm ? (
@@ -634,8 +1009,16 @@ export default function AssetDetail() {
                           : "bg-secondary/10 border border-secondary/20 text-secondary hover:bg-secondary/20"
                       }`}
                     >
-                      {isMakingOffer || isOfferConfirming ? <Loader2 className="animate-spin" size={16} /> : <HandCoins size={16} />}
-                      {isMakingOffer ? "Awaiting wallet..." : isOfferConfirming ? "Confirming..." : "Send Offer"}
+                      {isMakingOffer || isOfferConfirming ? (
+                        <Loader2 className="animate-spin" size={16} />
+                      ) : (
+                        <HandCoins size={16} />
+                      )}
+                      {isMakingOffer
+                        ? "Awaiting wallet..."
+                        : isOfferConfirming
+                          ? "Confirming..."
+                          : "Send Offer"}
                     </button>
                     <button
                       onClick={() => setShowOfferForm(false)}
@@ -655,6 +1038,15 @@ export default function AssetDetail() {
               )}
             </div>
           )}
+
+          {/* Price History */}
+          <div className="bg-surface-container-low border border-outline-variant/10 p-6 space-y-4 rounded-sm">
+            <h3 className="font-headline font-bold text-sm uppercase tracking-widest flex items-center gap-2">
+              <TrendingUp size={16} className="text-primary" />
+              Price History
+            </h3>
+            <PriceHistory nftContract={nftContract} tokenId={tokenId} />
+          </div>
 
           {/* Offers list */}
           <div className="bg-surface-container-low border border-outline-variant/10 p-6 space-y-4 rounded-sm">
