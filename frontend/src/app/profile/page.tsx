@@ -19,60 +19,16 @@ import {
   ExternalLink,
   Search,
   X,
-  ShoppingCart,
-  Tag,
-  HandCoins,
-  CheckCircle,
-  Sparkles,
   Activity,
   Heart,
 } from "lucide-react";
 import { fetchProfile, UserProfile } from "@/services/profile";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
-import type { ActivityType } from "@/types/marketplace";
+import { getEventConfig } from "@/lib/eventConfig";
 import Footer from "@/components/Footer";
 import { fetchAlchemyMetaForEvents, type MetaMap } from "@/lib/alchemyMeta";
 
-const EVENT_CONFIG: Record<
-  ActivityType,
-  { label: string; icon: React.ReactNode; colorClass: string }
-> = {
-  sale: {
-    label: "Sale",
-    icon: <ShoppingCart size={14} />,
-    colorClass: "text-primary",
-  },
-  listing: {
-    label: "Listing",
-    icon: <Tag size={14} />,
-    colorClass: "text-secondary",
-  },
-  listing_cancelled: {
-    label: "Cancelled",
-    icon: <X size={14} />,
-    colorClass: "text-on-surface-variant",
-  },
-  offer: {
-    label: "Offer",
-    icon: <HandCoins size={14} />,
-    colorClass: "text-tertiary",
-  },
-  offer_accepted: {
-    label: "Offer Accepted",
-    icon: <CheckCircle size={14} />,
-    colorClass: "text-primary",
-  },
-  offer_cancelled: {
-    label: "Offer Cancelled",
-    icon: <X size={14} />,
-    colorClass: "text-error",
-  },
-  mint: {
-    label: "Mint",
-    icon: <Sparkles size={14} />,
-    colorClass: "text-tertiary",
-  },
-};
+const EVENT_CONFIG = getEventConfig(14);
 
 function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;

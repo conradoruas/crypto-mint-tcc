@@ -9,11 +9,6 @@ import {
   Check,
   ExternalLink,
   User,
-  ShoppingCart,
-  Tag,
-  HandCoins,
-  CheckCircle,
-  Sparkles,
   X,
   Activity,
 } from "lucide-react";
@@ -24,53 +19,14 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 import {
   useActivityFeed,
   ActivityEvent,
-  ActivityType,
 } from "@/hooks/useActivityFeed";
+import { getEventConfig } from "@/lib/eventConfig";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { fetchAlchemyMeta, NFTMeta } from "@/lib/alchemyMeta";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-const EVENT_CONFIG: Record<
-  ActivityType,
-  { label: string; icon: React.ReactNode; colorClass: string }
-> = {
-  sale: {
-    label: "Sale",
-    icon: <ShoppingCart size={12} />,
-    colorClass: "text-primary",
-  },
-  listing: {
-    label: "Listed",
-    icon: <Tag size={12} />,
-    colorClass: "text-secondary",
-  },
-  listing_cancelled: {
-    label: "Delisted",
-    icon: <X size={12} />,
-    colorClass: "text-on-surface-variant",
-  },
-  offer: {
-    label: "Offer",
-    icon: <HandCoins size={12} />,
-    colorClass: "text-tertiary",
-  },
-  offer_accepted: {
-    label: "Offer Accepted",
-    icon: <CheckCircle size={12} />,
-    colorClass: "text-primary",
-  },
-  offer_cancelled: {
-    label: "Offer Cancelled",
-    icon: <X size={12} />,
-    colorClass: "text-error",
-  },
-  mint: {
-    label: "Minted",
-    icon: <Sparkles size={12} />,
-    colorClass: "text-tertiary",
-  },
-};
+const EVENT_CONFIG = getEventConfig(12);
 
 function formatTime(ts?: number) {
   if (!ts) return "—";

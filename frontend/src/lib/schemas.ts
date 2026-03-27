@@ -60,6 +60,6 @@ export function getZodErrors<T extends z.ZodTypeAny>(
   const result = schema.safeParse(data);
   if (result.success) return {};
   return Object.fromEntries(
-    result.error.errors.map((e) => [e.path[0] as string, e.message]),
+    result.error.issues.map((e) => [e.path[0] as string, e.message]),
   );
 }

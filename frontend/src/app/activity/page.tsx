@@ -3,16 +3,11 @@
 import { Navbar } from "@/components/NavBar";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
 import type { ActivityEvent, ActivityType } from "@/types/marketplace";
+import { getEventConfig, ALL_ACTIVITY_TYPES } from "@/lib/eventConfig";
 import { useCollections } from "@/hooks/useCollections";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import {
-  ShoppingCart,
-  Tag,
-  X,
-  HandCoins,
-  CheckCircle,
-  Sparkles,
   Activity,
   ExternalLink,
   ChevronDown,
@@ -20,48 +15,9 @@ import {
 import Footer from "@/components/Footer";
 import { fetchAlchemyMetaForEvents, type NFTMeta, type MetaMap } from "@/lib/alchemyMeta";
 
-const EVENT_CONFIG: Record<
-  ActivityType,
-  { label: string; icon: React.ReactNode; colorClass: string }
-> = {
-  sale: {
-    label: "Sale",
-    icon: <ShoppingCart size={16} />,
-    colorClass: "text-primary",
-  },
-  listing: {
-    label: "Listing",
-    icon: <Tag size={16} />,
-    colorClass: "text-secondary",
-  },
-  listing_cancelled: {
-    label: "Listing Cancelled",
-    icon: <X size={16} />,
-    colorClass: "text-on-surface-variant",
-  },
-  offer: {
-    label: "Offer",
-    icon: <HandCoins size={16} />,
-    colorClass: "text-tertiary",
-  },
-  offer_accepted: {
-    label: "Offer Accepted",
-    icon: <CheckCircle size={16} />,
-    colorClass: "text-primary",
-  },
-  offer_cancelled: {
-    label: "Offer Cancelled",
-    icon: <X size={16} />,
-    colorClass: "text-error",
-  },
-  mint: {
-    label: "Mint",
-    icon: <Sparkles size={16} />,
-    colorClass: "text-tertiary",
-  },
-};
+const EVENT_CONFIG = getEventConfig(16);
 
-const ALL_TYPES = Object.keys(EVENT_CONFIG) as ActivityType[];
+const ALL_TYPES = ALL_ACTIVITY_TYPES;
 
 function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
