@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PINATA_JWT as jwt } from "@/lib/env";
 
 export async function POST(req: NextRequest) {
-  const jwt = process.env.PINATA_JWT;
 
   try {
     const formData = await req.formData();

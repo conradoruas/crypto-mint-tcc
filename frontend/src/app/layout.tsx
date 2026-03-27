@@ -3,6 +3,9 @@ import { Space_Grotesk, Manrope } from "next/font/google";
 import { Web3Provider } from "@/components/Web3Provider";
 import { ApolloProvider } from "@/components/ApolloProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+// Validate required env vars at server startup — throws with a clear message
+// if any are missing rather than failing silently later.
+import "@/lib/env";
 
 import "./globals.css";
 

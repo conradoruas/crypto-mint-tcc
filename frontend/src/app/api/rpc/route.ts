@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
-
-const ALCHEMY_KEY = process.env.ALCHEMY_API_KEY;
+import { ALCHEMY_API_KEY as ALCHEMY_KEY } from "@/lib/env";
 const ALCHEMY_RPC = `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
 
 export async function POST(req: NextRequest) {

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import AssetPageClient from "./AssetPageClient";
-
-const ALCHEMY_KEY = process.env.ALCHEMY_API_KEY;
+import { ALCHEMY_API_KEY as ALCHEMY_KEY } from "@/lib/env";
 const ALCHEMY_BASE = `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}`;
 
 async function fetchNFTMeta(contract: string, tokenId: string) {
