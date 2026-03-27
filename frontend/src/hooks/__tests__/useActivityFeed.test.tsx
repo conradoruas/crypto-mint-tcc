@@ -6,7 +6,9 @@ import {
   GET_ACTIVITY_FEED,
 } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
-import type { MockedResponse } from "@apollo/client/testing";
+import { MockLink } from "@apollo/client/testing";
+
+type MockedResponse = MockLink.MockedResponse;
 
 const makeWrapper = (mocks: MockedResponse[]) => makeApolloWrapper(mocks);
 
@@ -25,9 +27,15 @@ const BASE_EVENT = {
 describe("useActivityFeed", () => {
   it("is loading before the query resolves", () => {
     const { result } = renderHook(() => useActivityFeed(), {
-      wrapper: makeWrapper([]),
+      wrapper: makeWrapper([
+        {
+          request: { query: GET_ACTIVITY_FEED_ALL, variables: { first: 50 } },
+          result: { data: { activityEvents: [] } },
+        },
+      ]),
     });
 
+    // Checked synchronously — mock exists but hasn't resolved yet
     expect(result.current.isLoading).toBe(true);
   });
 

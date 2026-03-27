@@ -63,13 +63,13 @@ describe("GlobalSearch", () => {
   it("renders search input with correct aria-label", () => {
     render(<GlobalSearch />);
     expect(
-      screen.getByRole("textbox", { name: /search collections and nfts/i }),
+      screen.getByRole("combobox", { name: /search collections and nfts/i }),
     ).toBeInTheDocument();
   });
 
   it("starts with an empty input and no dropdown", () => {
     render(<GlobalSearch />);
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("combobox");
     expect(input).toHaveValue("");
     expect(screen.queryByText(/no results/i)).toBeNull();
   });
@@ -78,7 +78,7 @@ describe("GlobalSearch", () => {
 
   it("shows clear button when query is non-empty", () => {
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "px" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "px" } });
     expect(screen.getByRole("button", { name: /clear search/i })).toBeInTheDocument();
   });
 
@@ -89,7 +89,7 @@ describe("GlobalSearch", () => {
 
   it("clear button resets the input", () => {
     render(<GlobalSearch />);
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("combobox");
     fireEvent.change(input, { target: { value: "pixel" } });
     fireEvent.click(screen.getByRole("button", { name: /clear search/i }));
     expect(input).toHaveValue("");
@@ -100,7 +100,7 @@ describe("GlobalSearch", () => {
   it("shows 'No results' message when query matches nothing", () => {
     mockUseCollections.mockReturnValue({ collections: [], isLoading: false });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "zzz" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "zzz" } });
     expect(screen.getByText(/no results for/i)).toBeInTheDocument();
   });
 
@@ -112,7 +112,7 @@ describe("GlobalSearch", () => {
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "pixel" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "pixel" } });
     expect(screen.getByText("Pixel Punks")).toBeInTheDocument();
   });
 
@@ -122,7 +122,7 @@ describe("GlobalSearch", () => {
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "ppk" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "ppk" } });
     expect(screen.getByText("Pixel Punks")).toBeInTheDocument();
   });
 
@@ -133,7 +133,7 @@ describe("GlobalSearch", () => {
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "deadbeef" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "deadbeef" } });
     expect(screen.getByText("DeadBeef")).toBeInTheDocument();
   });
 
@@ -143,7 +143,7 @@ describe("GlobalSearch", () => {
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "zzz" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "zzz" } });
     expect(screen.queryByText("Pixel Punks")).toBeNull();
   });
 
@@ -153,7 +153,7 @@ describe("GlobalSearch", () => {
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "p" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "p" } });
     // Dropdown opens but no results section since length < 2
     expect(screen.queryByText("Pixel Punks")).toBeNull();
   });
@@ -162,7 +162,7 @@ describe("GlobalSearch", () => {
 
   it("pressing Escape clears the query", () => {
     render(<GlobalSearch />);
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("combobox");
     fireEvent.change(input, { target: { value: "pixel" } });
     fireEvent.keyDown(input, { key: "Escape" });
     expect(input).toHaveValue("");
@@ -170,7 +170,7 @@ describe("GlobalSearch", () => {
 
   it("pressing Enter navigates to explore with the query", () => {
     render(<GlobalSearch />);
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("combobox");
     fireEvent.change(input, { target: { value: "pixel" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(mockPush).toHaveBeenCalledWith("/explore?q=pixel");
@@ -178,7 +178,7 @@ describe("GlobalSearch", () => {
 
   it("pressing Enter on an empty query does not navigate", () => {
     render(<GlobalSearch />);
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("combobox");
     fireEvent.keyDown(input, { key: "Enter" });
     expect(mockPush).not.toHaveBeenCalled();
   });
@@ -191,7 +191,7 @@ describe("GlobalSearch", () => {
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "pixel" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "pixel" } });
     await waitFor(() =>
       expect(screen.getByText(/see all results in explore/i)).toBeInTheDocument(),
     );

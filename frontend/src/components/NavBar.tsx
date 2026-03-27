@@ -384,12 +384,14 @@ export function Navbar() {
           ) : (
             <div className="flex items-center gap-1 text-on-surface-variant">
               <button
+                aria-label="Activity notifications"
                 className="p-2 text-on-surface-variant/30 cursor-not-allowed"
                 disabled
               >
                 <Bell className="w-5 h-5" />
               </button>
               <button
+                aria-label="Wallet"
                 className="p-2 text-on-surface-variant/30 cursor-not-allowed"
                 disabled
               >

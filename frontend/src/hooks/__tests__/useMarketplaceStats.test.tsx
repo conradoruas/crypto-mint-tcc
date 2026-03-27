@@ -3,16 +3,24 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { useMarketplaceStats } from "../useMarketplaceStats";
 import { GET_MARKETPLACE_STATS } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
-import type { MockedResponse } from "@apollo/client/testing";
+import { MockLink } from "@apollo/client/testing";
+
+type MockedResponse = MockLink.MockedResponse;
 
 const makeWrapper = (mocks: MockedResponse[]) => makeApolloWrapper(mocks);
+
+const makeStatsMock = (): MockedResponse => ({
+  request: { query: GET_MARKETPLACE_STATS },
+  result: { data: { marketplaceStats: null } },
+});
 
 describe("useMarketplaceStats", () => {
   it("is loading before the query resolves", () => {
     const { result } = renderHook(() => useMarketplaceStats(), {
-      wrapper: makeWrapper([]),
+      wrapper: makeWrapper([makeStatsMock()]),
     });
 
+    // Checked synchronously — mock exists but hasn't resolved yet
     expect(result.current.isLoading).toBe(true);
   });
 

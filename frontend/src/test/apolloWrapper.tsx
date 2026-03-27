@@ -2,7 +2,8 @@ import React from "react";
 import { ApolloClient, InMemoryCache } from "@apollo/client";
 import { ApolloProvider } from "@apollo/client/react";
 import { MockLink } from "@apollo/client/testing";
-import type { MockedResponse } from "@apollo/client/testing";
+
+type MockedResponse = MockLink.MockedResponse;
 
 /**
  * Returns a React wrapper component that provides an Apollo client backed by
@@ -10,12 +11,16 @@ import type { MockedResponse } from "@apollo/client/testing";
  */
 export function makeApolloWrapper(mocks: MockedResponse[]) {
   return function ApolloWrapper({ children }: { children: React.ReactNode }) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const link = new MockLink(mocks, true as any);
+    const link = new MockLink(mocks, {
+      showWarnings: true,
+    });
     const client = new ApolloClient({
       link,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      cache: new InMemoryCache({ addTypename: false } as any),
+      cache: new InMemoryCache(),
+      defaultOptions: {
+        watchQuery: { fetchPolicy: "no-cache" },
+        query: { fetchPolicy: "no-cache" },
+      },
     });
     return <ApolloProvider client={client}>{children}</ApolloProvider>;
   };

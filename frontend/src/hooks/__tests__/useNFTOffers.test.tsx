@@ -3,7 +3,9 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { useNFTOffers } from "../useMarketplace";
 import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
-import type { MockedResponse } from "@apollo/client/testing";
+import { MockLink } from "@apollo/client/testing";
+
+type MockedResponse = MockLink.MockedResponse;
 
 const CONTRACT = "0xcontract";
 const TOKEN_ID = "1";
@@ -31,9 +33,10 @@ afterEach(() => {
 describe("useNFTOffers", () => {
   it("is loading before the query resolves", () => {
     const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID), {
-      wrapper: makeWrapper([]),
+      wrapper: makeWrapper([{ request: mockRequest, result: { data: { offers: [] } } }]),
     });
 
+    // Checked synchronously — mock exists but hasn't resolved yet
     expect(result.current.isLoading).toBe(true);
   });
 

@@ -5,10 +5,13 @@ import {
   useCollectionNFTs,
   useCreatorCollections,
   useProfileNFTs,
+  CollectionInfo,
 } from "../useCollections";
 import { GET_COLLECTIONS } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
-import type { MockedResponse } from "@apollo/client/testing";
+import { MockLink } from "@apollo/client/testing";
+
+type MockedResponse = MockLink.MockedResponse;
 
 // wagmi hooks are called unconditionally inside useCollections even when
 // SUBGRAPH_ENABLED is true (useReadContract with enabled:false) and inside
@@ -28,7 +31,6 @@ vi.mock("wagmi", () => ({
     isLoading: false,
     isSuccess: false,
   }),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useConnection: vi.fn().mockReturnValue({ address: undefined } as any),
 }));
 
@@ -39,23 +41,34 @@ const makeWrapper = (mocks: MockedResponse[]) => makeApolloWrapper(mocks);
 // ─── shared fixtures ─────────────────────────────────────────────────────────
 
 const COLLECTION_1 = {
-  contractAddress: "0xcollection1",
-  creator: "0xcreator",
+  __typename: "Collection",
+  id: "some-id",
+  contractAddress: "0xcollection1" as `0x${string}`,
+  creator: "0xcreator" as `0x${string}`,
   name: "Test Collection",
   symbol: "TC",
   description: "A test collection",
   image: "https://example.com/img.png",
-  maxSupply: "100",
-  mintPrice: "10000000000000000",
-  createdAt: "1700000000",
-  totalSupply: "5",
+  maxSupply: BigInt(100),
+  mintPrice: BigInt("10000000000000000"),
+  totalSupply: BigInt(5),
+  createdAt: BigInt("1700000000"),
+  collectionId: "some-id",
 };
 
 const makeCollectionsMock = (
-  collections: object[] = [COLLECTION_1],
+  collections: CollectionInfo[] = [COLLECTION_1], // Alterado de object[] para any[] para facilitar a tipagem
 ): MockedResponse => ({
   request: { query: GET_COLLECTIONS },
-  result: { data: { collections } },
+  result: {
+    data: {
+      // Garantimos que cada coleção injetada tenha o __typename
+      collections: collections.map((c) => ({
+        ...c,
+        __typename: "Collection",
+      })),
+    },
+  },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,9 +78,10 @@ const makeCollectionsMock = (
 describe("useCollections", () => {
   it("is loading before the query resolves", () => {
     const { result } = renderHook(() => useCollections(), {
-      wrapper: makeWrapper([]),
+      wrapper: makeWrapper([makeCollectionsMock()]),
     });
 
+    // Checked synchronously — mock exists but hasn't resolved yet
     expect(result.current.isLoading).toBe(true);
   });
 
@@ -105,10 +119,15 @@ describe("useCollections", () => {
 
   it("defaults missing optional string fields to empty string and bigint fields to 0n", async () => {
     const minimal = {
-      contractAddress: "0xminimal",
-      creator: "0xcreator",
+      contractAddress: "0xminimal" as `0x${string}`,
+      creator: "0xcreator" as `0x${string}`,
       name: "Minimal",
       symbol: "MIN",
+      description: "",
+      image: "",
+      maxSupply: BigInt(0),
+      mintPrice: BigInt(0),
+      createdAt: BigInt(0),
     };
 
     const { result } = renderHook(() => useCollections(), {
@@ -139,7 +158,7 @@ describe("useCollections", () => {
   it("returns multiple collections preserving order", async () => {
     const col2 = {
       ...COLLECTION_1,
-      contractAddress: "0xcollection2",
+      contractAddress: "0xcollection2" as `0x${string}`,
       name: "Second Collection",
     };
 
@@ -176,7 +195,7 @@ describe("useCollectionNFTs", () => {
   });
 
   it("maps Alchemy NFT response to CollectionNFTItem list", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
         nfts: [
@@ -203,7 +222,7 @@ describe("useCollectionNFTs", () => {
   });
 
   it("falls back to 'NFT #<id>' when NFT has no name", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
         nfts: [{ tokenId: "42", image: { cachedUrl: "https://img.png" } }],
@@ -218,10 +237,12 @@ describe("useCollectionNFTs", () => {
   });
 
   it("uses originalUrl when cachedUrl is absent", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
-        nfts: [{ tokenId: "1", image: { originalUrl: "https://original.png" } }],
+        nfts: [
+          { tokenId: "1", image: { originalUrl: "https://original.png" } },
+        ],
       }),
     } as Response);
 
@@ -253,7 +274,7 @@ describe("useCollectionNFTs", () => {
   });
 
   it("sets totalSupply to the count of returned NFTs", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
         nfts: [
@@ -272,7 +293,7 @@ describe("useCollectionNFTs", () => {
   });
 
   it("returns empty nfts array when response has no nfts", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({ nfts: [] }),
     } as Response);
@@ -292,18 +313,20 @@ describe("useCollectionNFTs", () => {
 
 describe("useCreatorCollections", () => {
   afterEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(useConnection).mockReturnValue({ address: undefined } as any);
+    vi.mocked(useConnection).mockReturnValue({
+      address: undefined,
+    } as ReturnType<typeof useConnection>);
   });
 
   it("returns only collections matching the connected address", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(useConnection).mockReturnValue({ address: "0xcreator" as `0x${string}` } as any);
+    vi.mocked(useConnection).mockReturnValue({
+      address: "0xcreator" as `0x${string}`,
+    } as ReturnType<typeof useConnection>);
 
     const foreign = {
       ...COLLECTION_1,
-      contractAddress: "0xforeign",
-      creator: "0xother",
+      contractAddress: "0xforeign" as `0x${string}`,
+      creator: "0xother" as `0x${string}`,
     };
     const mocks = [makeCollectionsMock([COLLECTION_1, foreign])];
 
@@ -318,8 +341,9 @@ describe("useCreatorCollections", () => {
   });
 
   it("returns empty when no wallet is connected", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(useConnection).mockReturnValue({ address: undefined } as any);
+    vi.mocked(useConnection).mockReturnValue({
+      address: undefined,
+    } as ReturnType<typeof useConnection>);
 
     const { result } = renderHook(() => useCreatorCollections(), {
       wrapper: makeWrapper([makeCollectionsMock()]),
@@ -332,8 +356,10 @@ describe("useCreatorCollections", () => {
 
   it("is case-insensitive when comparing creator address", async () => {
     // COLLECTION_1.creator is "0xcreator"; connected address has uppercase letters
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(useConnection).mockReturnValue({ address: "0xCREATOR" as `0x${string}` } as any);
+
+    vi.mocked(useConnection).mockReturnValue({
+      address: "0xCREATOR" as `0x${string}`,
+    } as ReturnType<typeof useConnection>);
 
     const { result } = renderHook(() => useCreatorCollections(), {
       wrapper: makeWrapper([makeCollectionsMock()]),
@@ -345,12 +371,13 @@ describe("useCreatorCollections", () => {
   });
 
   it("returns all collections that match the creator", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(useConnection).mockReturnValue({ address: "0xcreator" as `0x${string}` } as any);
+    vi.mocked(useConnection).mockReturnValue({
+      address: "0xcreator" as `0x${string}`,
+    } as ReturnType<typeof useConnection>);
 
     const col2 = {
       ...COLLECTION_1,
-      contractAddress: "0xcollection2",
+      contractAddress: "0xcollection2" as `0x${string}`,
       name: "Second",
     };
     const mocks = [makeCollectionsMock([COLLECTION_1, col2])];
@@ -389,7 +416,7 @@ describe("useProfileNFTs", () => {
   });
 
   it("returns NFTs for owner filtered by collectionAddress", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
         ownedNfts: [
@@ -420,7 +447,7 @@ describe("useProfileNFTs", () => {
   });
 
   it("falls back to 'NFT #<id>' when name is missing", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
         ownedNfts: [
@@ -444,7 +471,7 @@ describe("useProfileNFTs", () => {
   });
 
   it("returns empty nfts when ownedNfts is empty", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({ ownedNfts: [] }),
     } as Response);
@@ -460,7 +487,7 @@ describe("useProfileNFTs", () => {
   });
 
   it("includes nftContract from contract.address field", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
         ownedNfts: [
