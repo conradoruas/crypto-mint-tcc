@@ -18,6 +18,7 @@ import type { CollectionInfo } from "@/types/collection";
 import type { CollectionNFTItem, CreatedNFTItem } from "@/types/nft";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { useStableArray } from "./useStableArray";
+import { ensureAddress, parseAddress } from "@/lib/schemas";
 
 export type { CollectionInfo, CollectionNFTItem, CreatedNFTItem };
 
@@ -27,8 +28,9 @@ export type { CollectionInfo, CollectionNFTItem, CreatedNFTItem };
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
-const FACTORY_ADDRESS = process.env
-  .NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS as `0x${string}`;
+const FACTORY_ADDRESS = ensureAddress(
+  process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS,
+);
 
 const publicClient = createPublicClient({
   chain: sepolia,
@@ -193,18 +195,23 @@ export function useCollections() {
 
   const collections = useMemo(() => {
     if (SUBGRAPH_ENABLED) {
-      return (gqlData?.collections ?? []).map((c) => ({
-        contractAddress: c.contractAddress as `0x${string}`,
-        creator: c.creator as `0x${string}`,
-        name: c.name,
-        symbol: c.symbol,
-        description: c.description ?? "",
-        image: c.image ?? "",
-        maxSupply: BigInt(c.maxSupply ?? 0),
-        mintPrice: BigInt(c.mintPrice ?? 0),
-        createdAt: BigInt(c.createdAt ?? 0),
-        totalSupply: BigInt(c.totalSupply ?? 0),
-      }));
+      return (gqlData?.collections ?? []).flatMap((c) => {
+        const contractAddress = parseAddress(c.contractAddress);
+        const creator = parseAddress(c.creator);
+        if (!contractAddress || !creator) return [];
+        return [{
+          contractAddress,
+          creator,
+          name: c.name,
+          symbol: c.symbol,
+          description: c.description ?? "",
+          image: c.image ?? "",
+          maxSupply: BigInt(c.maxSupply ?? 0),
+          mintPrice: BigInt(c.mintPrice ?? 0),
+          createdAt: BigInt(c.createdAt ?? 0),
+          totalSupply: BigInt(c.totalSupply ?? 0),
+        }];
+      });
     }
     return rpcCollections;
   }, [gqlData?.collections, rpcCollections]);
@@ -470,7 +477,7 @@ export function useCollectionNFTs(collectionAddress: string | undefined) {
 
 export function useCollectionDetails(collectionAddress: string | undefined) {
   const enabled = !!collectionAddress;
-  const addr = collectionAddress as `0x${string}`;
+  const addr = ensureAddress(collectionAddress);
 
   const base = {
     address: addr,
@@ -517,6 +524,6 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
     mintPriceEth: mintPrice ? formatEther(mintPrice as bigint) : null,
     maxSupply: maxSupply as bigint | undefined,
     totalSupply: totalSupply as bigint | undefined,
-    owner: owner as `0x${string}` | undefined,
+    owner: ensureAddress(owner),
   };
 }

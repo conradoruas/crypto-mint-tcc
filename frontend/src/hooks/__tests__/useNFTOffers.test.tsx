@@ -4,10 +4,18 @@ import { useNFTOffers } from "../useMarketplace";
 import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
 import { MockLink } from "@apollo/client/testing";
+import { ensureAddress } from "@/lib/schemas";
 
 type MockedResponse = MockLink.MockedResponse;
 
-const CONTRACT = "0xcontract";
+const CONTRACT = ensureAddress("0x1000000000000000000000000000000000000001");
+const ADDR_BUYER_1 = ensureAddress(
+  "0x1000000000000000000000000000000000000001",
+);
+const ADDR_BUYER_2 = ensureAddress(
+  "0x1000000000000000000000000000000000000002",
+);
+
 const TOKEN_ID = "1";
 const NOW = 1_700_000_000; // fixed unix timestamp
 
@@ -33,7 +41,9 @@ afterEach(() => {
 describe("useNFTOffers", () => {
   it("is loading before the query resolves", () => {
     const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID), {
-      wrapper: makeWrapper([{ request: mockRequest, result: { data: { offers: [] } } }]),
+      wrapper: makeWrapper([
+        { request: mockRequest, result: { data: { offers: [] } } },
+      ]),
     });
 
     // Checked synchronously — mock exists but hasn't resolved yet
@@ -49,14 +59,14 @@ describe("useNFTOffers", () => {
             offers: [
               {
                 id: "1",
-                buyer: "0xvalid",
+                buyer: ADDR_BUYER_1,
                 amount: "100000000000000000",
                 expiresAt: String(NOW + 3600), // 1 h from now — valid
                 active: true,
               },
               {
                 id: "2",
-                buyer: "0xexpired",
+                buyer: ADDR_BUYER_2,
                 amount: "200000000000000000",
                 expiresAt: String(NOW - 1), // 1 s ago — expired
                 active: true,
@@ -74,7 +84,7 @@ describe("useNFTOffers", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.offers).toHaveLength(1);
-    expect(result.current.offers[0].buyerAddress).toBe("0xvalid");
+    expect(result.current.offers[0].buyerAddress).toBe(ADDR_BUYER_1);
   });
 
   it("filters out inactive offers", async () => {
@@ -86,7 +96,7 @@ describe("useNFTOffers", () => {
             offers: [
               {
                 id: "1",
-                buyer: "0xbuyer",
+                buyer: ADDR_BUYER_1,
                 amount: "100000000000000000",
                 expiresAt: String(NOW + 3600),
                 active: false, // inactive
@@ -117,14 +127,14 @@ describe("useNFTOffers", () => {
             offers: [
               {
                 id: "2",
-                buyer: "0xwhale",
+                buyer: ADDR_BUYER_1,
                 amount: "500000000000000000", // 0.5 ETH — highest
                 expiresAt: String(NOW + 7200),
                 active: true,
               },
               {
                 id: "1",
-                buyer: "0xother",
+                buyer: ADDR_BUYER_2,
                 amount: "100000000000000000", // 0.1 ETH
                 expiresAt: String(NOW + 3600),
                 active: true,
@@ -154,7 +164,7 @@ describe("useNFTOffers", () => {
             offers: [
               {
                 id: "1",
-                buyer: "0xbuyer",
+                buyer: ADDR_BUYER_1,
                 amount: "100000000000000000",
                 expiresAt: String(NOW - 60), // expired 1 min ago
                 active: true,

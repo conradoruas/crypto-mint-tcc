@@ -10,6 +10,7 @@ import {
 import { GET_COLLECTIONS } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
 import { MockLink } from "@apollo/client/testing";
+import { getAddress } from "viem";
 
 type MockedResponse = MockLink.MockedResponse;
 
@@ -39,16 +40,38 @@ vi.mock("wagmi", () => ({
 }));
 
 import { useConnection } from "wagmi";
+import { ensureAddress } from "@/lib/schemas";
 
 const makeWrapper = (mocks: MockedResponse[]) => makeApolloWrapper(mocks);
+
+// ─── valid test addresses (must be 42-char hex to pass isAddress()) ───────────
+
+const ADDR_COL1 = ensureAddress("0x1000000000000000000000000000000000000001");
+const ADDR_COL2 = ensureAddress("0x1000000000000000000000000000000000000002");
+const ADDR_CREATOR = ensureAddress(
+  "0xabcd000000000000000000000000000000000001",
+);
+// getAddress computes the proper EIP-55 checksum — same address, uppercase variant for case-insensitivity test
+const ADDR_CREATOR_UPPER = getAddress(ADDR_CREATOR);
+const ADDR_FOREIGN = ensureAddress(
+  "0x3000000000000000000000000000000000000001",
+);
+const ADDR_OTHER = ensureAddress("0x4000000000000000000000000000000000000001");
+const ADDR_MINIMAL = ensureAddress(
+  "0x5000000000000000000000000000000000000001",
+);
+const ADDR_OWNER = ensureAddress("0x6000000000000000000000000000000000000001");
+const ADDR_CONTRACT = ensureAddress(
+  "0x7000000000000000000000000000000000000001",
+);
 
 // ─── shared fixtures ─────────────────────────────────────────────────────────
 
 const COLLECTION_1 = {
   __typename: "Collection",
   id: "some-id",
-  contractAddress: "0xcollection1" as `0x${string}`,
-  creator: "0xcreator" as `0x${string}`,
+  contractAddress: ADDR_COL1,
+  creator: ADDR_CREATOR,
   name: "Test Collection",
   symbol: "TC",
   description: "A test collection",
@@ -98,8 +121,8 @@ describe("useCollections", () => {
 
     expect(result.current.collections).toHaveLength(1);
     const c = result.current.collections[0];
-    expect(c.contractAddress).toBe("0xcollection1");
-    expect(c.creator).toBe("0xcreator");
+    expect(c.contractAddress).toBe(ADDR_COL1);
+    expect(c.creator).toBe(ADDR_CREATOR);
     expect(c.name).toBe("Test Collection");
     expect(c.symbol).toBe("TC");
     expect(c.description).toBe("A test collection");
@@ -123,8 +146,8 @@ describe("useCollections", () => {
 
   it("defaults missing optional string fields to empty string and bigint fields to 0n", async () => {
     const minimal = {
-      contractAddress: "0xminimal" as `0x${string}`,
-      creator: "0xcreator" as `0x${string}`,
+      contractAddress: ADDR_MINIMAL,
+      creator: ADDR_CREATOR,
       name: "Minimal",
       symbol: "MIN",
       description: "",
@@ -162,7 +185,7 @@ describe("useCollections", () => {
   it("returns multiple collections preserving order", async () => {
     const col2 = {
       ...COLLECTION_1,
-      contractAddress: "0xcollection2" as `0x${string}`,
+      contractAddress: ADDR_COL2,
       name: "Second Collection",
     };
 
@@ -213,7 +236,7 @@ describe("useCollectionNFTs", () => {
       }),
     } as Response);
 
-    const { result } = renderHook(() => useCollectionNFTs("0xcollection1"));
+    const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -222,7 +245,7 @@ describe("useCollectionNFTs", () => {
     expect(result.current.nfts[0].name).toBe("NFT One");
     expect(result.current.nfts[0].description).toBe("First NFT");
     expect(result.current.nfts[0].image).toBe("https://example.com/nft1.png");
-    expect(result.current.nfts[0].nftContract).toBe("0xcollection1");
+    expect(result.current.nfts[0].nftContract).toBe(ADDR_COL1);
   });
 
   it("falls back to 'NFT #<id>' when NFT has no name", async () => {
@@ -233,7 +256,7 @@ describe("useCollectionNFTs", () => {
       }),
     } as Response);
 
-    const { result } = renderHook(() => useCollectionNFTs("0xcollection1"));
+    const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -250,7 +273,7 @@ describe("useCollectionNFTs", () => {
       }),
     } as Response);
 
-    const { result } = renderHook(() => useCollectionNFTs("0xcollection1"));
+    const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -270,7 +293,7 @@ describe("useCollectionNFTs", () => {
         json: async () => ({ image: "ipfs://QmImg" }),
       } as Response);
 
-    const { result } = renderHook(() => useCollectionNFTs("0xcollection1"));
+    const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -289,7 +312,7 @@ describe("useCollectionNFTs", () => {
       }),
     } as Response);
 
-    const { result } = renderHook(() => useCollectionNFTs("0xcollection1"));
+    const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -302,7 +325,7 @@ describe("useCollectionNFTs", () => {
       json: async () => ({ nfts: [] }),
     } as Response);
 
-    const { result } = renderHook(() => useCollectionNFTs("0xcollection1"));
+    const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -324,13 +347,13 @@ describe("useCreatorCollections", () => {
 
   it("returns only collections matching the connected address", async () => {
     vi.mocked(useConnection).mockReturnValue({
-      address: "0xcreator" as `0x${string}`,
+      address: ADDR_CREATOR,
     } as ReturnType<typeof useConnection>);
 
     const foreign = {
       ...COLLECTION_1,
-      contractAddress: "0xforeign" as `0x${string}`,
-      creator: "0xother" as `0x${string}`,
+      contractAddress: ADDR_FOREIGN,
+      creator: ADDR_OTHER,
     };
     const mocks = [makeCollectionsMock([COLLECTION_1, foreign])];
 
@@ -341,7 +364,7 @@ describe("useCreatorCollections", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.collections).toHaveLength(1);
-    expect(result.current.collections[0].contractAddress).toBe("0xcollection1");
+    expect(result.current.collections[0].contractAddress).toBe(ADDR_COL1);
   });
 
   it("returns empty when no wallet is connected", async () => {
@@ -359,10 +382,9 @@ describe("useCreatorCollections", () => {
   });
 
   it("is case-insensitive when comparing creator address", async () => {
-    // COLLECTION_1.creator is "0xcreator"; connected address has uppercase letters
-
+    // COLLECTION_1.creator is ADDR_CREATOR (lowercase); connected address is EIP-55 checksummed (has uppercase letters)
     vi.mocked(useConnection).mockReturnValue({
-      address: "0xCREATOR" as `0x${string}`,
+      address: ADDR_CREATOR_UPPER,
     } as ReturnType<typeof useConnection>);
 
     const { result } = renderHook(() => useCreatorCollections(), {
@@ -376,12 +398,12 @@ describe("useCreatorCollections", () => {
 
   it("returns all collections that match the creator", async () => {
     vi.mocked(useConnection).mockReturnValue({
-      address: "0xcreator" as `0x${string}`,
+      address: ADDR_CREATOR,
     } as ReturnType<typeof useConnection>);
 
     const col2 = {
       ...COLLECTION_1,
-      contractAddress: "0xcollection2" as `0x${string}`,
+      contractAddress: ADDR_COL2,
       name: "Second",
     };
     const mocks = [makeCollectionsMock([COLLECTION_1, col2])];
@@ -429,24 +451,23 @@ describe("useProfileNFTs", () => {
             name: "Profile NFT",
             description: "Owned NFT",
             image: { cachedUrl: "https://example.com/nft7.png" },
-            contract: { address: "0xcollection1" },
+            contract: { address: ADDR_COL1 },
             collection: { name: "Test Collection" },
           },
         ],
       }),
     } as Response);
 
-    const { result } = renderHook(
-      () => useProfileNFTs("0xowner", "0xcollection1"),
-      { wrapper: makeWrapper([makeCollectionsMock()]) },
-    );
+    const { result } = renderHook(() => useProfileNFTs(ADDR_OWNER, ADDR_COL1), {
+      wrapper: makeWrapper([makeCollectionsMock()]),
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.nfts).toHaveLength(1);
     expect(result.current.nfts[0].tokenId).toBe("7");
     expect(result.current.nfts[0].name).toBe("Profile NFT");
-    expect(result.current.nfts[0].nftContract).toBe("0xcollection1");
+    expect(result.current.nfts[0].nftContract).toBe(ADDR_COL1);
     expect(result.current.nfts[0].collectionName).toBe("Test Collection");
   });
 
@@ -458,16 +479,15 @@ describe("useProfileNFTs", () => {
           {
             tokenId: "3",
             image: { cachedUrl: "https://img.png" },
-            contract: { address: "0xcollection1" },
+            contract: { address: ADDR_COL1 },
           },
         ],
       }),
     } as Response);
 
-    const { result } = renderHook(
-      () => useProfileNFTs("0xowner", "0xcollection1"),
-      { wrapper: makeWrapper([makeCollectionsMock()]) },
-    );
+    const { result } = renderHook(() => useProfileNFTs(ADDR_OWNER, ADDR_COL1), {
+      wrapper: makeWrapper([makeCollectionsMock()]),
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -480,10 +500,9 @@ describe("useProfileNFTs", () => {
       json: async () => ({ ownedNfts: [] }),
     } as Response);
 
-    const { result } = renderHook(
-      () => useProfileNFTs("0xowner", "0xcollection1"),
-      { wrapper: makeWrapper([makeCollectionsMock()]) },
-    );
+    const { result } = renderHook(() => useProfileNFTs(ADDR_OWNER, ADDR_COL1), {
+      wrapper: makeWrapper([makeCollectionsMock()]),
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -498,19 +517,19 @@ describe("useProfileNFTs", () => {
           {
             tokenId: "1",
             image: { cachedUrl: "https://img.png" },
-            contract: { address: "0xcontractaddr" },
+            contract: { address: ADDR_CONTRACT },
           },
         ],
       }),
     } as Response);
 
     const { result } = renderHook(
-      () => useProfileNFTs("0xowner", "0xcontractaddr"),
+      () => useProfileNFTs(ADDR_OWNER, ADDR_CONTRACT),
       { wrapper: makeWrapper([makeCollectionsMock()]) },
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.nfts[0].nftContract).toBe("0xcontractaddr");
+    expect(result.current.nfts[0].nftContract).toBe(ADDR_CONTRACT);
   });
 });

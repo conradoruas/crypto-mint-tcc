@@ -13,11 +13,10 @@ import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
 import type { ListingData, OfferData, OfferWithBuyer } from "@/types/marketplace";
+import { ensureAddress, parseAddress } from "@/lib/schemas";
+import { MARKETPLACE_ADDRESS } from "@/lib/env";
 
 export type { ListingData, OfferData, OfferWithBuyer };
-
-const MARKETPLACE_ADDRESS = process.env
-  .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
 
 // ─────────────────────────────────────────────
 // Hook: busca listagem e dono de um NFT
@@ -25,18 +24,19 @@ const MARKETPLACE_ADDRESS = process.env
 
 export function useNFTListing(nftContract: string, tokenId: string) {
   const enabled = !!nftContract && !!tokenId;
+  const nftAddr = ensureAddress(nftContract);
 
   const { data: listing, refetch: refetchListing } = useReadContract({
     address: MARKETPLACE_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getListing",
-    args: [nftContract as `0x${string}`, BigInt(tokenId || "0")],
+    args: [nftAddr, BigInt(tokenId || "0")],
     query: { enabled },
   });
 
   // ownerOf vem do contrato da COLEÇÃO, não do marketplace
   const { data: owner, refetch: refetchOwner } = useReadContract({
-    address: nftContract as `0x${string}`,
+    address: nftAddr,
     abi: NFT_COLLECTION_ABI,
     functionName: "ownerOf",
     args: [BigInt(tokenId || "0")],
@@ -52,7 +52,7 @@ export function useNFTListing(nftContract: string, tokenId: string) {
 
   return {
     listing: listingData,
-    owner: owner as `0x${string}` | undefined,
+    owner,
     isListed: listingData?.active ?? false,
     price: listingData?.active ? formatEther(listingData.price) : null,
     seller: listingData?.seller,
@@ -72,7 +72,7 @@ export function useMyOffer(nftContract: string, tokenId: string) {
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOffer",
     args: [
-      nftContract as `0x${string}`,
+      ensureAddress(nftContract),
       BigInt(tokenId || "0"),
       address ?? "0x0000000000000000000000000000000000000000",
     ],
@@ -122,15 +122,13 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   const refetch = useCallback(() => { gqlRefetch(); }, [gqlRefetch]);
 
   const now = BigInt(Math.floor(Date.now() / 1000));
-  const offers = (gqlData?.offers ?? [])
+  const offers: OfferWithBuyer[] = (gqlData?.offers ?? [])
     .filter((o) => o.active && BigInt(o.expiresAt) > now)
-    .map((o) => ({
-      buyer: o.buyer as `0x${string}`,
-      buyerAddress: o.buyer as `0x${string}`,
-      amount: BigInt(o.amount),
-      expiresAt: BigInt(o.expiresAt),
-      active: true,
-    })) as OfferWithBuyer[];
+    .flatMap((o) => {
+      const buyer = parseAddress(o.buyer);
+      if (!buyer) return [];
+      return [{ buyer, buyerAddress: buyer, amount: BigInt(o.amount), expiresAt: BigInt(o.expiresAt), active: true as const }];
+    });
 
   return {
     offers,

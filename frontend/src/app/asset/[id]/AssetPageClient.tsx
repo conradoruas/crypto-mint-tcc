@@ -38,6 +38,8 @@ import {
   listPriceSchema,
   offerAmountSchema,
   getZodErrors,
+  ensureAddress,
+  addressSchema,
 } from "@/lib/schemas";
 import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
 import { resolveIpfsUrl } from "@/lib/ipfs";
@@ -331,7 +333,7 @@ export default function AssetPageClient() {
   const { id } = useParams();
   const searchParams = useSearchParams();
   const tokenId = (Array.isArray(id) ? id[0] : id) ?? "";
-  const nftContract = searchParams.get("contract") as `0x${string}`;
+  const nftContract = ensureAddress(searchParams.get("contract"));
 
   const { address } = useConnection();
   const [nft, setNft] = useState<NFTItem | null>(null);
@@ -544,12 +546,30 @@ export default function AssetPageClient() {
     }
   };
 
-  const handleAcceptOffer = async (buyerAddress: `0x${string}`) => {
+  const handleAcceptOffer = async (buyerAddress: string) => {
+    // 1. VALIDAÇÃO ESTRITA: Se falhar, paramos tudo aqui.
+    const result = addressSchema.safeParse(buyerAddress);
+
+    if (!result.success) {
+      // Aqui você avisa o usuário. Isso evita o erro crítico.
+      setTxMsg({
+        type: "error",
+        text: "Endereço do comprador é inválido. Ação cancelada por segurança.",
+      });
+      return; // Interrompe a execução antes de chamar o contrato
+    }
+
+    // 2. SUCESSO: Agora temos um endereço validado e tipado como Address (0x...)
+    const safeBuyer = result.data;
+
     try {
       setTxMsg(null);
-      await acceptOffer(nftContract, tokenId, buyerAddress);
-    } catch {
-      setTxMsg({ type: "error", text: "Error accepting offer." });
+      await acceptOffer(nftContract, tokenId, safeBuyer);
+    } catch (error) {
+      setTxMsg({
+        type: "error",
+        text: "Erro ao aceitar oferta no Smart Contract.",
+      });
     }
   };
 
