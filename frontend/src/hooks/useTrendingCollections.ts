@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { useCollections } from "@/hooks/useCollections";
@@ -26,10 +26,10 @@ export function useTrendingCollections(limit = 10) {
   const [trending, setTrending] = useState<TrendingCollection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const makeQueryVars = useCallback(() => {
+  const makeQueryVars = () => {
     const now = Math.floor(Date.now() / 1000);
     return { sevenDaysAgo: (now - 7 * 86400).toString(), now: now.toString() };
-  }, []);
+  };
 
   const {
     data: statsData,
@@ -45,7 +45,7 @@ export function useTrendingCollections(limit = 10) {
   useEffect(() => {
     const id = setInterval(() => refetch(makeQueryVars()), 5 * 60 * 1000);
     return () => clearInterval(id);
-  }, [refetch, makeQueryVars]);
+  }, [refetch]);
 
   const { collections } = useCollections();
 
@@ -112,10 +112,7 @@ export function useTrendingCollections(limit = 10) {
       }
     }
 
-    let cancelled = false;
-
     const fetchOwners = async () => {
-      setIsLoading(true);
       const cols = collectionsRef.current;
 
       // Build trending metrics for all collections (no network calls yet)
@@ -171,24 +168,18 @@ export function useTrendingCollections(limit = 10) {
         });
         const ownerCountMap: Record<string, number> = await res.json();
         for (const entry of top) {
-          entry.owners =
-            ownerCountMap[entry.contractAddress.toLowerCase()] ?? 0;
+          entry.owners = ownerCountMap[entry.contractAddress.toLowerCase()] ?? 0;
         }
       } catch {
         // owner counts remain 0 — non-critical field
       }
 
-      if (!cancelled) {
-        setTrending(top);
-        setIsLoading(false);
-      }
+      setTrending(top);
+      setIsLoading(false);
     };
 
+    setIsLoading(true);
     fetchOwners();
-
-    return () => {
-      cancelled = true;
-    };
   }, [statsData, statsLoading, statsError, collectionKey, limit]);
 
   return { trending, isLoading: statsLoading || isLoading };

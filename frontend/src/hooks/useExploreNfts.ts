@@ -150,29 +150,23 @@ export function useExploreNFTs(
   );
 
   useEffect(() => {
-    if (!collectionAddress || gqlQueryLoading) return;
+    if (!collectionAddress) return;
+    if (gqlQueryLoading) return;
+    const raw = gqlData?.nfts ?? [];
+    if (raw.length === 0) {
+      setNfts([]);
+      setIsLoading(false);
+      setHasMore(false);
+      return;
+    }
     let cancelled = false;
-    const run = async () => {
-      const raw = gqlData?.nfts ?? [];
-      if (raw.length === 0) {
-        if (!cancelled) {
-          setNfts([]);
-          setIsLoading(false);
-          setHasMore(false);
-        }
-        return;
-      }
-      if (!cancelled) {
-        setIsLoading(true);
-        setHasMore(raw.length === pageSize);
-      }
-      const items = await mergeWithAlchemy(raw, collectionAddress);
-      if (!cancelled) {
-        setNfts(items);
-        setIsLoading(false);
-      }
-    };
-    run();
+    setIsLoading(true);
+    setHasMore(raw.length === pageSize);
+    mergeWithAlchemy(raw, collectionAddress).then((items) => {
+      if (cancelled) return;
+      setNfts(items);
+      setIsLoading(false);
+    });
     return () => {
       cancelled = true;
     };
@@ -212,38 +206,38 @@ export function useExploreAllNFTs(
     },
   );
 
+  // Mirror Apollo's loading state immediately so the page never shows stale data.
   useEffect(() => {
+    const loading = collectionAddress ? gqlColLoading : gqlAllLoading;
+    if (loading) setIsLoading(true);
+  }, [gqlAllLoading, gqlColLoading, collectionAddress]);
+
+  useEffect(() => {
+    const loading = collectionAddress ? gqlColLoading : gqlAllLoading;
+    if (loading) return;
+    const rawAll = collectionAddress
+      ? (gqlColData?.nfts ?? [])
+      : (gqlAllData?.nfts ?? []);
+
+    const hasNextPage = rawAll.length > pageSize;
+    const raw = hasNextPage ? rawAll.slice(0, pageSize) : rawAll;
+
+    if (raw.length === 0) {
+      setNfts([]);
+      setIsLoading(false);
+      setHasMore(false);
+      return;
+    }
     let cancelled = false;
-    const run = async () => {
-      const loading = collectionAddress ? gqlColLoading : gqlAllLoading;
-      if (loading) {
-        if (!cancelled) setIsLoading(true);
-        return;
-      }
-      const rawAll = collectionAddress
-        ? (gqlColData?.nfts ?? [])
-        : (gqlAllData?.nfts ?? []);
-      const hasNextPage = rawAll.length > pageSize;
-      const raw = hasNextPage ? rawAll.slice(0, pageSize) : rawAll;
-      if (raw.length === 0) {
-        if (!cancelled) {
-          setNfts([]);
-          setIsLoading(false);
-          setHasMore(false);
-        }
-        return;
-      }
-      if (!cancelled) {
-        setIsLoading(true);
-        setHasMore(hasNextPage);
-      }
-      const items = await mergeWithAlchemy(raw, collectionAddress);
-      if (!cancelled) {
+    setIsLoading(true);
+    setHasMore(hasNextPage);
+    mergeWithAlchemy(raw, collectionAddress).then(
+      (items: NFTItemWithMarket[]) => {
+        if (cancelled) return;
         setNfts(items);
         setIsLoading(false);
-      }
-    };
-    run();
+      },
+    );
     return () => {
       cancelled = true;
     };
