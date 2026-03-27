@@ -12,30 +12,12 @@ import { useQuery } from "@apollo/client/react";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
+import type { ListingData, OfferData, OfferWithBuyer } from "@/types/marketplace";
+
+export type { ListingData, OfferData, OfferWithBuyer };
 
 const MARKETPLACE_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
-
-// ─────────────────────────────────────────────
-// Tipos
-// ─────────────────────────────────────────────
-
-export interface ListingData {
-  seller: `0x${string}`;
-  price: bigint;
-  active: boolean;
-}
-
-export interface OfferData {
-  buyer: `0x${string}`;
-  amount: bigint;
-  expiresAt: bigint;
-  active: boolean;
-}
-
-export interface OfferWithBuyer extends OfferData {
-  buyerAddress: `0x${string}`;
-}
 
 // ─────────────────────────────────────────────
 // Hook: busca listagem e dono de um NFT

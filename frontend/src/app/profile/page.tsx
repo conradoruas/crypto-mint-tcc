@@ -28,7 +28,8 @@ import {
   Heart,
 } from "lucide-react";
 import { fetchProfile, UserProfile } from "@/services/profile";
-import { useActivityFeed, ActivityType } from "@/hooks/useActivityFeed";
+import { useActivityFeed } from "@/hooks/useActivityFeed";
+import type { ActivityType } from "@/types/marketplace";
 import Footer from "@/components/Footer";
 import { fetchAlchemyMetaForEvents, type MetaMap } from "@/lib/alchemyMeta";
 

@@ -5,25 +5,9 @@ import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { useCollections } from "@/hooks/useCollections";
 import { GET_TRENDING_DATA } from "@/lib/graphql/queries";
+import type { TrendingCollection } from "@/types/collection";
 
-// ─────────────────────────────────────────────
-// Tipos
-// ─────────────────────────────────────────────
-
-export interface TrendingCollection {
-  contractAddress: string;
-  name: string;
-  symbol: string;
-  image: string;
-  floorPrice: string | null;
-  floorChange24h: number | null;
-  topOffer: string | null;
-  sales24h: number;
-  owners: number;
-  listedPct: string | null;
-  volume24h: string;
-  floorHistory: number[];
-}
+export type { TrendingCollection };
 
 type GqlSaleEvent = { nftContract: string; price: string; timestamp: string };
 type GqlListing = { nftContract: string; price: string };

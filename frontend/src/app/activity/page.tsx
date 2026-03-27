@@ -1,11 +1,8 @@
 "use client";
 
 import { Navbar } from "@/components/NavBar";
-import {
-  useActivityFeed,
-  ActivityEvent,
-  ActivityType,
-} from "@/hooks/useActivityFeed";
+import { useActivityFeed } from "@/hooks/useActivityFeed";
+import type { ActivityEvent, ActivityType } from "@/types/marketplace";
 import { useCollections } from "@/hooks/useCollections";
 import Link from "next/link";
 import { useState, useEffect } from "react";

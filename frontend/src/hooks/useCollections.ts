@@ -14,6 +14,10 @@ import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
 import { GET_COLLECTIONS } from "@/lib/graphql/queries";
 import type { AlchemyNFT } from "@/types/alchemy";
+import type { CollectionInfo } from "@/types/collection";
+import type { CollectionNFTItem, CreatedNFTItem } from "@/types/nft";
+
+export type { CollectionInfo, CollectionNFTItem, CreatedNFTItem };
 
 // ─────────────────────────────────────────────
 // Endereços
@@ -28,33 +32,6 @@ const publicClient = createPublicClient({
   chain: sepolia,
   transport: http("/api/rpc"),
 });
-
-// ─────────────────────────────────────────────
-// Tipos
-// ─────────────────────────────────────────────
-
-export interface CollectionInfo {
-  contractAddress: `0x${string}`;
-  creator: `0x${string}`;
-  name: string;
-  symbol: string;
-  description: string;
-  image: string;
-  maxSupply: bigint;
-  mintPrice: bigint;
-  createdAt: bigint;
-  totalSupply?: bigint;
-}
-
-export interface CollectionNFTItem {
-  tokenId: string;
-  name: string;
-  description: string;
-  image: string;
-  nftContract: string;
-  collectionName?: string;
-}
-
 
 const resolveIpfsUrl = (url: string) => {
   if (!url) return "";
@@ -265,10 +242,6 @@ export function useCreatorCollections() {
 // useCreatedNFTs
 // Busca todos os NFTs das coleções criadas pelo usuário
 // ─────────────────────────────────────────────
-
-export interface CreatedNFTItem extends CollectionNFTItem {
-  collectionName: string;
-}
 
 export function useCreatedNFTs(ownerAddress: string | undefined) {
   const [nfts, setNfts] = useState<CreatedNFTItem[]>([]);

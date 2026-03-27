@@ -2,21 +2,9 @@ import { useEffect, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { GET_ALL_NFTS, GET_NFTS_FOR_CONTRACT } from "@/lib/graphql/queries";
+import type { NFTItem, NFTItemWithMarket } from "@/types/nft";
 
-export interface NFTItem {
-  tokenId: string;
-  name: string;
-  description: string;
-  image: string;
-  nftContract: string;
-  collectionName?: string;
-}
-
-export interface NFTItemWithMarket extends NFTItem {
-  listingPrice: string | null;
-  topOffer: string | null;
-  seller: string | null;
-}
+export type { NFTItem, NFTItemWithMarket };
 
 // ─── GraphQL types ───
 

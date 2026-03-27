@@ -2,7 +2,8 @@
 
 import { Navbar } from "@/components/NavBar";
 import { useCollections } from "@/hooks/useCollections";
-import { useExploreAllNFTs, NFTItemWithMarket } from "@/hooks/useExploreNfts";
+import { useExploreAllNFTs } from "@/hooks/useExploreNfts";
+import type { NFTItemWithMarket } from "@/types/nft";
 import Image from "next/image";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers, Heart, Tag } from "lucide-react";

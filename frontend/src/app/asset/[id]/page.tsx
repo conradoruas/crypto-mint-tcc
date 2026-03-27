@@ -22,7 +22,7 @@ import {
   Check,
 } from "lucide-react";
 import Image from "next/image";
-import { NFTItem } from "@/hooks/useExploreNfts";
+import type { NFTItem } from "@/types/nft";
 import {
   useNFTListing,
   useMyOffer,
@@ -33,8 +33,8 @@ import {
   useMakeOffer,
   useAcceptOffer,
   useCancelOffer,
-  OfferWithBuyer,
 } from "@/hooks/useMarketplace";
+import type { OfferWithBuyer } from "@/types/marketplace";
 import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
 import { listPriceSchema, offerAmountSchema, getZodErrors } from "@/lib/schemas";

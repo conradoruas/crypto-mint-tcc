@@ -3,14 +3,9 @@
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { GET_MARKETPLACE_STATS } from "@/lib/graphql/queries";
+import type { MarketplaceStats } from "@/types/marketplace";
 
-export interface MarketplaceStats {
-  totalCollections: number;
-  totalNFTs: number;
-  totalListed: number;
-  volumeETH: string;
-  isLoading: boolean;
-}
+export type { MarketplaceStats };
 
 type GqlStatsData = {
   marketplaceStats: {

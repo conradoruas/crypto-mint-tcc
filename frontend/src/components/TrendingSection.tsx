@@ -1,9 +1,7 @@
 "use client";
 
-import {
-  useTrendingCollections,
-  TrendingCollection,
-} from "@/hooks/useTrendingCollections";
+import { useTrendingCollections } from "@/hooks/useTrendingCollections";
+import type { TrendingCollection } from "@/types/collection";
 import Image from "next/image";
 import Link from "next/link";
 import { TrendingUp, TrendingDown } from "lucide-react";

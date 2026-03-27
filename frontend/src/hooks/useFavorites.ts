@@ -3,13 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useConnection } from "wagmi";
 import { fetchAlchemyMeta } from "@/lib/alchemyMeta";
-import type { CollectionNFTItem } from "@/hooks/useCollections";
-
-// ─────────────────────────────────────────────
-// Helpers localStorage
-// ─────────────────────────────────────────────
-
-type FavoriteRef = { nftContract: string; tokenId: string };
+import type { CollectionNFTItem, FavoriteRef } from "@/types/nft";
 
 function storageKey(address: string) {
   return `nft_favorites_${address.toLowerCase()}`;

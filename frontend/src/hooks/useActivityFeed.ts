@@ -6,32 +6,9 @@ import {
   GET_ACTIVITY_FEED,
   GET_ACTIVITY_FEED_ALL,
 } from "@/lib/graphql/queries";
+import type { ActivityType, ActivityEvent } from "@/types/marketplace";
 
-// ─────────────────────────────────────────────
-// Tipos
-// ─────────────────────────────────────────────
-
-export type ActivityType =
-  | "sale"
-  | "listing"
-  | "listing_cancelled"
-  | "offer"
-  | "offer_accepted"
-  | "offer_cancelled"
-  | "mint";
-
-export interface ActivityEvent {
-  id: string;
-  type: ActivityType;
-  nftContract: string;
-  tokenId: string;
-  from: string;
-  to?: string;
-  priceETH?: string;
-  txHash: string;
-  blockNumber: bigint;
-  timestamp?: number;
-}
+export type { ActivityType, ActivityEvent };
 
 // ─────────────────────────────────────────────
 // Hook principal
