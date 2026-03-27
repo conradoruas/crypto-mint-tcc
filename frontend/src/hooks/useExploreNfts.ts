@@ -211,7 +211,7 @@ export function useExploreAllNFTs(
     GET_ALL_NFTS,
     {
       skip: !!collectionAddress,
-      variables: { first: pageSize, skip },
+      variables: { first: pageSize + 1, skip },
     },
   );
 
@@ -219,16 +219,19 @@ export function useExploreAllNFTs(
     GET_NFTS_FOR_CONTRACT,
     {
       skip: !collectionAddress,
-      variables: { collection: collectionAddress?.toLowerCase(), first: pageSize, skip },
+      variables: { collection: collectionAddress?.toLowerCase(), first: pageSize + 1, skip },
     },
   );
 
   useEffect(() => {
     const loading = collectionAddress ? gqlColLoading : gqlAllLoading;
     if (loading) return;
-    const raw = collectionAddress
+    const rawAll = collectionAddress
       ? (gqlColData?.nfts ?? [])
       : (gqlAllData?.nfts ?? []);
+
+    const hasNextPage = rawAll.length > pageSize;
+    const raw = hasNextPage ? rawAll.slice(0, pageSize) : rawAll;
 
     if (raw.length === 0) {
       setNfts([]);
@@ -238,7 +241,7 @@ export function useExploreAllNFTs(
     }
     let cancelled = false;
     setIsLoading(true);
-    setHasMore(raw.length === pageSize);
+    setHasMore(hasNextPage);
     mergeWithAlchemy(raw, collectionAddress).then(
       (items: NFTItemWithMarket[]) => {
         if (cancelled) return;
