@@ -10,13 +10,7 @@ import { GET_ALL_NFTS } from "@/lib/graphql/queries";
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 import { fetchAlchemyMeta, NFTMeta } from "@/lib/alchemyMeta";
-
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
+import { resolveIpfsUrl } from "@/lib/ipfs";
 
 type GqlNFT = {
   id: string;

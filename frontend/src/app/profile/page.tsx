@@ -27,6 +27,7 @@ import { useActivityFeed } from "@/hooks/useActivityFeed";
 import { getEventConfig } from "@/lib/eventConfig";
 import Footer from "@/components/Footer";
 import { fetchAlchemyMetaForEvents, type MetaMap } from "@/lib/alchemyMeta";
+import { resolveIpfsUrl } from "@/lib/ipfs";
 
 const EVENT_CONFIG = getEventConfig(14);
 
@@ -43,12 +44,6 @@ function formatTime(ts?: number) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
 
 type SortOption = "default" | "id_asc" | "id_desc" | "name_asc" | "name_desc";
 

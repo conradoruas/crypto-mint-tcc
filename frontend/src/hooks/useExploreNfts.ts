@@ -3,6 +3,7 @@ import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { GET_ALL_NFTS, GET_NFTS_FOR_CONTRACT } from "@/lib/graphql/queries";
 import type { NFTItem, NFTItemWithMarket } from "@/types/nft";
+import { resolveIpfsUrl } from "@/lib/ipfs";
 
 export type { NFTItem, NFTItemWithMarket };
 
@@ -38,12 +39,6 @@ type GqlNFTsData = { nfts: GqlNFT[] };
 
 // ─── Helpers ───
 
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
 
 async function fetchAlchemyMetadata(
   contractAddress: string,

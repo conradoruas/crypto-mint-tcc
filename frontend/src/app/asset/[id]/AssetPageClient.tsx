@@ -39,6 +39,7 @@ import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
 import { listPriceSchema, offerAmountSchema, getZodErrors } from "@/lib/schemas";
 import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
+import { resolveIpfsUrl } from "@/lib/ipfs";
 
 // ─── Price History Chart ──────────────────────────────────────────────────────
 
@@ -269,13 +270,6 @@ function PriceHistory({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
 
 const inputClass =
   "w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40";

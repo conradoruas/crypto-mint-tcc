@@ -23,13 +23,7 @@ import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import Image from "next/image";
 import Link from "next/link";
 import Footer from "@/components/Footer";
-
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
+import { resolveIpfsUrl } from "@/lib/ipfs";
 
 function CollectionOption({
   collection,

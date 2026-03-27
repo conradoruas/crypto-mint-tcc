@@ -17,13 +17,8 @@ import {
   getZodErrors,
   EditProfileErrors,
 } from "@/lib/schemas";
+import { resolveIpfsUrl } from "@/lib/ipfs";
 
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
 
 async function uploadImageToIPFS(file: File): Promise<string> {
   const formData = new FormData();

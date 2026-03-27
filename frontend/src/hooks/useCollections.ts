@@ -16,6 +16,7 @@ import { GET_COLLECTIONS } from "@/lib/graphql/queries";
 import type { AlchemyNFT } from "@/types/alchemy";
 import type { CollectionInfo } from "@/types/collection";
 import type { CollectionNFTItem, CreatedNFTItem } from "@/types/nft";
+import { resolveIpfsUrl } from "@/lib/ipfs";
 
 export type { CollectionInfo, CollectionNFTItem, CreatedNFTItem };
 
@@ -33,12 +34,6 @@ const publicClient = createPublicClient({
   transport: http("/api/rpc"),
 });
 
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
 
 // ─────────────────────────────────────────────
 // useProfileNFTs

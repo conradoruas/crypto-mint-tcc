@@ -33,13 +33,7 @@ import {
 } from "@/hooks/useCollections";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import Footer from "@/components/Footer";
-
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
+import { resolveIpfsUrl } from "@/lib/ipfs";
 
 async function uploadImage(file: File): Promise<string> {
   const formData = new FormData();

@@ -10,14 +10,9 @@ export interface UserProfile {
   updatedAt: number;
 }
 
-const STORAGE_KEY = (address: string) => `nft_profile_${address.toLowerCase()}`;
+import { resolveIpfsUrl } from "@/lib/ipfs";
 
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
+const STORAGE_KEY = (address: string) => `nft_profile_${address.toLowerCase()}`;
 
 // ─── Upload de imagem para o IPFS ───
 export async function uploadProfileImage(file: File): Promise<string> {

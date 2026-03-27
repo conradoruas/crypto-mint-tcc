@@ -15,14 +15,9 @@ import {
   GET_TRENDING_DATA,
 } from "@/lib/graphql/queries";
 
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
+import { resolveIpfsUrl } from "@/lib/ipfs";
 
-const resolveIpfsUrl = (url: string) => {
-  if (!url) return "";
-  if (url.startsWith("ipfs://"))
-    return url.replace("ipfs://", "https://ipfs.io/ipfs/");
-  return url;
-};
+const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 function CollectionCard({ collection }: { collection: CollectionInfo }) {
   const image = resolveIpfsUrl(collection.image);
