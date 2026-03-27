@@ -114,59 +114,67 @@ export function useTrendingCollections(limit = 10) {
 
     const fetchOwners = async () => {
       const cols = collectionsRef.current;
-      const ownerCounts = await Promise.all(
-        cols.map(async (col) => {
-          try {
-            const res = await globalThis.fetch(
-              `/api/alchemy/getOwnersForContract?contractAddress=${col.contractAddress}`,
-            );
-            const data = await res.json();
-            return data.owners?.length ?? 0;
-          } catch {
-            return 0;
-          }
-        }),
-      );
 
-      const mapped: TrendingCollection[] = cols
-        .map((col, i) => {
-          const addr = col.contractAddress.toLowerCase();
-          const agg = salesByAddr.get(addr);
+      // Build trending metrics for all collections (no network calls yet)
+      const withoutOwners = cols.map((col) => {
+        const addr = col.contractAddress.toLowerCase();
+        const agg = salesByAddr.get(addr);
 
-          const floorPrice = floorByAddr.get(addr) ?? null;
-          const topOffer = topOfferByAddr.get(addr) ?? null;
-          const sales24h = agg?.count ?? 0;
-          const volume24h = agg
-            ? parseFloat(formatEther(agg.volumeWei)).toFixed(4)
-            : "0.0000";
+        const floorPrice = floorByAddr.get(addr) ?? null;
+        const topOffer = topOfferByAddr.get(addr) ?? null;
+        const sales24h = agg?.count ?? 0;
+        const volume24h = agg
+          ? parseFloat(formatEther(agg.volumeWei)).toFixed(4)
+          : "0.0000";
 
-          const floorHistory = agg?.prices.slice(-8) ?? [];
-          let floorChange24h: number | null = null;
-          if (floorHistory.length >= 2) {
-            const first = floorHistory[0];
-            const last = floorHistory[floorHistory.length - 1];
-            if (first > 0) floorChange24h = ((last - first) / first) * 100;
-          }
+        const floorHistory = agg?.prices.slice(-8) ?? [];
+        let floorChange24h: number | null = null;
+        if (floorHistory.length >= 2) {
+          const first = floorHistory[0];
+          const last = floorHistory[floorHistory.length - 1];
+          if (first > 0) floorChange24h = ((last - first) / first) * 100;
+        }
 
-          return {
-            contractAddress: col.contractAddress,
-            name: col.name,
-            symbol: col.symbol,
-            image: col.image ?? "",
-            floorPrice,
-            floorChange24h,
-            topOffer,
-            sales24h,
-            owners: ownerCounts[i],
-            listedPct: null,
-            volume24h,
-            floorHistory,
-          } as TrendingCollection;
-        })
+        return {
+          contractAddress: col.contractAddress,
+          name: col.name,
+          symbol: col.symbol,
+          image: col.image ?? "",
+          floorPrice,
+          floorChange24h,
+          topOffer,
+          sales24h,
+          owners: 0,
+          listedPct: null,
+          volume24h,
+          floorHistory,
+        } as TrendingCollection;
+      });
+
+      // Sort and slice BEFORE fetching owners — only query the collections
+      // that will actually be displayed (reduces N requests to `limit` requests)
+      const top = withoutOwners
         .sort((a, b) => parseFloat(b.volume24h) - parseFloat(a.volume24h))
         .slice(0, limit);
 
-      setTrending(mapped);
+      // Single batch request to the server instead of N parallel requests
+      try {
+        const res = await globalThis.fetch("/api/alchemy/getOwnerCountsBatch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contractAddresses: top.map((c) => c.contractAddress),
+          }),
+        });
+        const ownerCountMap: Record<string, number> = await res.json();
+        for (const entry of top) {
+          entry.owners = ownerCountMap[entry.contractAddress.toLowerCase()] ?? 0;
+        }
+      } catch {
+        // owner counts remain 0 — non-critical field
+      }
+
+      setTrending(top);
       setIsLoading(false);
     };
 
