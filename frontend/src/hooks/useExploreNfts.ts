@@ -15,6 +15,7 @@ export interface NFTItem {
 export interface NFTItemWithMarket extends NFTItem {
   listingPrice: string | null;
   topOffer: string | null;
+  seller: string | null;
 }
 
 // ─── GraphQL types ───
@@ -137,6 +138,7 @@ async function mergeWithAlchemy(
         : null,
       topOffer: topOfferRaw ? formatEther(BigInt(topOfferRaw)) : null,
       collectionName: nft.collection?.name ?? "",
+      seller: activeListing?.seller ?? null,
     } as NFTItemWithMarket;
   });
 }

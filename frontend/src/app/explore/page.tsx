@@ -5,10 +5,12 @@ import { useCollections } from "@/hooks/useCollections";
 import { useExploreAllNFTs, NFTItemWithMarket } from "@/hooks/useExploreNfts";
 import Image from "next/image";
 import Link from "next/link";
-import { Search, SlidersHorizontal, X, Layers } from "lucide-react";
+import { Search, SlidersHorizontal, X, Layers, Heart, Tag } from "lucide-react";
 import { useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
+import { useConnection } from "wagmi";
+import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
 
 type SortOption =
   | "default"
@@ -85,10 +87,143 @@ function sortNFTs(
   }
 }
 
+// ─── NFT Card ────────────────────────────────────────────────────────────────
+
+function NFTCard({
+  nft,
+  userAddress,
+}: {
+  nft: NFTItemWithMarket;
+  userAddress?: string;
+}) {
+  const { isFavorited } = useIsFavorited(nft.nftContract, nft.tokenId);
+  const { toggleFavorite } = useFavorite();
+
+  const isMyListing =
+    !!nft.listingPrice &&
+    !!nft.seller &&
+    !!userAddress &&
+    nft.seller.toLowerCase() === userAddress.toLowerCase();
+
+  return (
+    <div className="relative group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] transition-all duration-300 border border-outline-variant/5">
+      <Link
+        href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
+        className="block"
+      >
+        <div className="aspect-square overflow-hidden bg-surface-container-lowest relative">
+          {nft.image ? (
+            <Image
+              src={nft.image}
+              alt={nft.name}
+              fill
+              loading="eager"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              className="object-cover"
+            />
+          ) : (
+            <div className="w-full h-full animate-pulse bg-surface-container-high" />
+          )}
+
+          {/* Top overlay row: badges left, heart right */}
+          <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              {nft.listingPrice && (
+                <div
+                  className={`glass-panel px-2 py-1 text-[10px] font-bold uppercase tracking-wider border ${
+                    isMyListing
+                      ? "text-tertiary border-tertiary/20"
+                      : "text-primary border-primary/20"
+                  }`}
+                >
+                  {isMyListing ? "Your Listing" : "For Sale"}
+                </div>
+              )}
+              {nft.topOffer && (
+                <div className="glass-panel px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-secondary border border-secondary/20">
+                  Offer
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFavorite(nft.nftContract, nft.tokenId);
+              }}
+              className={`transition-all drop-shadow-md ${
+                isFavorited
+                  ? "text-error"
+                  : "text-white/60 opacity-0 group-hover:opacity-100"
+              }`}
+            >
+              <Heart size={25} className={isFavorited ? "fill-error" : ""} />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
+                {nft.collectionName}
+              </p>
+              <h4 className="font-headline text-lg font-bold group-hover:text-primary transition-colors">
+                {nft.name}
+              </h4>
+              <span className="text-[10px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">
+                #{nft.tokenId.padStart(3, "0")}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-outline-variant/10 pt-4">
+            <div>
+              <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest">
+                Price
+              </span>
+              <span className="font-headline font-bold text-on-surface">
+                {nft.listingPrice ? (
+                  `${nft.listingPrice} ETH`
+                ) : (
+                  <span className="text-on-surface-variant/50 font-normal text-sm italic">
+                    Not listed
+                  </span>
+                )}
+              </span>
+              {nft.topOffer && (
+                <span className="block text-[10px] text-secondary font-bold uppercase tracking-widest mt-0.5">
+                  Offer {nft.topOffer} ETH
+                </span>
+              )}
+            </div>
+
+            {nft.listingPrice &&
+              (isMyListing ? (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-secondary/5 border border-secondary/20 text-secondary text-xs font-bold uppercase tracking-widest">
+                  <Tag size={11} />
+                  Listed
+                </div>
+              ) : (
+                <div className="bg-primary/10 text-primary hover:bg-primary hover:text-on-primary-fixed px-4 py-2 rounded-sm text-xs font-black uppercase tracking-widest transition-all">
+                  Buy Now
+                </div>
+              ))}
+          </div>
+        </div>
+      </Link>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const PAGE_SIZE = 8;
 
 function ExploreContent() {
   const searchParams = useSearchParams();
+  const { address } = useConnection();
   const { collections, isLoading: isLoadingCollections } = useCollections();
   const [selectedCollection, setSelectedCollection] = useState<string>("");
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
@@ -144,7 +279,10 @@ function ExploreContent() {
               </h3>
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => { setOnlyListed(false); setPage(1); }}
+                  onClick={() => {
+                    setOnlyListed(false);
+                    setPage(1);
+                  }}
                   className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                     !onlyListed
                       ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -154,7 +292,10 @@ function ExploreContent() {
                   All
                 </button>
                 <button
-                  onClick={() => { setOnlyListed(true); setPage(1); }}
+                  onClick={() => {
+                    setOnlyListed(true);
+                    setPage(1);
+                  }}
                   className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                     onlyListed
                       ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -175,7 +316,10 @@ function ExploreContent() {
                 {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
                   <button
                     key={key}
-                    onClick={() => { setSort(key); setPage(1); }}
+                    onClick={() => {
+                      setSort(key);
+                      setPage(1);
+                    }}
                     className={`w-full text-left px-3 py-2 rounded-sm text-sm transition-all ${
                       sort === key
                         ? "bg-primary/10 text-primary border border-primary/20"
@@ -241,13 +385,19 @@ function ExploreContent() {
               <input
                 type="text"
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
                 placeholder="Search by name or ID..."
                 className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-3 pl-12 pr-4 w-72 focus:outline-none focus:border-primary transition-all text-sm text-on-surface placeholder:text-on-surface-variant/50"
               />
               {search && (
                 <button
-                  onClick={() => { setSearch(""); setPage(1); }}
+                  onClick={() => {
+                    setSearch("");
+                    setPage(1);
+                  }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
                 >
                   <X size={14} />
@@ -259,7 +409,10 @@ function ExploreContent() {
           {/* Mobile filters */}
           <div className="flex xl:hidden gap-2 mb-6 flex-wrap">
             <button
-              onClick={() => { setOnlyListed((v) => !v); setPage(1); }}
+              onClick={() => {
+                setOnlyListed((v) => !v);
+                setPage(1);
+              }}
               className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                 onlyListed
                   ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -349,77 +502,11 @@ function ExploreContent() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
               {displayedNFTs.map((nft) => (
-                <Link
-                  href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
+                <NFTCard
                   key={`${nft.nftContract}-${nft.tokenId}`}
-                  className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] transition-all duration-300 border border-outline-variant/5"
-                >
-                  <div className="aspect-square overflow-hidden bg-surface-container-lowest relative">
-                    {nft.image ? (
-                      <Image
-                        src={nft.image}
-                        alt={nft.name}
-                        fill
-                        loading="eager"
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full animate-pulse bg-surface-container-high" />
-                    )}
-                    {nft.listingPrice && (
-                      <div className="absolute top-3 left-3 glass-panel px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-primary border border-primary/20">
-                        For Sale
-                      </div>
-                    )}
-                    {nft.topOffer && (
-                      <div className="absolute top-3 right-3 glass-panel px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-secondary border border-secondary/20">
-                        Offer
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-5 space-y-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
-                          {nft.collectionName}
-                        </p>
-                        <h4 className="font-headline text-lg font-bold group-hover:text-primary transition-colors">
-                          {nft.name}
-                        </h4>
-                        <span className="text-[10px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">
-                          #{nft.tokenId.padStart(3, "0")}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-outline-variant/10 pt-4">
-                      <div>
-                        <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest">
-                          Price
-                        </span>
-                        <span className="font-headline font-bold text-on-surface">
-                          {nft.listingPrice ? (
-                            `${nft.listingPrice} ETH`
-                          ) : (
-                            <span className="text-on-surface-variant/50 font-normal text-sm italic">
-                              Not listed
-                            </span>
-                          )}
-                        </span>
-                        {nft.topOffer && (
-                          <span className="block text-[10px] text-secondary font-bold uppercase tracking-widest mt-0.5">
-                            Offer {nft.topOffer} ETH
-                          </span>
-                        )}
-                      </div>
-                      {nft.listingPrice && (
-                        <button className="bg-primary/10 text-primary hover:bg-primary hover:text-on-primary-fixed px-4 py-2 rounded-sm text-xs font-black uppercase tracking-widest transition-all">
-                          Buy Now
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </Link>
+                  nft={nft}
+                  userAddress={address}
+                />
               ))}
             </div>
           )}
