@@ -17,6 +17,9 @@ import {
   ExternalLink,
   TrendingUp,
   Heart,
+  Share2,
+  Copy,
+  Check,
 } from "lucide-react";
 import Image from "next/image";
 import { NFTItem } from "@/hooks/useExploreNfts";
@@ -271,6 +274,23 @@ export default function AssetDetail() {
 
   const { isFavorited } = useIsFavorited(nftContract ?? "", tokenId);
   const { toggleFavorite } = useFavorite();
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    const title = nft?.name ?? "NFT";
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, url });
+      } catch {
+        /* user cancelled */
+      }
+    } else {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const isOwner = address && owner && address.toLowerCase() === owner.toLowerCase();
 
@@ -433,6 +453,13 @@ export default function AssetDetail() {
                   {isFavorited ? "Saved" : "Save"}
                 </button>
               )}
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-outline-variant/15 bg-surface-container text-on-surface-variant hover:border-outline transition-all text-xs font-bold uppercase tracking-widest"
+              >
+                {copied ? <Check size={13} className="text-primary" /> : <Share2 size={13} />}
+                {copied ? "Copied!" : "Share"}
+              </button>
             </div>
             {topOffer && (
               <div className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-sm bg-tertiary/5 border border-tertiary/20">
