@@ -43,6 +43,7 @@ import {
 } from "@/lib/schemas";
 import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
 import { resolveIpfsUrl } from "@/lib/ipfs";
+import { logger } from "@/lib/logger";
 
 // ─── Price History Chart ──────────────────────────────────────────────────────
 
@@ -449,7 +450,7 @@ export default function AssetPageClient() {
           nftContract,
         });
       } catch (error) {
-        console.error("Error fetching NFT:", error);
+        logger.error("Error fetching NFT", error);
       } finally {
         setIsLoadingNft(false);
       }

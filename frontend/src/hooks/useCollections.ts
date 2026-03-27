@@ -19,6 +19,7 @@ import type { CollectionNFTItem, CreatedNFTItem } from "@/types/nft";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { useStableArray } from "./useStableArray";
 import { ensureAddress, parseAddress } from "@/lib/schemas";
+import { logger } from "@/lib/logger";
 
 export type { CollectionInfo, CollectionNFTItem, CreatedNFTItem };
 
@@ -104,7 +105,7 @@ export function useProfileNFTs(
 
         setNfts(items);
       } catch (error) {
-        console.error("Erro ao buscar NFTs do perfil:", error);
+        logger.error("Erro ao buscar NFTs do perfil", error);
       } finally {
         setIsLoading(false);
       }
@@ -283,7 +284,7 @@ export function useCreatedNFTs(ownerAddress: string | undefined) {
         );
         setNfts(results.flat());
       } catch (error) {
-        console.error("Erro ao buscar NFTs criados:", error);
+        logger.error("Erro ao buscar NFTs criados", error);
       } finally {
         setIsLoading(false);
       }
@@ -446,7 +447,7 @@ export function useCollectionNFTs(collectionAddress: string | undefined) {
         setNextPageKey(key);
         setTotalSupply(totalCount);
       })
-      .catch((error) => console.error("Erro ao buscar NFTs da coleção:", error))
+      .catch((error) => logger.error("Erro ao buscar NFTs da coleção", error))
       .finally(() => setIsLoading(false));
   }, [collectionAddress]);
 
@@ -461,7 +462,7 @@ export function useCollectionNFTs(collectionAddress: string | undefined) {
       setNfts((prev) => [...prev, ...items]);
       setNextPageKey(key);
     } catch (error) {
-      console.error("Erro ao buscar mais NFTs:", error);
+      logger.error("Erro ao buscar mais NFTs", error);
     } finally {
       setIsLoadingMore(false);
     }

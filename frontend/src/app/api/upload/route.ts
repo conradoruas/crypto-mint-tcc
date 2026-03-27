@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PINATA_JWT as jwt } from "@/lib/env";
+import { logger } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
 
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
     const jsonData = await jsonRes.json();
     return NextResponse.json({ uri: `ipfs://${jsonData.IpfsHash}` });
   } catch (error) {
-    console.error("Erro na route de upload:", error);
+    logger.error("Erro na route de upload", error, { path: req.nextUrl.pathname });
     return NextResponse.json(
       { error: "Erro interno no servidor" },
       { status: 500 },

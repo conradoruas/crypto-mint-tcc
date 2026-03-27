@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PINATA_JWT as jwt } from "@/lib/env";
+import { logger } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
 
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ uri: `ipfs://${data.IpfsHash}` });
   } catch (error) {
-    console.error("Erro na route de perfil:", error);
+    logger.error("Erro na route de perfil", error, { path: req.nextUrl.pathname });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

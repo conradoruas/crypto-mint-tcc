@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PINATA_JWT as jwt } from "@/lib/env";
+import { logger } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     // ✅ Retorna direto o URI da imagem — sem metadados
     return NextResponse.json({ uri: `ipfs://${data.IpfsHash}` });
   } catch (error) {
-    console.error("Erro no upload de imagem:", error);
+    logger.error("Erro no upload de imagem", error, { path: req.nextUrl.pathname });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
