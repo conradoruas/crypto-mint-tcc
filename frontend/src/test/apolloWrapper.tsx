@@ -10,10 +10,12 @@ import type { MockedResponse } from "@apollo/client/testing";
  */
 export function makeApolloWrapper(mocks: MockedResponse[]) {
   return function ApolloWrapper({ children }: { children: React.ReactNode }) {
-    const link = new MockLink(mocks, true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const link = new MockLink(mocks, true as any);
     const client = new ApolloClient({
       link,
-      cache: new InMemoryCache({ addTypename: false }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cache: new InMemoryCache({ addTypename: false } as any),
     });
     return <ApolloProvider client={client}>{children}</ApolloProvider>;
   };

@@ -6,7 +6,7 @@ import { useExploreAllNFTs, NFTItemWithMarket } from "@/hooks/useExploreNfts";
 import Image from "next/image";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers } from "lucide-react";
-import { useState, useMemo, Suspense, useEffect } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
 
@@ -96,9 +96,11 @@ function ExploreContent() {
   const [onlyListed, setOnlyListed] = useState(false);
   const [page, setPage] = useState(1);
 
-  const { nfts, isLoading: isLoadingNFTs } = useExploreAllNFTs(
-    selectedCollection || undefined,
-  );
+  const {
+    nfts,
+    isLoading: isLoadingNFTs,
+    hasMore,
+  } = useExploreAllNFTs(selectedCollection || undefined, page, PAGE_SIZE);
   const isLoading = isLoadingCollections || isLoadingNFTs;
 
   const displayedNFTs = useMemo(() => {
@@ -106,21 +108,12 @@ function ExploreContent() {
     return sortNFTs(filtered, sort);
   }, [nfts, search, onlyListed, sort]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, onlyListed, sort, selectedCollection]);
-
-  const totalPages = Math.ceil(displayedNFTs.length / PAGE_SIZE);
-  const paginatedNFTs = displayedNFTs.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE,
-  );
-
   const hasActiveFilters = search !== "" || sort !== "default" || onlyListed;
   const clearFilters = () => {
     setSearch("");
     setSort("default");
     setOnlyListed(false);
+    setPage(1);
   };
 
   return (
@@ -151,7 +144,7 @@ function ExploreContent() {
               </h3>
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => setOnlyListed(false)}
+                  onClick={() => { setOnlyListed(false); setPage(1); }}
                   className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                     !onlyListed
                       ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -161,7 +154,7 @@ function ExploreContent() {
                   All
                 </button>
                 <button
-                  onClick={() => setOnlyListed(true)}
+                  onClick={() => { setOnlyListed(true); setPage(1); }}
                   className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                     onlyListed
                       ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -182,7 +175,7 @@ function ExploreContent() {
                 {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
                   <button
                     key={key}
-                    onClick={() => setSort(key)}
+                    onClick={() => { setSort(key); setPage(1); }}
                     className={`w-full text-left px-3 py-2 rounded-sm text-sm transition-all ${
                       sort === key
                         ? "bg-primary/10 text-primary border border-primary/20"
@@ -212,9 +205,10 @@ function ExploreContent() {
                           type="radio"
                           name="collection"
                           checked={selectedCollection === c.contractAddress}
-                          onChange={() =>
-                            setSelectedCollection(c.contractAddress)
-                          }
+                          onChange={() => {
+                            setSelectedCollection(c.contractAddress);
+                            setPage(1);
+                          }}
                           className="accent-primary"
                         />
                         <span className="text-sm text-on-surface-variant group-hover:text-on-surface transition-colors">
@@ -247,13 +241,13 @@ function ExploreContent() {
               <input
                 type="text"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder="Search by name or ID..."
                 className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-3 pl-12 pr-4 w-72 focus:outline-none focus:border-primary transition-all text-sm text-on-surface placeholder:text-on-surface-variant/50"
               />
               {search && (
                 <button
-                  onClick={() => setSearch("")}
+                  onClick={() => { setSearch(""); setPage(1); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
                 >
                   <X size={14} />
@@ -265,7 +259,7 @@ function ExploreContent() {
           {/* Mobile filters */}
           <div className="flex xl:hidden gap-2 mb-6 flex-wrap">
             <button
-              onClick={() => setOnlyListed((v) => !v)}
+              onClick={() => { setOnlyListed((v) => !v); setPage(1); }}
               className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                 onlyListed
                   ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -354,7 +348,7 @@ function ExploreContent() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-              {paginatedNFTs.map((nft) => (
+              {displayedNFTs.map((nft) => (
                 <Link
                   href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
                   key={`${nft.nftContract}-${nft.tokenId}`}
@@ -431,58 +425,23 @@ function ExploreContent() {
           )}
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {(page > 1 || hasMore) && (
             <div className="flex items-center justify-between mt-12 pt-6 border-t border-outline-variant/10">
               <p className="text-xs text-on-surface-variant uppercase tracking-widest">
-                {(page - 1) * PAGE_SIZE + 1}–
-                {Math.min(page * PAGE_SIZE, displayedNFTs.length)} of{" "}
-                {displayedNFTs.length}
+                Page {page}
               </p>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
                   Prev
                 </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(
-                    (p) =>
-                      p === 1 || p === totalPages || Math.abs(p - page) <= 1,
-                  )
-                  .reduce<(number | "…")[]>((acc, p, idx, arr) => {
-                    if (idx > 0 && p - (arr[idx - 1] as number) > 1)
-                      acc.push("…");
-                    acc.push(p);
-                    return acc;
-                  }, [])
-                  .map((p, idx) =>
-                    p === "…" ? (
-                      <span
-                        key={`ellipsis-${idx}`}
-                        className="px-2 text-on-surface-variant/40 text-xs"
-                      >
-                        …
-                      </span>
-                    ) : (
-                      <button
-                        key={p}
-                        onClick={() => setPage(p as number)}
-                        className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${
-                          page === p
-                            ? "bg-primary text-on-primary border-primary"
-                            : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ),
-                  )}
                 <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={!hasMore}
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
                   Next
                 </button>

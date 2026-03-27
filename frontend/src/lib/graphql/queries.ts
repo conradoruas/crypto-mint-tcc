@@ -75,9 +75,11 @@ export const GET_ACTIVITY_FEED_ALL = gql`
 `;
 
 export const GET_NFTS_FOR_CONTRACT = gql`
-  query GetNFTsForContract($collection: String!) {
+  query GetNFTsForContract($collection: String!, $first: Int!, $skip: Int!) {
     nfts(
       where: { collection: $collection }
+      first: $first
+      skip: $skip
       orderBy: tokenId
       orderDirection: asc
     ) {
@@ -102,8 +104,8 @@ export const GET_NFTS_FOR_CONTRACT = gql`
 `;
 
 export const GET_ALL_NFTS = gql`
-  query GetAllNFTs($first: Int!) {
-    nfts(first: $first, orderBy: tokenId, orderDirection: asc) {
+  query GetAllNFTs($first: Int!, $skip: Int!) {
+    nfts(first: $first, skip: $skip, orderBy: tokenId, orderDirection: asc) {
       id
       tokenId
       tokenUri

@@ -145,15 +145,22 @@ async function mergeWithAlchemy(
 // useExploreNFTs — busca NFTs de uma coleção específica
 // ─────────────────────────────────────────────
 
-export function useExploreNFTs(collectionAddress?: string) {
+export function useExploreNFTs(
+  collectionAddress?: string,
+  page: number = 1,
+  pageSize: number = 20,
+) {
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+
+  const skip = (page - 1) * pageSize;
 
   const { data: gqlData, loading: gqlQueryLoading } = useQuery<GqlNFTsData>(
     GET_NFTS_FOR_CONTRACT,
     {
       skip: !collectionAddress,
-      variables: { collection: collectionAddress?.toLowerCase() },
+      variables: { collection: collectionAddress?.toLowerCase(), first: pageSize, skip },
     },
   );
 
@@ -164,10 +171,12 @@ export function useExploreNFTs(collectionAddress?: string) {
     if (raw.length === 0) {
       setNfts([]);
       setIsLoading(false);
+      setHasMore(false);
       return;
     }
     let cancelled = false;
     setIsLoading(true);
+    setHasMore(raw.length === pageSize);
     mergeWithAlchemy(raw, collectionAddress).then((items) => {
       if (cancelled) return;
       setNfts(items);
@@ -176,24 +185,31 @@ export function useExploreNFTs(collectionAddress?: string) {
     return () => {
       cancelled = true;
     };
-  }, [gqlData, gqlQueryLoading, collectionAddress]);
+  }, [gqlData, gqlQueryLoading, collectionAddress, pageSize]);
 
-  return { nfts, isLoading };
+  return { nfts, isLoading, hasMore };
 }
 
 // ─────────────────────────────────────────────
 // useExploreAllNFTs — busca NFTs de todas as coleções
 // ─────────────────────────────────────────────
 
-export function useExploreAllNFTs(collectionAddress?: string) {
+export function useExploreAllNFTs(
+  collectionAddress?: string,
+  page: number = 1,
+  pageSize: number = 20,
+) {
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+
+  const skip = (page - 1) * pageSize;
 
   const { data: gqlAllData, loading: gqlAllLoading } = useQuery<GqlNFTsData>(
     GET_ALL_NFTS,
     {
       skip: !!collectionAddress,
-      variables: { first: 200 },
+      variables: { first: pageSize, skip },
     },
   );
 
@@ -201,7 +217,7 @@ export function useExploreAllNFTs(collectionAddress?: string) {
     GET_NFTS_FOR_CONTRACT,
     {
       skip: !collectionAddress,
-      variables: { collection: collectionAddress?.toLowerCase() },
+      variables: { collection: collectionAddress?.toLowerCase(), first: pageSize, skip },
     },
   );
 
@@ -215,10 +231,12 @@ export function useExploreAllNFTs(collectionAddress?: string) {
     if (raw.length === 0) {
       setNfts([]);
       setIsLoading(false);
+      setHasMore(false);
       return;
     }
     let cancelled = false;
     setIsLoading(true);
+    setHasMore(raw.length === pageSize);
     mergeWithAlchemy(raw, collectionAddress).then(
       (items: NFTItemWithMarket[]) => {
         if (cancelled) return;
@@ -229,7 +247,7 @@ export function useExploreAllNFTs(collectionAddress?: string) {
     return () => {
       cancelled = true;
     };
-  }, [gqlAllData, gqlColData, gqlAllLoading, gqlColLoading, collectionAddress]);
+  }, [gqlAllData, gqlColData, gqlAllLoading, gqlColLoading, collectionAddress, pageSize]);
 
-  return { nfts, isLoading };
+  return { nfts, isLoading, hasMore };
 }

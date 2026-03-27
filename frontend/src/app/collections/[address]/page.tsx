@@ -502,7 +502,10 @@ export default function CollectionPage() {
   const {
     nfts,
     isLoading: isLoadingNFTs,
+    isLoadingMore,
     totalSupply,
+    hasMore,
+    loadMore,
   } = useCollectionNFTs(collectionAddress);
 
   const { data: urisLoadedData, refetch: refetchUrisLoaded } = useReadContract({
@@ -546,13 +549,6 @@ export default function CollectionPage() {
     }
   };
 
-  const [nftPage, setNftPage] = useState(1);
-  const NFT_PAGE_SIZE = 8;
-  const totalNftPages = Math.ceil(nfts.length / NFT_PAGE_SIZE);
-  const paginatedNfts = nfts.slice(
-    (nftPage - 1) * NFT_PAGE_SIZE,
-    nftPage * NFT_PAGE_SIZE,
-  );
 
   const isOwner =
     userAddress &&
@@ -803,7 +799,7 @@ export default function CollectionPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3">
-              {paginatedNfts.map((nft) => (
+              {nfts.map((nft) => (
                 <NFTCard
                   key={nft.tokenId}
                   nft={nft}
@@ -812,66 +808,21 @@ export default function CollectionPage() {
               ))}
             </div>
 
-            {totalNftPages > 1 && (
-              <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
-                <p className="text-xs text-on-surface-variant uppercase tracking-widest">
-                  {(nftPage - 1) * NFT_PAGE_SIZE + 1}–
-                  {Math.min(nftPage * NFT_PAGE_SIZE, nfts.length)} of{" "}
-                  {nfts.length}
-                </p>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setNftPage((p) => Math.max(1, p - 1))}
-                    disabled={nftPage === 1}
-                    className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    Prev
-                  </button>
-                  {Array.from({ length: totalNftPages }, (_, i) => i + 1)
-                    .filter(
-                      (p) =>
-                        p === 1 ||
-                        p === totalNftPages ||
-                        Math.abs(p - nftPage) <= 1,
-                    )
-                    .reduce<(number | "…")[]>((acc, p, idx, arr) => {
-                      if (idx > 0 && p - (arr[idx - 1] as number) > 1)
-                        acc.push("…");
-                      acc.push(p);
-                      return acc;
-                    }, [])
-                    .map((p, idx) =>
-                      p === "…" ? (
-                        <span
-                          key={`ellipsis-${idx}`}
-                          className="px-2 text-on-surface-variant/40 text-xs"
-                        >
-                          …
-                        </span>
-                      ) : (
-                        <button
-                          key={p}
-                          onClick={() => setNftPage(p as number)}
-                          className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${
-                            nftPage === p
-                              ? "bg-primary text-on-primary border-primary"
-                              : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      ),
-                    )}
-                  <button
-                    onClick={() =>
-                      setNftPage((p) => Math.min(totalNftPages, p + 1))
-                    }
-                    disabled={nftPage === totalNftPages}
-                    className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    Next
-                  </button>
-                </div>
+            {hasMore && (
+              <div className="flex justify-center mt-8 pt-6 border-t border-outline-variant/10">
+                <button
+                  onClick={loadMore}
+                  disabled={isLoadingMore}
+                  className="px-6 py-2.5 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" /> Loading...
+                    </>
+                  ) : (
+                    "Load More"
+                  )}
+                </button>
               </div>
             )}
           </>

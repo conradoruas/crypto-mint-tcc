@@ -28,7 +28,8 @@ vi.mock("wagmi", () => ({
     isLoading: false,
     isSuccess: false,
   }),
-  useConnection: vi.fn().mockReturnValue({ address: undefined }),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  useConnection: vi.fn().mockReturnValue({ address: undefined } as any),
 }));
 
 import { useConnection } from "wagmi";
@@ -291,13 +292,13 @@ describe("useCollectionNFTs", () => {
 
 describe("useCreatorCollections", () => {
   afterEach(() => {
-    vi.mocked(useConnection).mockReturnValue({ address: undefined });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(useConnection).mockReturnValue({ address: undefined } as any);
   });
 
   it("returns only collections matching the connected address", async () => {
-    vi.mocked(useConnection).mockReturnValue({
-      address: "0xcreator" as `0x${string}`,
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(useConnection).mockReturnValue({ address: "0xcreator" as `0x${string}` } as any);
 
     const foreign = {
       ...COLLECTION_1,
@@ -317,7 +318,8 @@ describe("useCreatorCollections", () => {
   });
 
   it("returns empty when no wallet is connected", async () => {
-    vi.mocked(useConnection).mockReturnValue({ address: undefined });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(useConnection).mockReturnValue({ address: undefined } as any);
 
     const { result } = renderHook(() => useCreatorCollections(), {
       wrapper: makeWrapper([makeCollectionsMock()]),
@@ -330,9 +332,8 @@ describe("useCreatorCollections", () => {
 
   it("is case-insensitive when comparing creator address", async () => {
     // COLLECTION_1.creator is "0xcreator"; connected address has uppercase letters
-    vi.mocked(useConnection).mockReturnValue({
-      address: "0xCREATOR" as `0x${string}`,
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(useConnection).mockReturnValue({ address: "0xCREATOR" as `0x${string}` } as any);
 
     const { result } = renderHook(() => useCreatorCollections(), {
       wrapper: makeWrapper([makeCollectionsMock()]),
@@ -344,9 +345,8 @@ describe("useCreatorCollections", () => {
   });
 
   it("returns all collections that match the creator", async () => {
-    vi.mocked(useConnection).mockReturnValue({
-      address: "0xcreator" as `0x${string}`,
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(useConnection).mockReturnValue({ address: "0xcreator" as `0x${string}` } as any);
 
     const col2 = {
       ...COLLECTION_1,
