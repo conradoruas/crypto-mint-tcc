@@ -34,30 +34,37 @@ export function GlobalSearch() {
   });
 
   // Pre-load all NFT metadata as soon as subgraph data arrives
-  const allTokensKey = (nftData?.nfts ?? []).length;
-  useEffect(() => {
+  // 1. Estabilizamos a lista de tokens. O useMemo garante que a referência
+  // só mude se os dados reais do nftData mudarem.
+  const tokensToFetch = useMemo(() => {
     const nfts = nftData?.nfts ?? [];
-    if (!nfts.length) return;
-
-    const tokens = nfts.map((n) => ({
+    return nfts.map((n) => ({
       contractAddress: n.collection.contractAddress,
       tokenId: n.tokenId,
     }));
+  }, [nftData?.nfts]);
+
+  // 2. Pré-carregamento de metadados
+  useEffect(() => {
+    // Evitamos a execução se não houver tokens para buscar
+    if (!tokensToFetch.length) return;
 
     const fetchAll = async () => {
       const merged = new Map<string, NFTMeta>();
       const chunkSize = 100;
-      for (let i = 0; i < tokens.length; i += chunkSize) {
-        const chunk = tokens.slice(i, i + chunkSize);
+
+      // Processamento em chunks para evitar sobrecarga da API
+      for (let i = 0; i < tokensToFetch.length; i += chunkSize) {
+        const chunk = tokensToFetch.slice(i, i + chunkSize);
         const partial = await fetchAlchemyMeta(chunk);
         partial.forEach((v, k) => merged.set(k, v));
       }
+
       setMetaMap(merged);
     };
 
     fetchAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allTokensKey]);
+  }, [tokensToFetch]); // Agora utilizamos a dependência estável
 
   const trimmed = query.trim().toLowerCase();
 
@@ -126,6 +133,10 @@ export function GlobalSearch() {
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant w-4 h-4 pointer-events-none z-10" />
       <input
         type="text"
+        role="combobox"
+        aria-controls="search-results-listbox"
+        aria-haspopup="listbox"
+        aria-expanded={open && trimmed.length >= 1}
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -135,7 +146,6 @@ export function GlobalSearch() {
         onKeyDown={handleKeyDown}
         placeholder="Search collections, NFTs..."
         aria-label="Search collections and NFTs"
-        aria-expanded={open && trimmed.length >= 1}
         aria-autocomplete="list"
         className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-2 pl-10 pr-8 text-sm w-72 focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/50 text-on-surface"
       />

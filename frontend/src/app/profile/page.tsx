@@ -45,7 +45,6 @@ function formatTime(ts?: number) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-
 type SortOption = "default" | "id_asc" | "id_desc" | "name_asc" | "name_desc";
 
 const SORT_LABELS: Record<SortOption, string> = {
@@ -169,7 +168,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     collectedPag.reset();
-  }, [search, sort, selectedCollection]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, sort, selectedCollection, collectedPag]);
 
   const { items: paginatedCollected, totalPages: collectedTotalPages } =
     collectedPag.paginate(displayedNFTs);
@@ -194,12 +193,10 @@ export default function ProfilePage() {
   const { items: paginatedFavorites, totalPages: favTotalPages } =
     favoritesPag.paginate(favorites);
 
-  const eventIds = userEvents.map((e) => e.id).join(",");
   useEffect(() => {
     if (!userEvents.length) return;
     fetchAlchemyMetaForEvents(userEvents).then(setMetaMap);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventIds]);
+  }, [userEvents]);
 
   useEffect(() => {
     if (!address) return;
@@ -595,7 +592,10 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
                 <p className="text-xs text-on-surface-variant uppercase tracking-widest">
                   {(activityPag.page - 1) * ACTIVITY_PAGE_SIZE + 1}–
-                  {Math.min(activityPag.page * ACTIVITY_PAGE_SIZE, userEvents.length)}{" "}
+                  {Math.min(
+                    activityPag.page * ACTIVITY_PAGE_SIZE,
+                    userEvents.length,
+                  )}{" "}
                   of {userEvents.length}
                 </p>
                 <div className="flex items-center gap-1">
@@ -621,7 +621,10 @@ export default function ProfilePage() {
                     }, [])
                     .map((p, idx) =>
                       p === "…" ? (
-                        <span key={`e-${idx}`} className="px-2 text-on-surface-variant/40 text-xs">
+                        <span
+                          key={`e-${idx}`}
+                          className="px-2 text-on-surface-variant/40 text-xs"
+                        >
                           …
                         </span>
                       ) : (
@@ -711,7 +714,10 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
                   <p className="text-xs text-on-surface-variant uppercase tracking-widest">
                     {(favoritesPag.page - 1) * NFT_PAGE_SIZE + 1}–
-                    {Math.min(favoritesPag.page * NFT_PAGE_SIZE, favorites.length)}{" "}
+                    {Math.min(
+                      favoritesPag.page * NFT_PAGE_SIZE,
+                      favorites.length,
+                    )}{" "}
                     of {favorites.length}
                   </p>
                   <div className="flex items-center gap-1">
@@ -737,7 +743,10 @@ export default function ProfilePage() {
                       }, [])
                       .map((p, idx) =>
                         p === "…" ? (
-                          <span key={`e-${idx}`} className="px-2 text-on-surface-variant/40 text-xs">
+                          <span
+                            key={`e-${idx}`}
+                            className="px-2 text-on-surface-variant/40 text-xs"
+                          >
                             …
                           </span>
                         ) : (
@@ -836,7 +845,10 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
                   <p className="text-xs text-on-surface-variant uppercase tracking-widest">
                     {(createdPag.page - 1) * NFT_PAGE_SIZE + 1}–
-                    {Math.min(createdPag.page * NFT_PAGE_SIZE, createdNfts.length)}{" "}
+                    {Math.min(
+                      createdPag.page * NFT_PAGE_SIZE,
+                      createdNfts.length,
+                    )}{" "}
                     of {createdNfts.length}
                   </p>
                   <div className="flex items-center gap-1">

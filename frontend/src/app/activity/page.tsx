@@ -7,13 +7,14 @@ import { getEventConfig, ALL_ACTIVITY_TYPES } from "@/lib/eventConfig";
 import { useCollections } from "@/hooks/useCollections";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import {
-  Activity,
-  ExternalLink,
-  ChevronDown,
-} from "lucide-react";
+import { Activity, ExternalLink, ChevronDown } from "lucide-react";
 import Footer from "@/components/Footer";
-import { fetchAlchemyMetaForEvents, type NFTMeta, type MetaMap } from "@/lib/alchemyMeta";
+import {
+  fetchAlchemyMetaForEvents,
+  type NFTMeta,
+  type MetaMap,
+} from "@/lib/alchemyMeta";
+import { useStableArray } from "@/hooks/useStableArray";
 
 const EVENT_CONFIG = getEventConfig(16);
 
@@ -174,19 +175,22 @@ export default function ActivityPage() {
   const [showTypeFilter, setShowTypeFilter] = useState(false);
   const [metaMap, setMetaMap] = useState<MetaMap>(new Map());
 
-  const { events, isLoading } = useActivityFeed(
+  const { events: events, isLoading } = useActivityFeed(
     selectedCollection || undefined,
     100,
   );
 
+  const stableEvents = useStableArray(
+    events,
+    (e) => `${e.nftContract}-${e.tokenId}`,
+  );
+
   // Fetch NFT metadata only when the set of event IDs actually changes.
   // Using a joined string avoids re-triggering on Apollo's array reference churn.
-  const eventIds = events.map((e) => e.id).join(",");
   useEffect(() => {
-    if (!events.length) return;
-    fetchAlchemyMetaForEvents(events).then(setMetaMap);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventIds]);
+    if (!stableEvents.length) return;
+    fetchAlchemyMetaForEvents(stableEvents).then(setMetaMap);
+  }, [stableEvents]);
 
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;

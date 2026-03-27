@@ -1,9 +1,8 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useConnection } from "wagmi";
-import { formatEther } from "viem";
 import { Navbar } from "@/components/NavBar";
 import {
   ShoppingCart,
@@ -17,7 +16,6 @@ import {
   TrendingUp,
   Heart,
   Share2,
-  Copy,
   Check,
 } from "lucide-react";
 import Image from "next/image";
@@ -33,11 +31,14 @@ import {
   useAcceptOffer,
   useCancelOffer,
 } from "@/hooks/useMarketplace";
-import type { OfferWithBuyer } from "@/types/marketplace";
 import { OffersTable, ExpiresIn } from "@/components/OffersTable";
 import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
-import { listPriceSchema, offerAmountSchema, getZodErrors } from "@/lib/schemas";
+import {
+  listPriceSchema,
+  offerAmountSchema,
+  getZodErrors,
+} from "@/lib/schemas";
 import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 
@@ -415,11 +416,11 @@ export default function AssetPageClient() {
   const isOwner =
     address && owner && address.toLowerCase() === owner.toLowerCase();
 
-  const refetchAll = () => {
+  const refetchAll = useCallback(() => {
     refetchListing();
     refetchMyOffer();
     refetchOffers();
-  };
+  }, [refetchListing, refetchMyOffer, refetchOffers]);
 
   useEffect(() => {
     if (!nftContract) {
@@ -463,7 +464,7 @@ export default function AssetPageClient() {
       });
       refetchAll();
     }
-  }, [isBought]);
+  }, [isBought, refetchAll, buyHash]);
   useEffect(() => {
     if (isOfferMade) {
       setTxMsg({
@@ -475,23 +476,25 @@ export default function AssetPageClient() {
       refetchMyOffer();
       refetchOffers();
     }
-  }, [isOfferMade]);
+  }, [isOfferMade, refetchMyOffer, refetchOffers]);
   useEffect(() => {
     if (isOfferCancelled) {
       setTxMsg({ type: "success", text: "Offer cancelled. ETH returned." });
       refetchMyOffer();
       refetchOffers();
     }
-  }, [isOfferCancelled]);
+  }, [isOfferCancelled, refetchMyOffer, refetchOffers]);
   useEffect(() => {
     if (isOfferAccepted) {
       setTxMsg({ type: "success", text: "Offer accepted! NFT transferred." });
       refetchAll();
     }
-  }, [isOfferAccepted]);
+  }, [isOfferAccepted, refetchAll]);
 
   const handleList = async () => {
-    const errors = getZodErrors(listPriceSchema, { price: listPrice }) as ListPriceErrors;
+    const errors = getZodErrors(listPriceSchema, {
+      price: listPrice,
+    }) as ListPriceErrors;
     setListErrors(errors);
     if (errors.price) return;
     try {
@@ -528,7 +531,9 @@ export default function AssetPageClient() {
   };
 
   const handleMakeOffer = async () => {
-    const errors = getZodErrors(offerAmountSchema, { amount: offerAmount }) as OfferAmountErrors;
+    const errors = getZodErrors(offerAmountSchema, {
+      amount: offerAmount,
+    }) as OfferAmountErrors;
     setOfferErrors(errors);
     if (errors.amount) return;
     try {
@@ -750,11 +755,20 @@ export default function AssetPageClient() {
                         placeholder="Price in ETH (e.g. 0.05)"
                         aria-label="Listing price in ETH"
                         value={listPrice}
-                        onChange={(e) => { setListPrice(e.target.value); setListErrors({}); }}
-                        className={listErrors.price ? `${inputClass} !border-error/40` : inputClass}
+                        onChange={(e) => {
+                          setListPrice(e.target.value);
+                          setListErrors({});
+                        }}
+                        className={
+                          listErrors.price
+                            ? `${inputClass} !border-error/40`
+                            : inputClass
+                        }
                       />
                       {listErrors.price && (
-                        <p className="text-xs text-error mt-1.5">{listErrors.price}</p>
+                        <p className="text-xs text-error mt-1.5">
+                          {listErrors.price}
+                        </p>
                       )}
                       <div className="flex gap-3">
                         <button
@@ -847,11 +861,20 @@ export default function AssetPageClient() {
                     placeholder="Amount in ETH (e.g. 0.08)"
                     aria-label="Offer amount in ETH"
                     value={offerAmount}
-                    onChange={(e) => { setOfferAmount(e.target.value); setOfferErrors({}); }}
-                    className={offerErrors.amount ? `${inputClass} !border-error/40` : inputClass}
+                    onChange={(e) => {
+                      setOfferAmount(e.target.value);
+                      setOfferErrors({});
+                    }}
+                    className={
+                      offerErrors.amount
+                        ? `${inputClass} !border-error/40`
+                        : inputClass
+                    }
                   />
                   {offerErrors.amount && (
-                    <p className="text-xs text-error mt-1.5">{offerErrors.amount}</p>
+                    <p className="text-xs text-error mt-1.5">
+                      {offerErrors.amount}
+                    </p>
                   )}
                   <p className="text-xs text-on-surface-variant/50 uppercase tracking-widest">
                     ETH will be held in escrow for 7 days.

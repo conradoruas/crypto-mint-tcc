@@ -17,6 +17,7 @@ import type { AlchemyNFT } from "@/types/alchemy";
 import type { CollectionInfo } from "@/types/collection";
 import type { CollectionNFTItem, CreatedNFTItem } from "@/types/nft";
 import { resolveIpfsUrl } from "@/lib/ipfs";
+import { useStableArray } from "./useStableArray";
 
 export type { CollectionInfo, CollectionNFTItem, CreatedNFTItem };
 
@@ -33,7 +34,6 @@ const publicClient = createPublicClient({
   chain: sepolia,
   transport: http("/api/rpc"),
 });
-
 
 // ─────────────────────────────────────────────
 // useProfileNFTs
@@ -243,10 +243,14 @@ export function useCreatedNFTs(ownerAddress: string | undefined) {
   const [isLoading, setIsLoading] = useState(true);
   const { collections: creatorCollections, isLoading: isLoadingCollections } =
     useCreatorCollections();
+  const stableCollections = useStableArray(
+    creatorCollections,
+    (col) => col.contractAddress,
+  );
 
   useEffect(() => {
     if (!ownerAddress || isLoadingCollections) return;
-    if (creatorCollections.length === 0) {
+    if (stableCollections.length === 0) {
       setNfts([]);
       setIsLoading(false);
       return;
@@ -256,7 +260,7 @@ export function useCreatedNFTs(ownerAddress: string | undefined) {
       setIsLoading(true);
       try {
         const results = await Promise.all(
-          creatorCollections.map(async (col) => {
+          stableCollections.map(async (col) => {
             const res = await fetch(
               `/api/alchemy/getNFTsForContract?contractAddress=${col.contractAddress}&withMetadata=true&refreshCache=false`,
             );
@@ -280,8 +284,7 @@ export function useCreatedNFTs(ownerAddress: string | undefined) {
     };
 
     fetchAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownerAddress, isLoadingCollections, creatorCollections.length]);
+  }, [ownerAddress, isLoadingCollections, stableCollections]);
 
   return { nfts, isLoading };
 }
@@ -368,7 +371,11 @@ const PAGE_SIZE_COLLECTION = 20;
 async function fetchCollectionPage(
   collectionAddress: string,
   pageKey?: string,
-): Promise<{ items: CollectionNFTItem[]; nextPageKey?: string; totalCount: number }> {
+): Promise<{
+  items: CollectionNFTItem[];
+  nextPageKey?: string;
+  totalCount: number;
+}> {
   const params = new URLSearchParams({
     contractAddress: collectionAddress,
     withMetadata: "true",

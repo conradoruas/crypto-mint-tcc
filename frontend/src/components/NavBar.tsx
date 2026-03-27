@@ -16,13 +16,11 @@ import { ConnectKitButton, useModal } from "connectkit";
 import { useConnection, useBalance, useDisconnect } from "wagmi";
 import { cn } from "@/lib/utils";
 import { GlobalSearch } from "@/components/GlobalSearch";
-import {
-  useActivityFeed,
-  ActivityEvent,
-} from "@/hooks/useActivityFeed";
+import { useActivityFeed, ActivityEvent } from "@/hooks/useActivityFeed";
 import { getEventConfig } from "@/lib/eventConfig";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { fetchAlchemyMeta, NFTMeta } from "@/lib/alchemyMeta";
+import { useStableArray } from "@/hooks/useStableArray";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -67,6 +65,7 @@ function BellDropdown({ address }: { address: string }) {
   const { events: allEvents, isLoading } = useActivityFeed(undefined, 200);
 
   const userEvents = useMemo(() => {
+    if (!address) return [];
     const lower = address.toLowerCase();
     return allEvents
       .filter(
@@ -75,17 +74,21 @@ function BellDropdown({ address }: { address: string }) {
       .slice(0, 8);
   }, [allEvents, address]);
 
-  // Fetch NFT names when userEvents changes
-  const eventIds = userEvents.map((e) => `${e.nftContract}-${e.tokenId}`).join(",");
+  const stableUserEvents = useStableArray(
+    userEvents,
+    (e) => `${e.nftContract}-${e.tokenId}`,
+  );
+
   useEffect(() => {
-    if (!userEvents.length) return;
-    const tokens = userEvents.map((e) => ({
+    if (!stableUserEvents.length) return;
+
+    const tokens = stableUserEvents.map((e) => ({
       contractAddress: e.nftContract,
       tokenId: e.tokenId,
     }));
+
     fetchAlchemyMeta(tokens).then(setMetaMap);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventIds]);
+  }, [stableUserEvents]);
 
   // Count events newer than last time the user opened the dropdown
   const unread = useMemo(
@@ -166,7 +169,9 @@ function BellDropdown({ address }: { address: string }) {
                 const isFrom =
                   event.from.toLowerCase() === address.toLowerCase();
                 const metaKey = `${event.nftContract.toLowerCase()}-${event.tokenId}`;
-                const nftName = metaMap.get(metaKey)?.name ?? `#${event.tokenId.padStart(3, "0")}`;
+                const nftName =
+                  metaMap.get(metaKey)?.name ??
+                  `#${event.tokenId.padStart(3, "0")}`;
                 return (
                   <Link
                     key={event.id}
@@ -379,14 +384,12 @@ export function Navbar() {
           ) : (
             <div className="flex items-center gap-1 text-on-surface-variant">
               <button
-                aria-label="Activity notifications"
                 className="p-2 text-on-surface-variant/30 cursor-not-allowed"
                 disabled
               >
                 <Bell className="w-5 h-5" />
               </button>
               <button
-                aria-label="Wallet"
                 className="p-2 text-on-surface-variant/30 cursor-not-allowed"
                 disabled
               >
