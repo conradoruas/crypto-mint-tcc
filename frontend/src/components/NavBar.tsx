@@ -109,6 +109,8 @@ function BellDropdown({ address }: { address: string }) {
     <div ref={ref} className="relative">
       <button
         onClick={handleOpen}
+        aria-label="Activity notifications"
+        aria-expanded={open}
         className={cn(
           "relative p-2 transition-colors",
           open ? "text-primary" : "hover:text-primary text-on-surface-variant",
@@ -225,6 +227,8 @@ function WalletDropdown({ address }: { address: string }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
+        aria-label="Wallet"
+        aria-expanded={open}
         className={cn(
           "p-2 transition-colors",
           open ? "text-primary" : "hover:text-primary text-on-surface-variant",
@@ -246,6 +250,7 @@ function WalletDropdown({ address }: { address: string }) {
               </span>
               <button
                 onClick={copy}
+                aria-label={copied ? "Copied" : "Copy address"}
                 className="text-on-surface-variant hover:text-primary transition-colors shrink-0"
               >
                 {copied ? (
@@ -374,12 +379,14 @@ export function Navbar() {
           ) : (
             <div className="flex items-center gap-1 text-on-surface-variant">
               <button
+                aria-label="Activity notifications"
                 className="p-2 text-on-surface-variant/30 cursor-not-allowed"
                 disabled
               >
                 <Bell className="w-5 h-5" />
               </button>
               <button
+                aria-label="Wallet"
                 className="p-2 text-on-surface-variant/30 cursor-not-allowed"
                 disabled
               >

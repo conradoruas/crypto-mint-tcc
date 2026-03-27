@@ -498,10 +498,11 @@ export default function CreateCollectionPage() {
             {/* Name + Symbol */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+                <label htmlFor="col-name" className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
                   Name *
                 </label>
                 <input
+                  id="col-name"
                   type="text"
                   value={name}
                   onChange={(e) => { setName(e.target.value); setFieldErrors((p) => ({ ...p, name: undefined })); }}
@@ -511,10 +512,11 @@ export default function CreateCollectionPage() {
                 <FieldError msg={fieldErrors.name} />
               </div>
               <div>
-                <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+                <label htmlFor="col-symbol" className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
                   Symbol *
                 </label>
                 <input
+                  id="col-symbol"
                   type="text"
                   value={symbol}
                   onChange={(e) => { setSymbol(e.target.value.toUpperCase()); setFieldErrors((p) => ({ ...p, symbol: undefined })); }}
@@ -528,10 +530,11 @@ export default function CreateCollectionPage() {
 
             {/* Description */}
             <div>
-              <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+              <label htmlFor="col-description" className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
                 Description
               </label>
               <textarea
+                id="col-description"
                 value={description}
                 onChange={(e) => { setDescription(e.target.value); setFieldErrors((p) => ({ ...p, description: undefined })); }}
                 className={`${fieldErrors.description ? inputErrorClass : inputClass} h-24 resize-none`}
@@ -542,10 +545,11 @@ export default function CreateCollectionPage() {
 
             {/* Mint price */}
             <div>
-              <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+              <label htmlFor="col-mint-price" className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
                 Mint Price (ETH) *
               </label>
               <input
+                id="col-mint-price"
                 type="number"
                 step="0.0001"
                 min="0.0001"

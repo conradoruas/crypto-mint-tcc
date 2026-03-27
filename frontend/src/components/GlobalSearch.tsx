@@ -140,11 +140,15 @@ export function GlobalSearch() {
         onFocus={() => trimmed && setOpen(true)}
         onKeyDown={handleKeyDown}
         placeholder="Search collections, NFTs..."
+        aria-label="Search collections and NFTs"
+        aria-expanded={open && trimmed.length >= 1}
+        aria-autocomplete="list"
         className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-2 pl-10 pr-8 text-sm w-72 focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/50 text-on-surface"
       />
       {query && (
         <button
           onClick={clear}
+          aria-label="Clear search"
           className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
         >
           <X size={12} />

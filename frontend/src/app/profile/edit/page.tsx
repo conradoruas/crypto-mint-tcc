@@ -185,10 +185,11 @@ export default function EditProfilePage() {
 
             {/* Name */}
             <div>
-              <label className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+              <label htmlFor="profile-name" className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
                 Display Name
               </label>
               <input
+                id="profile-name"
                 type="text"
                 value={name}
                 onChange={(e) => { setName(e.target.value); setFieldErrors((p) => ({ ...p, name: undefined })); }}

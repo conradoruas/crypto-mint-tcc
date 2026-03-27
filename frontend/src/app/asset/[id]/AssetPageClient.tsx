@@ -291,6 +291,8 @@ function TxMessage({
 }) {
   return (
     <div
+      role="status"
+      aria-live="polite"
       className={`p-4 text-sm flex flex-col gap-2 rounded-sm border ${
         type === "success"
           ? "bg-primary/5 border-primary/20 text-primary"
@@ -901,6 +903,7 @@ export default function AssetPageClient() {
                         step="0.0001"
                         min="0.0001"
                         placeholder="Price in ETH (e.g. 0.05)"
+                        aria-label="Listing price in ETH"
                         value={listPrice}
                         onChange={(e) => { setListPrice(e.target.value); setListErrors({}); }}
                         className={listErrors.price ? `${inputClass} !border-error/40` : inputClass}
@@ -997,6 +1000,7 @@ export default function AssetPageClient() {
                     step="0.0001"
                     min="0.0001"
                     placeholder="Amount in ETH (e.g. 0.08)"
+                    aria-label="Offer amount in ETH"
                     value={offerAmount}
                     onChange={(e) => { setOfferAmount(e.target.value); setOfferErrors({}); }}
                     className={offerErrors.amount ? `${inputClass} !border-error/40` : inputClass}
