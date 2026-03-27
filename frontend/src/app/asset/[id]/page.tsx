@@ -16,6 +16,7 @@ import {
   Clock,
   ExternalLink,
   TrendingUp,
+  Heart,
 } from "lucide-react";
 import Image from "next/image";
 import { NFTItem } from "@/hooks/useExploreNfts";
@@ -31,6 +32,7 @@ import {
   useCancelOffer,
   OfferWithBuyer,
 } from "@/hooks/useMarketplace";
+import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
 
 
 const resolveIpfsUrl = (url: string) => {
@@ -267,6 +269,9 @@ export default function AssetDetail() {
   const { acceptOffer, isPending: isAccepting, isSuccess: isOfferAccepted } = useAcceptOffer();
   const { cancelOffer, isPending: isCancellingOffer, isSuccess: isOfferCancelled } = useCancelOffer();
 
+  const { isFavorited } = useIsFavorited(nftContract ?? "", tokenId);
+  const { toggleFavorite } = useFavorite();
+
   const isOwner = address && owner && address.toLowerCase() === owner.toLowerCase();
 
   const refetchAll = () => { refetchListing(); refetchMyOffer(); refetchOffers(); };
@@ -294,6 +299,7 @@ export default function AssetDetail() {
     };
     fetchNFT();
   }, [tokenId, nftContract]);
+
 
   useEffect(() => {
     if (isBought) { setTxMsg({ type: "success", text: "NFT purchased successfully!", hash: buyHash }); refetchAll(); }
@@ -404,15 +410,30 @@ export default function AssetDetail() {
           </div>
 
           <div className="flex items-center justify-between flex-wrap gap-3">
-            {owner && (
-              <div className="flex items-center gap-2 text-sm bg-surface-container px-3 py-1.5 rounded-sm border border-outline-variant/15">
-                <ShieldCheck size={13} className="text-primary" />
-                <span className="text-on-surface-variant text-xs uppercase tracking-widest">Owner</span>
-                <span className="font-headline font-bold text-sm font-mono text-on-surface">
-                  {isOwner ? "You" : `${owner.slice(0, 6)}...${owner.slice(-4)}`}
-                </span>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {owner && (
+                <div className="flex items-center gap-2 text-sm bg-surface-container px-3 py-1.5 rounded-sm border border-outline-variant/15">
+                  <ShieldCheck size={13} className="text-primary" />
+                  <span className="text-on-surface-variant text-xs uppercase tracking-widest">Owner</span>
+                  <span className="font-headline font-bold text-sm font-mono text-on-surface">
+                    {isOwner ? "You" : `${owner.slice(0, 6)}...${owner.slice(-4)}`}
+                  </span>
+                </div>
+              )}
+              {address && (
+                <button
+                  onClick={() => toggleFavorite(nftContract, tokenId)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm border transition-all text-xs font-bold uppercase tracking-widest ${
+                    isFavorited
+                      ? "bg-error/10 border-error/30 text-error"
+                      : "bg-surface-container border-outline-variant/15 text-on-surface-variant hover:border-outline"
+                  }`}
+                >
+                  <Heart size={13} className={isFavorited ? "fill-error" : ""} />
+                  {isFavorited ? "Saved" : "Save"}
+                </button>
+              )}
+            </div>
             {topOffer && (
               <div className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-sm bg-tertiary/5 border border-tertiary/20">
                 <TrendingUp size={12} className="text-tertiary" />

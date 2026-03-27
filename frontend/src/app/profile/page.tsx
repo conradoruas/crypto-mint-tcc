@@ -9,6 +9,7 @@ import {
   CollectionNFTItem,
   CreatedNFTItem,
 } from "@/hooks/useCollections";
+import { useUserFavorites } from "@/hooks/useFavorites";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
@@ -24,12 +25,10 @@ import {
   CheckCircle,
   Sparkles,
   Activity,
+  Heart,
 } from "lucide-react";
 import { fetchProfile, UserProfile } from "@/services/profile";
-import {
-  useActivityFeed,
-  ActivityType,
-} from "@/hooks/useActivityFeed";
+import { useActivityFeed, ActivityType } from "@/hooks/useActivityFeed";
 import Footer from "@/components/Footer";
 import { fetchAlchemyMetaForEvents, type MetaMap } from "@/lib/alchemyMeta";
 
@@ -188,6 +187,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState("Collected");
   const [metaMap, setMetaMap] = useState<MetaMap>(new Map());
   const [collectedPage, setCollectedPage] = useState(1);
+  const [favoritesPage, setFavoritesPage] = useState(1);
   const [createdPage, setCreatedPage] = useState(1);
   const [activityPage, setActivityPage] = useState(1);
   const NFT_PAGE_SIZE = 8;
@@ -201,6 +201,8 @@ export default function ProfilePage() {
 
   const { nfts: createdNfts, isLoading: isLoadingCreated } =
     useCreatedNFTs(address);
+  const { favorites, isLoading: isLoadingFavorites } =
+    useUserFavorites(address);
   const displayedNFTs = useMemo(
     () => filterAndSort(nfts, search, sort),
     [nfts, search, sort],
@@ -379,7 +381,7 @@ export default function ProfilePage() {
 
         {/* Tabs */}
         <div className="flex items-center border-b border-outline-variant/15 mb-10 overflow-x-auto no-scrollbar">
-          {["Collected", "Created", "Activity"].map((tab) => (
+          {["Collected", "Favorites", "Created", "Activity"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -709,6 +711,133 @@ export default function ProfilePage() {
             )}
           </div>
         )}
+
+        {/* Favorites tab */}
+        {activeTab === "Favorites" &&
+          (isLoadingFavorites ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="bg-surface-container-low rounded-sm overflow-hidden border border-outline-variant/5"
+                >
+                  <div className="aspect-square animate-pulse bg-surface-container-high" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-3 rounded-sm animate-pulse w-1/2 bg-surface-container-high" />
+                    <div className="h-4 rounded-sm animate-pulse w-3/4 bg-surface-container-high" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : favorites.length === 0 ? (
+            <div className="text-center py-20">
+              <Heart
+                size={48}
+                className="mx-auto mb-4 text-on-surface-variant/30"
+              />
+              <p className="text-sm text-on-surface-variant">
+                You haven&apos;t saved any NFTs yet.
+              </p>
+            </div>
+          ) : (() => {
+            const favTotalPages = Math.ceil(favorites.length / NFT_PAGE_SIZE);
+            const paginatedFavorites = favorites.slice(
+              (favoritesPage - 1) * NFT_PAGE_SIZE,
+              favoritesPage * NFT_PAGE_SIZE,
+            );
+            return (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {paginatedFavorites.map((nft) => (
+                    <Link
+                      href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
+                      key={`${nft.nftContract}-${nft.tokenId}`}
+                      className="group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] hover:bg-surface-container-high transition-all duration-300"
+                    >
+                      <div className="aspect-square overflow-hidden relative">
+                        {nft.image ? (
+                          <Image
+                            src={nft.image}
+                            alt={nft.name}
+                            fill
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full animate-pulse bg-surface-container-high" />
+                        )}
+                      </div>
+                      <div className="p-5">
+                        <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
+                          {nft.name}
+                        </h3>
+                        <p className="text-on-surface-variant text-xs mt-1">
+                          #{nft.tokenId.padStart(3, "0")}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+                {favTotalPages > 1 && (
+                  <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/10">
+                    <p className="text-xs text-on-surface-variant uppercase tracking-widest">
+                      {(favoritesPage - 1) * NFT_PAGE_SIZE + 1}–
+                      {Math.min(favoritesPage * NFT_PAGE_SIZE, favorites.length)}{" "}
+                      of {favorites.length}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setFavoritesPage((p) => Math.max(1, p - 1))}
+                        disabled={favoritesPage === 1}
+                        className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        Prev
+                      </button>
+                      {Array.from({ length: favTotalPages }, (_, i) => i + 1)
+                        .filter(
+                          (p) =>
+                            p === 1 ||
+                            p === favTotalPages ||
+                            Math.abs(p - favoritesPage) <= 1,
+                        )
+                        .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                          if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                            acc.push("…");
+                          acc.push(p);
+                          return acc;
+                        }, [])
+                        .map((p, idx) =>
+                          p === "…" ? (
+                            <span
+                              key={`e-${idx}`}
+                              className="px-2 text-on-surface-variant/40 text-xs"
+                            >
+                              …
+                            </span>
+                          ) : (
+                            <button
+                              key={p}
+                              onClick={() => setFavoritesPage(p as number)}
+                              className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${favoritesPage === p ? "bg-primary text-on-primary border-primary" : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"}`}
+                            >
+                              {p}
+                            </button>
+                          ),
+                        )}
+                      <button
+                        onClick={() => setFavoritesPage((p) => Math.min(favTotalPages, p + 1))}
+                        disabled={favoritesPage === favTotalPages}
+                        className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()
+          )}
 
         {/* Created tab */}
         {activeTab === "Created" &&
