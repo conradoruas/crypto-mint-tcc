@@ -45,9 +45,9 @@ function isAllowedOrigin(req: NextRequest): boolean {
   }
 }
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
+// ─── Proxy ────────────────────────────────────────────────────────────────────
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   if (!isAllowedOrigin(req)) {
     return new NextResponse("Forbidden", { status: 403 });
   }
