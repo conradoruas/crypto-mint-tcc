@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@testing-library/dom": ["./node_modules/@testing-library/dom/types/index.d.ts"]
     }
   },
   "include": [
