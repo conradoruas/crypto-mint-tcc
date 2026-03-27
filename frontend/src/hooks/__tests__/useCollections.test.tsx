@@ -31,7 +31,11 @@ vi.mock("wagmi", () => ({
     isLoading: false,
     isSuccess: false,
   }),
-  useConnection: vi.fn().mockReturnValue({ address: undefined } as any),
+  useConnection: vi
+    .fn()
+    .mockReturnValue({ address: undefined } as ReturnType<
+      typeof useConnection
+    >),
 }));
 
 import { useConnection } from "wagmi";
