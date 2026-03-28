@@ -11,8 +11,10 @@ import {
 import { parseEther, formatEther } from "viem";
 import { waitForTransactionReceipt } from "viem/actions";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useQuery } from "@apollo/client/react";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
+import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
 import type {
   ListingData,
   OfferData,
@@ -112,20 +114,131 @@ export function useMyOffer(nftContract: string, tokenId: string) {
 }
 
 // ─────────────────────────────────────────────
-// Hook: busca todas as ofertas ativas de um NFT (via contrato — não subgraph)
+// Hook: ofertas — subgraph first (rápido), RPC reconcilia quando possível
 // ─────────────────────────────────────────────
-/** Stable empty list so memoized read-contract configs do not churn each render. */
+
+/** Stable empty list so `useReadContracts` configs do not churn each render. */
 const NO_OFFER_BUYERS: readonly `0x${string}`[] = [];
+
+type GqlOfferRow = {
+  buyer: string;
+  amount: string;
+  expiresAt: string;
+  active: boolean;
+};
+
+function buildChainOfferMap(
+  buyersRaw: readonly `0x${string}`[] | undefined,
+  offerRows:
+    | readonly { result?: unknown; status?: string }[]
+    | undefined,
+): Map<string, OfferWithBuyer> {
+  const m = new Map<string, OfferWithBuyer>();
+  if (
+    !buyersRaw ||
+    !Array.isArray(buyersRaw) ||
+    !offerRows ||
+    offerRows.length !== buyersRaw.length
+  ) {
+    return m;
+  }
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  for (let i = 0; i < buyersRaw.length; i++) {
+    const row = offerRows[i]?.result as OfferData | undefined;
+    if (!row?.active || now > row.expiresAt) continue;
+    const buyer =
+      parseAddress(row.buyer) ?? parseAddress(buyersRaw[i]!);
+    if (!buyer) continue;
+    m.set(buyer.toLowerCase(), {
+      buyer,
+      buyerAddress: buyer,
+      amount: row.amount,
+      expiresAt: row.expiresAt,
+      active: true,
+    });
+  }
+  return m;
+}
+
+function indexerOffersFromGql(gqlOffers: GqlOfferRow[] | undefined) {
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const out: OfferWithBuyer[] = [];
+  for (const o of gqlOffers ?? []) {
+    if (!o.active || BigInt(o.expiresAt) <= now) continue;
+    const buyer = parseAddress(o.buyer);
+    if (!buyer) continue;
+    out.push({
+      buyer,
+      buyerAddress: buyer,
+      amount: BigInt(o.amount),
+      expiresAt: BigInt(o.expiresAt),
+      active: true,
+    });
+  }
+  out.sort((a, b) =>
+    a.amount === b.amount ? 0 : a.amount > b.amount ? -1 : 1,
+  );
+  return out;
+}
+
+function mergeIndexerAndChainOffers(
+  indexer: OfferWithBuyer[],
+  buyersRaw: readonly `0x${string}`[] | undefined,
+  chainByBuyer: Map<string, OfferWithBuyer>,
+): OfferWithBuyer[] {
+  const onChainBuyers = new Set(
+    (buyersRaw ?? []).map((b) => b.toLowerCase()),
+  );
+  const merged = new Map<string, OfferWithBuyer>();
+
+  for (const o of indexer) {
+    const k = o.buyerAddress.toLowerCase();
+    if (onChainBuyers.has(k)) {
+      const c = chainByBuyer.get(k);
+      if (c) merged.set(k, c);
+    } else {
+      merged.set(k, o);
+    }
+  }
+
+  for (const [k, v] of chainByBuyer) {
+    if (!merged.has(k)) merged.set(k, v);
+  }
+
+  const list = [...merged.values()];
+  list.sort((a, b) =>
+    a.amount === b.amount ? 0 : a.amount > b.amount ? -1 : 1,
+  );
+  return list;
+}
 
 export function useNFTOffers(nftContract: string, tokenId: string) {
   const enabled = !!nftContract && !!tokenId;
   const nftAddr = ensureAddress(nftContract);
   const tokenIdBn = BigInt(tokenId || "0");
 
+  type GqlOffersData = { offers: GqlOfferRow[] };
+  const {
+    data: gqlData,
+    loading: gqlLoading,
+    refetch: gqlRefetch,
+  } = useQuery<GqlOffersData>(GET_OFFERS_FOR_NFT, {
+    skip: !enabled,
+    variables: {
+      nftContract: nftContract?.toLowerCase() ?? "",
+      tokenId,
+    },
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+  });
+
+  const indexerRows = useMemo(
+    () => indexerOffersFromGql(gqlData?.offers),
+    [gqlData?.offers],
+  );
+
   const {
     data: buyersRaw,
-    isPending: isPendingBuyers,
-    isFetching: isFetchingBuyers,
     refetch: refetchBuyers,
   } = useReadContract({
     address: MARKETPLACE_ADDRESS,
@@ -151,57 +264,34 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     [nftAddr, tokenIdBn, buyerAddresses],
   );
 
-  const {
-    data: offerRows,
-    isPending: isPendingOffers,
-    isFetching: isFetchingOffers,
-    refetch: refetchOfferRows,
-  } = useReadContracts({
+  const { data: offerRows, refetch: refetchOfferRows } = useReadContracts({
     contracts: offerReads,
     query: { enabled: enabled && buyerAddresses.length > 0 },
   });
 
+  const chainByBuyer = useMemo(
+    () => buildChainOfferMap(buyerAddresses, offerRows),
+    [buyerAddresses, offerRows],
+  );
+
+  const offers = useMemo(
+    () =>
+      mergeIndexerAndChainOffers(
+        indexerRows,
+        Array.isArray(buyersRaw) ? (buyersRaw as `0x${string}`[]) : undefined,
+        chainByBuyer,
+      ),
+    [indexerRows, buyersRaw, chainByBuyer],
+  );
+
   const refetch = useCallback(() => {
+    gqlRefetch();
     refetchBuyers();
     refetchOfferRows();
-  }, [refetchBuyers, refetchOfferRows]);
+  }, [gqlRefetch, refetchBuyers, refetchOfferRows]);
 
-  const offers = useMemo(() => {
-    if (buyerAddresses.length === 0) return [];
-    if (!offerRows) return [];
-
-    const now = BigInt(Math.floor(Date.now() / 1000));
-    const collected: OfferWithBuyer[] = [];
-
-    for (let i = 0; i < buyerAddresses.length; i++) {
-      const row = offerRows[i]?.result as OfferData | undefined;
-      if (!row?.active || now > row.expiresAt) continue;
-      const buyer =
-        parseAddress(row.buyer) ?? parseAddress(buyerAddresses[i]!);
-      if (!buyer) continue;
-      collected.push({
-        buyer,
-        buyerAddress: buyer,
-        amount: row.amount,
-        expiresAt: row.expiresAt,
-        active: true,
-      });
-    }
-
-    collected.sort((a, b) => {
-      if (a.amount === b.amount) return 0;
-      return a.amount > b.amount ? -1 : 1;
-    });
-    return collected;
-  }, [buyerAddresses, offerRows]);
-
-  const isLoading =
-    !enabled
-      ? false
-      : isPendingBuyers ||
-        isFetchingBuyers ||
-        (buyerAddresses.length > 0 &&
-          (isPendingOffers || isFetchingOffers));
+  /** Spinner only on cold load (no cached indexer payload); never block on RPC. */
+  const isLoading = enabled && gqlLoading && gqlData === undefined;
 
   return {
     offers,

@@ -985,8 +985,8 @@ export default function AssetPageClient() {
               )}
             </h3>
             <p className="text-[11px] text-on-surface-variant/70 leading-snug -mt-1">
-              Offer amounts and buyers are read from the marketplace contract on this
-              network (same source the chain uses for escrow).
+              Offers load from the indexer for speed, then align with on-chain escrow when
+              your wallet can read the marketplace contract.
             </p>
             <OffersTable
               offers={offers}

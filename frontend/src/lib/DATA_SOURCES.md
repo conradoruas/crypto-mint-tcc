@@ -26,7 +26,7 @@ This app combines three read paths. They update at different speeds and serve di
 | Concern | Source of truth in UI |
 |--------|------------------------|
 | Buy / pay listing price | Asset page reads listing via `getListing` (RPC). |
-| Offers table / accept offer | Asset page reads buyers via `getOfferBuyers` and each row via `getOffer` (RPC). |
+| Offers table / accept offer | **Indexer first** (`GET_OFFERS_FOR_NFT`) for instant paint; **RPC reconciles** via `getOfferBuyers` + `getOffer` when available (fixes stale rows, ghost offers). Accept still executes against chain. |
 | Explore grid price / “for sale” badges | Subgraph (+ Alchemy for images). Shown as **best-effort**; copy tells users to open the asset to confirm. |
 | After a tx | Hooks refetch on-chain reads; explore uses `cache-and-network` and refetches when the tab becomes visible again to soften indexer lag. |
 

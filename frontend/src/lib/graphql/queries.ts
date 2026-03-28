@@ -184,7 +184,7 @@ export const GET_LISTING = gql`
   }
 `;
 
-/** Indexer view only; the asset page reads live offers via `getOfferBuyers` + `getOffer`. */
+/** Primary list for the asset UI (fast); RPC reconciles rows when `getOfferBuyers` / `getOffer` return. */
 export const GET_OFFERS_FOR_NFT = gql`
   query GetOffersForNFT($nftContract: Bytes!, $tokenId: BigInt!) {
     offers(
