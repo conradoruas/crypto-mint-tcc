@@ -15,7 +15,7 @@ import {
   CollectionStats,
   Collection,
 } from "../generated/schema";
-import { BigInt } from "@graphprotocol/graph-ts";
+import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 
 function getOrCreateStats(): MarketplaceStats {
   let stats = MarketplaceStats.load("global");
@@ -90,9 +90,18 @@ export function handleItemListed(event: ItemListed): void {
 
   // Ensure CollectionStats entity exists for this collection
   let colStats = getOrCreateCollectionStats(
-    event.params.nftContract.toHexString()
+    event.params.nftContract.toHexString(),
   );
   colStats.save();
+}
+
+function deactivateOfferForBuyer(nftId: string, buyer: Bytes): void {
+  let offerId = nftId + "-" + buyer.toHexString();
+  let offer = Offer.load(offerId);
+  if (offer && offer.active) {
+    offer.active = false;
+    offer.save();
+  }
 }
 
 export function handleItemSold(event: ItemSold): void {
@@ -114,6 +123,11 @@ export function handleItemSold(event: ItemSold): void {
     nft.listing = null;
     nft.save();
   }
+
+  // Prevenção de oferta fantasma: o comprador pode ter uma oferta ativa neste NFT
+  // (ex.: fez uma oferta e depois comprou pelo preço de listagem).
+  // Como agora é proprietário, uma oferta própria deve ser invalidada no subgraph.
+  deactivateOfferForBuyer(id, event.params.buyer);
 
   let actId =
     event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
@@ -138,7 +152,7 @@ export function handleItemSold(event: ItemSold): void {
 
   // Collection stats — all-time only (24h is computed on frontend via activityEvents)
   let colStats = getOrCreateCollectionStats(
-    event.params.nftContract.toHexString()
+    event.params.nftContract.toHexString(),
   );
   colStats.totalSales = colStats.totalSales.plus(BigInt.fromI32(1));
   colStats.totalVolume = colStats.totalVolume.plus(event.params.price);
@@ -220,17 +234,31 @@ export function handleOfferMade(event: OfferMade): void {
 }
 
 export function handleOfferAccepted(event: OfferAccepted): void {
-  let id =
+  let nftId =
     event.params.nftContract.toHexString() +
     "-" +
-    event.params.tokenId.toString() +
-    "-" +
-    event.params.buyer.toHexString();
+    event.params.tokenId.toString();
 
-  let offer = Offer.load(id);
-  if (offer) {
-    offer.active = false;
-    offer.save();
+  // 1. Desativa a oferta aceita e remove oferta própria do novo proprietário (para o caso de oferta prévia)
+  deactivateOfferForBuyer(nftId, event.params.buyer);
+
+  // 2. Transfere a propriedade do NFT para o comprador
+  //    (aceitar oferta transfere o NFT — o owner precisa ser atualizado no subgraph)
+  let nft = NFT.load(nftId);
+  if (nft) {
+    nft.owner = event.params.buyer;
+    nft.listing = null;
+    nft.save();
+  }
+
+  // 3. Se havia listagem ativa, desativa — o NFT mudou de dono
+  let hadActiveListing = false;
+  let listing = Listing.load(nftId);
+  if (listing && listing.active) {
+    hadActiveListing = true;
+    listing.active = false;
+    listing.updatedAt = event.block.timestamp;
+    listing.save();
   }
 
   let actId =
@@ -247,10 +275,22 @@ export function handleOfferAccepted(event: OfferAccepted): void {
   act.txHash = event.transaction.hash;
   act.save();
 
+  // Global stats
   let stats = getOrCreateStats();
   stats.totalSales = stats.totalSales.plus(BigInt.fromI32(1));
   stats.totalVolume = stats.totalVolume.plus(event.params.amount);
+  if (hadActiveListing) {
+    stats.totalListed = stats.totalListed.minus(BigInt.fromI32(1));
+  }
   stats.save();
+
+  // Collection stats (consistência com handleItemSold)
+  let colStats = getOrCreateCollectionStats(
+    event.params.nftContract.toHexString(),
+  );
+  colStats.totalSales = colStats.totalSales.plus(BigInt.fromI32(1));
+  colStats.totalVolume = colStats.totalVolume.plus(event.params.amount);
+  colStats.save();
 }
 
 export function handleOfferCancelled(event: OfferCancelled): void {
