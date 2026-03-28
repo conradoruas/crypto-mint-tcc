@@ -44,6 +44,7 @@ import {
 import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { logger } from "@/lib/logger";
+import { formatTransactionError } from "@/lib/txErrors";
 
 // ─── Price History Chart ──────────────────────────────────────────────────────
 
@@ -511,8 +512,11 @@ export default function AssetPageClient() {
       setListPrice("");
       setTxMsg({ type: "success", text: "NFT listed successfully!" });
       refetchListing();
-    } catch {
-      setTxMsg({ type: "error", text: "Error listing NFT." });
+    } catch (e) {
+      setTxMsg({
+        type: "error",
+        text: formatTransactionError(e, "Could not list this NFT."),
+      });
     }
   };
 
@@ -521,8 +525,11 @@ export default function AssetPageClient() {
     try {
       setTxMsg(null);
       await buyNFT(nftContract, tokenId, price);
-    } catch {
-      setTxMsg({ type: "error", text: "Error buying NFT." });
+    } catch (e) {
+      setTxMsg({
+        type: "error",
+        text: formatTransactionError(e, "Could not complete purchase."),
+      });
     }
   };
 
@@ -532,8 +539,11 @@ export default function AssetPageClient() {
       await cancelListing(nftContract, tokenId);
       setTxMsg({ type: "success", text: "Listing cancelled." });
       refetchListing();
-    } catch {
-      setTxMsg({ type: "error", text: "Error cancelling listing." });
+    } catch (e) {
+      setTxMsg({
+        type: "error",
+        text: formatTransactionError(e, "Could not cancel listing."),
+      });
     }
   };
 
@@ -546,8 +556,11 @@ export default function AssetPageClient() {
     try {
       setTxMsg(null);
       await makeOffer(nftContract, tokenId, offerAmount);
-    } catch {
-      setTxMsg({ type: "error", text: "Error sending offer." });
+    } catch (e) {
+      setTxMsg({
+        type: "error",
+        text: formatTransactionError(e, "Could not send offer."),
+      });
     }
   };
 
@@ -576,10 +589,10 @@ export default function AssetPageClient() {
       });
       refetchAll();
     } catch (e) {
-      logger.error("Erro ao aceitar oferta no Smart Contract", e);
+      logger.error("acceptOffer failed", e);
       setTxMsg({
         type: "error",
-        text: "Erro ao aceitar oferta no Smart Contract.",
+        text: formatTransactionError(e, "Could not accept offer."),
       });
     }
   };
@@ -588,8 +601,11 @@ export default function AssetPageClient() {
     try {
       setTxMsg(null);
       await cancelOffer(nftContract, tokenId);
-    } catch {
-      setTxMsg({ type: "error", text: "Error cancelling offer." });
+    } catch (e) {
+      setTxMsg({
+        type: "error",
+        text: formatTransactionError(e, "Could not cancel offer."),
+      });
     }
   };
 

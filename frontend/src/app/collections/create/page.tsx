@@ -30,6 +30,7 @@ import {
   getZodErrors,
   type CreateCollectionErrors,
 } from "@/lib/schemas";
+import { formatTransactionError } from "@/lib/txErrors";
 import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
 import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
 
@@ -236,7 +237,12 @@ export default function CreateCollectionPage() {
         mintPrice,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error.");
+      setError(
+        formatTransactionError(
+          e,
+          "Could not create collection. Check uploads and try again.",
+        ),
+      );
       setIsUploadingCover(false);
     }
   };
@@ -269,7 +275,12 @@ export default function CreateCollectionPage() {
       setLoadURIsHash(tx);
       setUploadProgress(100);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error loading URIs.");
+      setError(
+        formatTransactionError(
+          e,
+          "Could not publish metadata on-chain. Try again.",
+        ),
+      );
       setIsUploadingNFTs(false);
     }
   };

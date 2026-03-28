@@ -24,6 +24,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Footer from "@/components/Footer";
 import { resolveIpfsUrl } from "@/lib/ipfs";
+import { formatTransactionError } from "@/lib/txErrors";
 
 function CollectionOption({
   collection,
@@ -211,7 +212,7 @@ export default function MintPage() {
         address,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error.");
+      setError(formatTransactionError(e, "Could not mint. Try again."));
     }
   };
 

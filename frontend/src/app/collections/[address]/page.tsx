@@ -36,6 +36,7 @@ import {
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import Footer from "@/components/Footer";
 import { resolveIpfsUrl } from "@/lib/ipfs";
+import { formatTransactionError } from "@/lib/txErrors";
 import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
 import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
 
@@ -201,7 +202,12 @@ function LoadNFTsPanel({
       setLoadHash(tx);
       setProgress(100);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar NFTs.");
+      setError(
+        formatTransactionError(
+          e,
+          "Could not load NFTs on-chain. Try again.",
+        ),
+      );
       setIsUploading(false);
     }
   };
@@ -433,7 +439,7 @@ function MintModal({
     try {
       await mint(collectionAddress, mintPriceEth, address);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro desconhecido.");
+      setError(formatTransactionError(e, "Could not mint. Try again."));
     }
   };
 
@@ -569,7 +575,7 @@ export default function CollectionPage() {
       setWithdrawHash(tx);
     } catch (e) {
       setWithdrawError(
-        e instanceof Error ? e.message : "Erro ao retirar fundos.",
+        formatTransactionError(e, "Could not withdraw funds. Try again."),
       );
     }
   };
