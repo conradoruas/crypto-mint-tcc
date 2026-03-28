@@ -241,32 +241,44 @@ export const GET_TRENDING_COLLECTIONS = gql`
   }
 `;
 
+/**
+ * Trending inputs scoped to known collection contracts (smaller scans than global 1000×3).
+ * For richer analytics, add time-bucketed aggregates in the subgraph (e.g. volume24h on CollectionStats).
+ */
 export const GET_TRENDING_DATA = gql`
-  query GetTrendingData($sevenDaysAgo: BigInt!, $now: BigInt!) {
+  query GetTrendingData($sevenDaysAgo: BigInt!, $now: BigInt!, $contracts: [Bytes!]!) {
     activityEvents(
-      where: { type: "sale", timestamp_gt: $sevenDaysAgo }
+      where: {
+        type: "sale"
+        timestamp_gt: $sevenDaysAgo
+        nftContract_in: $contracts
+      }
       orderBy: timestamp
       orderDirection: asc
-      first: 1000
+      first: 400
     ) {
       nftContract
       price
       timestamp
     }
     listings(
-      where: { active: true }
+      where: { active: true, nftContract_in: $contracts }
       orderBy: price
       orderDirection: asc
-      first: 1000
+      first: 400
     ) {
       nftContract
       price
     }
     offers(
-      where: { active: true, expiresAt_gt: $now }
+      where: {
+        active: true
+        expiresAt_gt: $now
+        nftContract_in: $contracts
+      }
       orderBy: amount
       orderDirection: desc
-      first: 1000
+      first: 400
     ) {
       nftContract
       amount

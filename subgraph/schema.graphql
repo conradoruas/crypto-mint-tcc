@@ -72,6 +72,8 @@ type MarketplaceStats @entity {
   totalSales: BigInt!
 }
 
+# All-time aggregates only. Optional extension: volume24h / sales24h (bucketed in handlers)
+# so the dApp can rank "Trending" without wide activityEvents scans.
 type CollectionStats @entity {
   id: ID!
   collection: Collection!

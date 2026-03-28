@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { useCollections } from "@/hooks/useCollections";
@@ -8,6 +8,11 @@ import { GET_TRENDING_DATA } from "@/lib/graphql/queries";
 import type { TrendingCollection } from "@/types/collection";
 
 export type { TrendingCollection };
+
+const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
+
+/** Single poller: refresh window + subgraph data every 5 minutes (no pollInterval + setInterval). */
+const TRENDING_REFRESH_MS = 5 * 60 * 1000;
 
 type GqlSaleEvent = { nftContract: string; price: string; timestamp: string };
 type GqlListing = { nftContract: string; price: string };
@@ -18,6 +23,15 @@ type GqlTrendingData = {
   offers: GqlOffer[];
 };
 
+function buildTrendingVariables(contractAddresses: string[]) {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    sevenDaysAgo: (now - 7 * 86400).toString(),
+    now: now.toString(),
+    contracts: contractAddresses,
+  };
+}
+
 // ─────────────────────────────────────────────
 // Hook principal
 // ─────────────────────────────────────────────
@@ -26,10 +40,17 @@ export function useTrendingCollections(limit = 10) {
   const [trending, setTrending] = useState<TrendingCollection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const makeQueryVars = useCallback(() => {
-    const now = Math.floor(Date.now() / 1000);
-    return { sevenDaysAgo: (now - 7 * 86400).toString(), now: now.toString() };
-  }, []);
+  const { collections } = useCollections();
+
+  const contractAddresses = useMemo(
+    () => collections.map((c) => c.contractAddress.toLowerCase()),
+    [collections],
+  );
+
+  const queryVariables = useMemo(
+    () => buildTrendingVariables(contractAddresses),
+    [contractAddresses],
+  );
 
   const {
     data: statsData,
@@ -37,17 +58,19 @@ export function useTrendingCollections(limit = 10) {
     error: statsError,
     refetch,
   } = useQuery<GqlTrendingData>(GET_TRENDING_DATA, {
-    variables: makeQueryVars(),
-    pollInterval: 5 * 60 * 1000,
+    skip: !SUBGRAPH_ENABLED || contractAddresses.length === 0,
+    variables: queryVariables,
   });
 
-  // Atualiza os timestamps das variáveis a cada poll para manter a janela de 7 dias correta
   useEffect(() => {
-    const id = setInterval(() => refetch(makeQueryVars()), 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [refetch, makeQueryVars]);
+    if (!SUBGRAPH_ENABLED || contractAddresses.length === 0) return;
 
-  const { collections } = useCollections();
+    const id = window.setInterval(() => {
+      void refetch(buildTrendingVariables(contractAddresses));
+    }, TRENDING_REFRESH_MS);
+
+    return () => window.clearInterval(id);
+  }, [refetch, contractAddresses]);
 
   const collectionsRef = useRef(collections);
   useEffect(() => {
@@ -118,7 +141,6 @@ export function useTrendingCollections(limit = 10) {
       setIsLoading(true);
       const cols = collectionsRef.current;
 
-      // Build trending metrics for all collections (no network calls yet)
       const withoutOwners = cols.map((col) => {
         const addr = col.contractAddress.toLowerCase();
         const agg = salesByAddr.get(addr);
@@ -154,13 +176,10 @@ export function useTrendingCollections(limit = 10) {
         } as TrendingCollection;
       });
 
-      // Sort and slice BEFORE fetching owners — only query the collections
-      // that will actually be displayed (reduces N requests to `limit` requests)
       const top = withoutOwners
         .sort((a, b) => parseFloat(b.volume24h) - parseFloat(a.volume24h))
         .slice(0, limit);
 
-      // Single batch request to the server instead of N parallel requests
       try {
         const res = await globalThis.fetch("/api/alchemy/getOwnerCountsBatch", {
           method: "POST",
@@ -184,7 +203,7 @@ export function useTrendingCollections(limit = 10) {
       }
     };
 
-    fetchOwners();
+    void fetchOwners();
 
     return () => {
       cancelled = true;

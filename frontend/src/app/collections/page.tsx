@@ -177,13 +177,22 @@ export default function CollectionsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
+  const trendingContracts = useMemo(
+    () => collections.map((c) => c.contractAddress.toLowerCase()),
+    [collections],
+  );
+
   const trendingVars = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
-    return { sevenDaysAgo: (now - 7 * 86400).toString(), now: now.toString() };
-  }, []);
+    return {
+      sevenDaysAgo: (now - 7 * 86400).toString(),
+      now: now.toString(),
+      contracts: trendingContracts,
+    };
+  }, [trendingContracts]);
 
   const { data: trendingData } = useQuery<GqlTrendingData>(GET_TRENDING_DATA, {
-    skip: !SUBGRAPH_ENABLED,
+    skip: !SUBGRAPH_ENABLED || trendingContracts.length === 0,
     variables: trendingVars,
   });
 
