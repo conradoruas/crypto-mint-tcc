@@ -7,6 +7,15 @@ import {
   runUploadGate,
   validateImageFile,
 } from "@/lib/uploadSecurity";
+import { parseCombinedUploadFields } from "@/lib/uploadPayloadSchemas";
+
+function safeMetadataFileName(name: string): string {
+  const base = name
+    .replace(/[/\\?%*:|"<>]/g, "")
+    .replace(/\s+/g, "_")
+    .slice(0, 80);
+  return `${base || "metadata"}_metadata.json`;
+}
 
 export async function POST(req: NextRequest) {
   const gate = await runUploadGate(
@@ -26,15 +35,18 @@ export async function POST(req: NextRequest) {
     const invalid = validateImageFile(file);
     if (invalid) return invalid;
 
-    const name = formData.get("name") as string | null;
-    const description = formData.get("description") as string | null;
+    const rawName = formData.get("name");
+    const rawDesc = formData.get("description");
+    if (rawName instanceof File || rawDesc instanceof File) {
+      return NextResponse.json({ error: "Invalid form fields." }, { status: 400 });
+    }
 
-    if (name !== null && name.length > 500) {
-      return NextResponse.json({ error: "Name too long." }, { status: 400 });
+    const fields = parseCombinedUploadFields(rawName, rawDesc);
+    if (!fields.ok) {
+      return NextResponse.json({ error: "Invalid form fields." }, { status: 400 });
     }
-    if (description !== null && description.length > 10000) {
-      return NextResponse.json({ error: "Description too long." }, { status: 400 });
-    }
+    const metaName = fields.name;
+    const metaDescription = fields.description;
 
     const pinataForm = new FormData();
     pinataForm.append("file", file);
@@ -62,18 +74,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Upload failed." }, { status: 502 });
     }
 
-    if (!name) {
+    if (!metaName) {
       return NextResponse.json({ uri: `ipfs://${imageHash}` });
     }
 
     const metadata = JSON.stringify({
       pinataContent: {
-        name,
-        description: description || "",
+        name: metaName,
+        description: metaDescription ?? "",
         image: `ipfs://${imageHash}`,
         attributes: [{ trait_type: "Criador", value: "Usuario TCC" }],
       },
-      pinataMetadata: { name: `${name}_metadata.json` },
+      pinataMetadata: { name: safeMetadataFileName(metaName) },
     });
 
     const jsonRes = await fetch(

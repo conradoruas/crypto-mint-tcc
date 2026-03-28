@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAddress } from "viem";
 import { z } from "zod";
 import { PINATA_JWT as jwt } from "@/lib/env";
 import { logger } from "@/lib/logger";
@@ -8,17 +7,7 @@ import {
   MAX_JSON_UPLOAD_BYTES,
   runUploadGate,
 } from "@/lib/uploadSecurity";
-
-const profileBodySchema = z
-  .object({
-    address: z.string().min(1).max(200),
-    name: z.string().max(500).optional(),
-    description: z.string().max(10000).optional(),
-    image: z.string().max(500).optional(),
-    imageUri: z.string().max(500).optional(),
-    updatedAt: z.number().optional(),
-  })
-  .strict();
+import { parseUploadProfileBody } from "@/lib/uploadPayloadSchemas";
 
 export async function POST(req: NextRequest) {
   const gate = await runUploadGate(
@@ -44,21 +33,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
     }
 
-    const parsedBody = profileBodySchema.safeParse(parsed);
-    if (!parsedBody.success) {
-      return NextResponse.json({ error: "Invalid profile data." }, { status: 400 });
-    }
-
-    const profile = parsedBody.data;
-
-    if (isAddress(profile.address)) {
-      if (profile.address.toLowerCase() !== gate.address.toLowerCase()) {
-        return NextResponse.json(
-          { error: "Profile address must match the signing wallet." },
-          { status: 403 },
-        );
+    const result = parseUploadProfileBody(parsed, gate.address);
+    if (!result.ok) {
+      if (result.error instanceof z.ZodError) {
+        return NextResponse.json({ error: "Invalid profile data." }, { status: 400 });
       }
+      const msg = result.error.message;
+      const status =
+        msg === "Profile address must match the signing wallet." ? 403 : 400;
+      return NextResponse.json({ error: msg }, { status });
     }
+
+    const { content, pinataFileName } = result.data;
 
     const res = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
       method: "POST",
@@ -67,10 +53,8 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        pinataContent: profile,
-        pinataMetadata: {
-          name: `profile_${profile.address.slice(0, 8)}.json`,
-        },
+        pinataContent: content,
+        pinataMetadata: { name: pinataFileName },
       }),
     });
 
