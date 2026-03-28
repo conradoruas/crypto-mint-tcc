@@ -18,7 +18,10 @@ import type {
   OfferWithBuyer,
 } from "@/types/marketplace";
 import { ensureAddress, parseAddress } from "@/lib/schemas";
-import { MARKETPLACE_ADDRESS } from "@/lib/env";
+
+// env.ts is server-only — read the NEXT_PUBLIC_ var directly on the client
+const MARKETPLACE_ADDRESS = process.env
+  .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
 
 export type { ListingData, OfferData, OfferWithBuyer };
 

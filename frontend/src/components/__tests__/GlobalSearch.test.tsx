@@ -32,7 +32,9 @@ vi.mock("@/lib/alchemyMeta", () => ({
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
-function makeCollection(overrides: Partial<CollectionInfo> = {}): CollectionInfo {
+function makeCollection(
+  overrides: Partial<CollectionInfo> = {},
+): CollectionInfo {
   return {
     contractAddress: "0xcollection0000000000000000000000000000001",
     creator: "0xcreator",
@@ -79,7 +81,9 @@ describe("GlobalSearch", () => {
   it("shows clear button when query is non-empty", () => {
     render(<GlobalSearch />);
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "px" } });
-    expect(screen.getByRole("button", { name: /clear search/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /clear search/i }),
+    ).toBeInTheDocument();
   });
 
   it("does not show clear button when input is empty", () => {
@@ -100,7 +104,9 @@ describe("GlobalSearch", () => {
   it("shows 'No results' message when query matches nothing", () => {
     mockUseCollections.mockReturnValue({ collections: [], isLoading: false });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "zzz" } });
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "zzz" },
+    });
     expect(screen.getByText(/no results for/i)).toBeInTheDocument();
   });
 
@@ -112,7 +118,9 @@ describe("GlobalSearch", () => {
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "pixel" } });
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "pixel" },
+    });
     expect(screen.getByText("Pixel Punks")).toBeInTheDocument();
   });
 
@@ -122,18 +130,24 @@ describe("GlobalSearch", () => {
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "ppk" } });
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "ppk" },
+    });
     expect(screen.getByText("Pixel Punks")).toBeInTheDocument();
   });
 
   it("matches collections by contract address", () => {
     const addr = "0xdeadbeef0000000000000000000000000000cafe";
     mockUseCollections.mockReturnValue({
-      collections: [makeCollection({ contractAddress: addr, name: "DeadBeef" })],
+      collections: [
+        makeCollection({ contractAddress: addr, name: "DeadBeef" }),
+      ],
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "deadbeef" } });
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "deadbeef" },
+    });
     expect(screen.getByText("DeadBeef")).toBeInTheDocument();
   });
 
@@ -143,18 +157,20 @@ describe("GlobalSearch", () => {
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "zzz" } });
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "zzz" },
+    });
     expect(screen.queryByText("Pixel Punks")).toBeNull();
   });
 
-  it("requires at least 2 characters to show collection results", () => {
+  it("requires at least 1 character to show collection results", () => {
     mockUseCollections.mockReturnValue({
       collections: [makeCollection({ name: "Pixel Punks" })],
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "p" } });
-    // Dropdown opens but no results section since length < 2
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "" } });
+    // Dropdown opens but no results section since length < 1
     expect(screen.queryByText("Pixel Punks")).toBeNull();
   });
 
@@ -191,9 +207,13 @@ describe("GlobalSearch", () => {
       isLoading: false,
     });
     render(<GlobalSearch />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "pixel" } });
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "pixel" },
+    });
     await waitFor(() =>
-      expect(screen.getByText(/see all results in explore/i)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/see all results in explore/i),
+      ).toBeInTheDocument(),
     );
   });
 });

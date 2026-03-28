@@ -27,10 +27,22 @@ export async function GET(
   const search = req.nextUrl.search;
   const upstream = `${ALCHEMY_BASE}/${endpoint}${search}`;
 
-  // Next.js data cache: deduplicates concurrent requests and revalidates by TTL
-  const res = await fetch(upstream, { next: { revalidate: getTTL(endpoint) } });
-  const data = await res.json();
-  return Response.json(data, { status: res.status });
+  try {
+    // Next.js data cache: deduplicates concurrent requests and revalidates by TTL
+    const res = await fetch(upstream, { next: { revalidate: getTTL(endpoint) } });
+
+    if (!res.ok) {
+      return Response.json(
+        { error: `Alchemy error ${res.status}` },
+        { status: res.status },
+      );
+    }
+
+    const data = await res.json();
+    return Response.json(data);
+  } catch {
+    return Response.json({ error: "Failed to reach Alchemy" }, { status: 502 });
+  }
 }
 
 // Cached POST fetcher — cache key is (endpoint, serialized body)

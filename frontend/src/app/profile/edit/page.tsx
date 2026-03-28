@@ -19,11 +19,13 @@ import {
 } from "@/lib/schemas";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 
-
 async function uploadImageToIPFS(file: File): Promise<string> {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch("/api/upload-image", { method: "POST", body: formData });
+  const res = await fetch("/api/upload-image", {
+    method: "POST",
+    body: formData,
+  });
   if (!res.ok) throw new Error(`Image upload failed: ${res.status}`);
   const data = await res.json();
   if (!data.uri) throw new Error("Invalid URI returned by server");
@@ -34,7 +36,9 @@ export default function EditProfilePage() {
   const { address, isConnected } = useConnection();
   const router = useRouter();
 
-  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
+  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(
+    null,
+  );
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [name, setName] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string>("");
@@ -46,7 +50,10 @@ export default function EditProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!address) { setIsLoadingProfile(false); return; }
+    if (!address) {
+      setIsLoadingProfile(false);
+      return;
+    }
     fetchProfile(address).then((p) => {
       setCurrentProfile(p);
       setName(p?.name ?? "");
@@ -64,7 +71,9 @@ export default function EditProfilePage() {
 
   const handleSave = async () => {
     if (!address) return;
-    const errors = getZodErrors(editProfileSchema, { name: name.trim() }) as EditProfileErrors;
+    const errors = getZodErrors(editProfileSchema, {
+      name: name.trim(),
+    }) as EditProfileErrors;
     setFieldErrors(errors);
     if (errors.name) return;
     setError(null);
@@ -72,7 +81,12 @@ export default function EditProfilePage() {
     try {
       let imageUri = currentProfile?.imageUri ?? "";
       if (imageFile) imageUri = await uploadImageToIPFS(imageFile);
-      const updated: UserProfile = { address, name: name.trim(), imageUri, updatedAt: Date.now() };
+      const updated: UserProfile = {
+        address,
+        name: name.trim(),
+        imageUri,
+        updatedAt: Date.now(),
+      };
       const uri = await uploadProfileToIPFS(updated);
       saveProfileHash(address, uri);
       setSuccess(true);
@@ -84,7 +98,8 @@ export default function EditProfilePage() {
     }
   };
 
-  const hasChanges = name !== (currentProfile?.name ?? "") || imageFile !== null;
+  const hasChanges =
+    name !== (currentProfile?.name ?? "") || imageFile !== null;
 
   if (!isConnected) {
     return (
@@ -101,7 +116,6 @@ export default function EditProfilePage() {
     <main className="min-h-screen bg-background text-on-surface">
       <Navbar />
       <div className="pt-32 pb-20 max-w-lg mx-auto px-8">
-
         {/* Header */}
         <div className="flex items-center gap-4 mb-10">
           <button
@@ -130,7 +144,6 @@ export default function EditProfilePage() {
           </div>
         ) : (
           <div className="bg-surface-container-low border border-outline-variant/10 p-8 space-y-6 rounded-sm">
-
             {/* Avatar */}
             <div className="flex flex-col items-center gap-3">
               <div className="relative group">
@@ -142,6 +155,7 @@ export default function EditProfilePage() {
                       fill
                       className="object-cover"
                       sizes="112px"
+                      loading="eager"
                     />
                   </div>
                 ) : (
@@ -180,14 +194,20 @@ export default function EditProfilePage() {
 
             {/* Name */}
             <div>
-              <label htmlFor="profile-name" className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant">
+              <label
+                htmlFor="profile-name"
+                className="block text-[10px] font-headline font-bold mb-2 uppercase tracking-widest text-on-surface-variant"
+              >
                 Display Name
               </label>
               <input
                 id="profile-name"
                 type="text"
                 value={name}
-                onChange={(e) => { setName(e.target.value); setFieldErrors((p) => ({ ...p, name: undefined })); }}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setFieldErrors((p) => ({ ...p, name: undefined }));
+                }}
                 maxLength={32}
                 placeholder="Your name..."
                 className="w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40"
@@ -247,7 +267,11 @@ export default function EditProfilePage() {
                   {!(isSaving || !hasChanges) && (
                     <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
                   )}
-                  {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                  {isSaving ? (
+                    <Loader2 className="animate-spin" size={16} />
+                  ) : (
+                    <Check size={16} />
+                  )}
                   {isSaving ? "Saving..." : "Save"}
                 </button>
               </div>

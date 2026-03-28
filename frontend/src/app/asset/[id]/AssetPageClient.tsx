@@ -566,7 +566,8 @@ export default function AssetPageClient() {
     try {
       setTxMsg(null);
       await acceptOffer(nftContract, tokenId, safeBuyer);
-    } catch (error) {
+    } catch (e) {
+      logger.error("Erro ao aceitar oferta no Smart Contract", e);
       setTxMsg({
         type: "error",
         text: "Erro ao aceitar oferta no Smart Contract.",

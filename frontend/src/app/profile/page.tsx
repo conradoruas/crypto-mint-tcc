@@ -112,6 +112,7 @@ function ProfileAvatar({
           fill
           className="object-cover"
           sizes={`${size}px`}
+          loading="eager"
         />
       </div>
     );
@@ -153,8 +154,18 @@ export default function ProfilePage() {
 
   const { nfts: createdNfts, isLoading: isLoadingCreated } =
     useCreatedNFTs(address);
-  const { favorites, isLoading: isLoadingFavorites } =
+  const { favorites: rawFavorites, isLoading: isLoadingFavorites } =
     useUserFavorites(address);
+  const favorites = useMemo(() => {
+    const colMap = new Map(
+      collections.map((c) => [c.contractAddress.toLowerCase(), c.name]),
+    );
+    return rawFavorites.map((fav) => ({
+      ...fav,
+      collectionName:
+        fav.collectionName || colMap.get(fav.nftContract.toLowerCase()) || "",
+    }));
+  }, [rawFavorites, collections]);
   const displayedNFTs = useMemo(
     () => filterAndSort(nfts, search, sort),
     [nfts, search, sort],
@@ -515,6 +526,7 @@ export default function ProfilePage() {
                                   fill
                                   className="object-cover"
                                   sizes="120px"
+                                  loading="eager"
                                 />
                               )}
                             </div>
@@ -695,12 +707,16 @@ export default function ProfilePage() {
                           fill
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                           className="object-cover"
+                          loading="eager"
                         />
                       ) : (
                         <div className="w-full h-full animate-pulse bg-surface-container-high" />
                       )}
                     </div>
                     <div className="p-5">
+                      <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
+                        {nft.collectionName}
+                      </p>
                       <h3 className="font-headline font-bold text-lg truncate group-hover:text-primary transition-colors">
                         {nft.name}
                       </h3>
@@ -823,6 +839,7 @@ export default function ProfilePage() {
                           fill
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                           className="object-cover"
+                          loading="eager"
                         />
                       ) : (
                         <div className="w-full h-full animate-pulse bg-surface-container-high" />
@@ -975,6 +992,7 @@ export default function ProfilePage() {
                             fill
                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                             className="object-cover"
+                            loading="eager"
                           />
                         ) : (
                           <div className="w-full h-full animate-pulse bg-surface-container-high" />

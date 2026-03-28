@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import {
@@ -44,22 +45,24 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
       pollInterval: 30_000,
     });
 
-  const rawEvents: GqlEvent[] =
-    (filterContract ? gqlFiltered?.activityEvents : gqlAll?.activityEvents) ??
-    [];
+  const events: ActivityEvent[] = useMemo(() => {
+    const rawEvents: GqlEvent[] =
+      (filterContract ? gqlFiltered?.activityEvents : gqlAll?.activityEvents) ??
+      [];
 
-  const events: ActivityEvent[] = rawEvents.map((e) => ({
-    id: e.id,
-    type: e.type as ActivityType,
-    nftContract: e.nftContract,
-    tokenId: e.tokenId,
-    from: e.from,
-    to: e.to,
-    priceETH: e.price ? formatEther(BigInt(e.price)) : undefined,
-    txHash: e.txHash,
-    blockNumber: BigInt(0),
-    timestamp: e.timestamp ? Number(e.timestamp) : undefined,
-  }));
+    return rawEvents.map((e) => ({
+      id: e.id,
+      type: e.type as ActivityType,
+      nftContract: e.nftContract,
+      tokenId: e.tokenId,
+      from: e.from,
+      to: e.to,
+      priceETH: e.price ? formatEther(BigInt(e.price)) : undefined,
+      txHash: e.txHash,
+      blockNumber: BigInt(0),
+      timestamp: e.timestamp ? Number(e.timestamp) : undefined,
+    }));
+  }, [gqlAll, gqlFiltered, filterContract]);
 
   return {
     events,

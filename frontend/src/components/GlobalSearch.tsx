@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useStableArray } from "@/hooks/useStableArray";
 import { Search, X, Layers, Image as ImageIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -35,15 +36,21 @@ export function GlobalSearch() {
   });
 
   // Pre-load all NFT metadata as soon as subgraph data arrives
-  // 1. Estabilizamos a lista de tokens. O useMemo garante que a referência
-  // só mude se os dados reais do nftData mudarem.
-  const tokensToFetch = useMemo(() => {
+  // 1. Estabilizamos a lista de tokens. O useStableArray garante que a referência
+  // só mude se os tokens reais mudarem — evita re-disparo pelo churn de referência
+  // do Apollo (causado pelo polling do wagmi ao conectar a carteira).
+  const rawTokens = useMemo(() => {
     const nfts = nftData?.nfts ?? [];
     return nfts.map((n) => ({
       contractAddress: n.collection.contractAddress,
       tokenId: n.tokenId,
     }));
-  }, [nftData?.nfts]);
+  }, [nftData]);
+
+  const tokensToFetch = useStableArray(
+    rawTokens,
+    (t) => `${t.contractAddress}-${t.tokenId}`,
+  );
 
   // 2. Pré-carregamento de metadados
   useEffect(() => {
@@ -71,7 +78,7 @@ export function GlobalSearch() {
 
   const collectionResults = useMemo(
     () =>
-      trimmed.length >= 2
+      trimmed.length >= 1
         ? collections
             .filter(
               (c) =>
@@ -181,7 +188,7 @@ export function GlobalSearch() {
                       onClick={clear}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container transition-colors"
                     >
-                      <div className="w-9 h-9 shrink-0 bg-surface-container-high overflow-hidden">
+                      <div className="w-9 h-9 shrink-0 bg-surface-container-high overflow-hidden relative">
                         {c.image ? (
                           <Image
                             src={resolveIpfsUrl(c.image)}
