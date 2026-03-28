@@ -5,9 +5,11 @@ import {
   useWaitForTransactionReceipt,
   useReadContract,
   useConnection,
+  usePublicClient,
 } from "wagmi";
 import { parseEther, formatEther } from "viem";
-import { useCallback } from "react";
+import { waitForTransactionReceipt } from "viem/actions";
+import { useCallback, useRef, useState } from "react";
 import { useQuery } from "@apollo/client/react";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
@@ -24,6 +26,14 @@ const MARKETPLACE_ADDRESS = process.env
   .NEXT_PUBLIC_MARKETPLACE_ADDRESS as `0x${string}`;
 
 export type { ListingData, OfferData, OfferWithBuyer };
+
+/** Stages for approve-then-act contract flows (listing, accepting offers). */
+export type TwoStepTxPhase =
+  | "idle"
+  | "approve-wallet"
+  | "approve-confirm"
+  | "exec-wallet"
+  | "exec-confirm";
 
 // ─────────────────────────────────────────────
 // Hook: busca listagem e dono de um NFT
@@ -159,36 +169,72 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
 // ─────────────────────────────────────────────
 
 export function useListNFT() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
+  const publicClient = usePublicClient();
+  const { mutateAsync } = useWriteContract();
+  const [phase, setPhase] = useState<TwoStepTxPhase>("idle");
+  const inFlightRef = useRef(false);
 
-  const listNFT = async (
-    nftContract: `0x${string}`,
-    tokenId: string,
-    priceInEth: string,
-  ) => {
-    // Aprovação no contrato da COLEÇÃO
-    await mutateAsync({
-      address: nftContract,
-      abi: NFT_COLLECTION_ABI,
-      functionName: "setApprovalForAll",
-      args: [MARKETPLACE_ADDRESS, true],
-      gas: BigInt(100000),
-    });
+  const listNFT = useCallback(
+    async (
+      nftContract: `0x${string}`,
+      tokenId: string,
+      priceInEth: string,
+    ) => {
+      if (inFlightRef.current) {
+        throw new Error("Listing already in progress.");
+      }
+      if (!publicClient) {
+        throw new Error("No network connection.");
+      }
 
-    // Listagem no MARKETPLACE — hash rastreado via useWaitForTransactionReceipt
-    await mutateAsync({
-      address: MARKETPLACE_ADDRESS,
-      abi: NFT_MARKETPLACE_ABI,
-      functionName: "listItem",
-      args: [nftContract, BigInt(tokenId), parseEther(priceInEth)],
-      gas: BigInt(200000),
-    });
+      inFlightRef.current = true;
+      try {
+        setPhase("approve-wallet");
+        const approveHash = await mutateAsync({
+          address: nftContract,
+          abi: NFT_COLLECTION_ABI,
+          functionName: "setApprovalForAll",
+          args: [MARKETPLACE_ADDRESS, true],
+          gas: BigInt(100000),
+        });
+
+        setPhase("approve-confirm");
+        await waitForTransactionReceipt(publicClient, { hash: approveHash });
+
+        setPhase("exec-wallet");
+        const listHash = await mutateAsync({
+          address: MARKETPLACE_ADDRESS,
+          abi: NFT_MARKETPLACE_ABI,
+          functionName: "listItem",
+          args: [nftContract, BigInt(tokenId), parseEther(priceInEth)],
+          gas: BigInt(200000),
+        });
+
+        setPhase("exec-confirm");
+        await waitForTransactionReceipt(publicClient, { hash: listHash });
+      } finally {
+        setPhase("idle");
+        inFlightRef.current = false;
+      }
+    },
+    [publicClient, mutateAsync],
+  );
+
+  const isFlowBusy = phase !== "idle";
+
+  return {
+    listNFT,
+    /** Current step in the approve → list pipeline. */
+    phase,
+    /** True from first wallet prompt until the listing tx is mined. */
+    isPending: isFlowBusy,
+    /** True while waiting for chain confirmation (not wallet popup). */
+    isConfirming:
+      phase === "approve-confirm" || phase === "exec-confirm",
+    /** @deprecated Single-hash hook was misleading for two txs; use await listNFT() success. */
+    isSuccess: false,
+    hash: undefined as `0x${string}` | undefined,
   };
-
-  return { listNFT, isPending, isConfirming, isSuccess, hash };
 }
 
 // ─────────────────────────────────────────────
@@ -275,35 +321,68 @@ export function useMakeOffer() {
 // ─────────────────────────────────────────────
 
 export function useAcceptOffer() {
-  const { data: hash, mutateAsync, isPending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
+  const publicClient = usePublicClient();
+  const { mutateAsync } = useWriteContract();
+  const [phase, setPhase] = useState<TwoStepTxPhase>("idle");
+  const inFlightRef = useRef(false);
 
-  const acceptOffer = async (
-    nftContract: `0x${string}`,
-    tokenId: string,
-    buyerAddress: `0x${string}`,
-  ) => {
-    // Aprovação no contrato da COLEÇÃO
-    await mutateAsync({
-      address: nftContract,
-      abi: NFT_COLLECTION_ABI,
-      functionName: "setApprovalForAll",
-      args: [MARKETPLACE_ADDRESS, true],
-      gas: BigInt(100000),
-    });
+  const acceptOffer = useCallback(
+    async (
+      nftContract: `0x${string}`,
+      tokenId: string,
+      buyerAddress: `0x${string}`,
+    ) => {
+      if (inFlightRef.current) {
+        throw new Error("Accept offer already in progress.");
+      }
+      if (!publicClient) {
+        throw new Error("No network connection.");
+      }
 
-    await mutateAsync({
-      address: MARKETPLACE_ADDRESS,
-      abi: NFT_MARKETPLACE_ABI,
-      functionName: "acceptOffer",
-      args: [nftContract, BigInt(tokenId), buyerAddress],
-      gas: BigInt(300000),
-    });
+      inFlightRef.current = true;
+      try {
+        setPhase("approve-wallet");
+        const approveHash = await mutateAsync({
+          address: nftContract,
+          abi: NFT_COLLECTION_ABI,
+          functionName: "setApprovalForAll",
+          args: [MARKETPLACE_ADDRESS, true],
+          gas: BigInt(100000),
+        });
+
+        setPhase("approve-confirm");
+        await waitForTransactionReceipt(publicClient, { hash: approveHash });
+
+        setPhase("exec-wallet");
+        const acceptHash = await mutateAsync({
+          address: MARKETPLACE_ADDRESS,
+          abi: NFT_MARKETPLACE_ABI,
+          functionName: "acceptOffer",
+          args: [nftContract, BigInt(tokenId), buyerAddress],
+          gas: BigInt(300000),
+        });
+
+        setPhase("exec-confirm");
+        await waitForTransactionReceipt(publicClient, { hash: acceptHash });
+      } finally {
+        setPhase("idle");
+        inFlightRef.current = false;
+      }
+    },
+    [publicClient, mutateAsync],
+  );
+
+  const isFlowBusy = phase !== "idle";
+
+  return {
+    acceptOffer,
+    phase,
+    isPending: isFlowBusy,
+    isConfirming:
+      phase === "approve-confirm" || phase === "exec-confirm",
+    /** Use completion of `await acceptOffer()` for success UX; hook no longer tracks a single hash. */
+    isSuccess: false,
   };
-
-  return { acceptOffer, isPending, isConfirming, isSuccess };
 }
 
 // ─────────────────────────────────────────────

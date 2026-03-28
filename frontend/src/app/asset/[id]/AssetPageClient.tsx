@@ -368,7 +368,11 @@ export default function AssetPageClient() {
     refetch: refetchOffers,
   } = useNFTOffers(nftContract ?? "", tokenId);
 
-  const { listNFT, isPending: isListing } = useListNFT();
+  const {
+    listNFT,
+    isPending: isListing,
+    phase: listPhase,
+  } = useListNFT();
   const {
     buyNFT,
     isPending: isBuying,
@@ -383,11 +387,7 @@ export default function AssetPageClient() {
     isConfirming: isOfferConfirming,
     isSuccess: isOfferMade,
   } = useMakeOffer();
-  const {
-    acceptOffer,
-    isPending: isAccepting,
-    isSuccess: isOfferAccepted,
-  } = useAcceptOffer();
+  const { acceptOffer, isPending: isAccepting } = useAcceptOffer();
   const {
     cancelOffer,
     isPending: isCancellingOffer,
@@ -418,6 +418,17 @@ export default function AssetPageClient() {
 
   const isOwner =
     address && owner && address.toLowerCase() === owner.toLowerCase();
+
+  const listFlowLabel =
+    listPhase === "approve-wallet"
+      ? "Approve in wallet…"
+      : listPhase === "approve-confirm"
+        ? "Confirming approval…"
+        : listPhase === "exec-wallet"
+          ? "Sign listing…"
+          : listPhase === "exec-confirm"
+            ? "Confirming listing…"
+            : "Working…";
 
   const refetchAll = useCallback(() => {
     refetchListing();
@@ -487,13 +498,6 @@ export default function AssetPageClient() {
       refetchOffers();
     }
   }, [isOfferCancelled, refetchMyOffer, refetchOffers]);
-  useEffect(() => {
-    if (isOfferAccepted) {
-      setTxMsg({ type: "success", text: "Offer accepted! NFT transferred." });
-      refetchAll();
-    }
-  }, [isOfferAccepted, refetchAll]);
-
   const handleList = async () => {
     const errors = getZodErrors(listPriceSchema, {
       price: listPrice,
@@ -566,6 +570,11 @@ export default function AssetPageClient() {
     try {
       setTxMsg(null);
       await acceptOffer(nftContract, tokenId, safeBuyer);
+      setTxMsg({
+        type: "success",
+        text: "Offer accepted! NFT transferred.",
+      });
+      refetchAll();
     } catch (e) {
       logger.error("Erro ao aceitar oferta no Smart Contract", e);
       setTxMsg({
@@ -807,9 +816,7 @@ export default function AssetPageClient() {
                           ) : (
                             <Tag size={16} />
                           )}
-                          {isListing
-                            ? "Approving & Listing..."
-                            : "Confirm Listing"}
+                          {isListing ? listFlowLabel : "Confirm Listing"}
                         </button>
                         <button
                           onClick={() => setShowListForm(false)}
