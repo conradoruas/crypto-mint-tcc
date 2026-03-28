@@ -1,17 +1,19 @@
 "use client";
 
-import { useConnection } from "wagmi";
+import { useConnection, useSignMessage } from "wagmi";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/NavBar";
 import Image from "next/image";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Camera, Loader2, ArrowLeft, Check } from "lucide-react";
 import {
   fetchProfile,
+  uploadProfileImage,
   uploadProfileToIPFS,
   saveProfileHash,
   UserProfile,
 } from "@/services/profile";
+import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
 import {
   editProfileSchema,
   getZodErrors,
@@ -19,21 +21,17 @@ import {
 } from "@/lib/schemas";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 
-async function uploadImageToIPFS(file: File): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await fetch("/api/upload-image", {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) throw new Error(`Image upload failed: ${res.status}`);
-  const data = await res.json();
-  if (!data.uri) throw new Error("Invalid URI returned by server");
-  return data.uri;
-}
-
 export default function EditProfilePage() {
   const { address, isConnected } = useConnection();
+  const { signMessageAsync } = useSignMessage();
+
+  const getAuthHeaders = useCallback(
+    (pathname: string) => {
+      if (!address) throw new Error("Wallet required");
+      return buildUploadAuthHeaders(signMessageAsync, address, pathname);
+    },
+    [signMessageAsync, address],
+  );
   const router = useRouter();
 
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(
@@ -80,14 +78,14 @@ export default function EditProfilePage() {
     setIsSaving(true);
     try {
       let imageUri = currentProfile?.imageUri ?? "";
-      if (imageFile) imageUri = await uploadImageToIPFS(imageFile);
+      if (imageFile) imageUri = await uploadProfileImage(imageFile, getAuthHeaders);
       const updated: UserProfile = {
         address,
         name: name.trim(),
         imageUri,
         updatedAt: Date.now(),
       };
-      const uri = await uploadProfileToIPFS(updated);
+      const uri = await uploadProfileToIPFS(updated, getAuthHeaders);
       saveProfileHash(address, uri);
       setSuccess(true);
       setTimeout(() => router.push("/profile"), 1500);

@@ -3,6 +3,9 @@
 // Os dados ficam no IPFS e o hash no localStorage
 // ─────────────────────────────────────────────
 
+import { resolveIpfsUrl } from "@/lib/ipfs";
+import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
+
 export interface UserProfile {
   address: string;
   name: string;
@@ -10,19 +13,26 @@ export interface UserProfile {
   updatedAt: number;
 }
 
-import { resolveIpfsUrl } from "@/lib/ipfs";
-
 const STORAGE_KEY = (address: string) => `nft_profile_${address.toLowerCase()}`;
 
+/** Returns headers from `buildUploadAuthHeaders` for the given API pathname. */
+export type UploadAuthHeadersFn = (
+  pathname: string,
+) => Promise<Record<string, string>>;
+
 // ─── Upload de imagem para o IPFS ───
-export async function uploadProfileImage(file: File): Promise<string> {
+export async function uploadProfileImage(
+  file: File,
+  authHeaders: UploadAuthHeadersFn,
+): Promise<string> {
   const formData = new FormData();
   formData.append("file", file);
 
-  // ✅ Usa rota dedicada que retorna só o URI da imagem
+  const headers = await authHeaders(UPLOAD_API_PATHS.image);
   const res = await fetch("/api/upload-image", {
     method: "POST",
     body: formData,
+    headers,
   });
 
   if (!res.ok) throw new Error(`Falha no upload da imagem: ${res.status}`);
@@ -36,10 +46,15 @@ export async function uploadProfileImage(file: File): Promise<string> {
 // ─── Upload do JSON de perfil para o IPFS ───
 export async function uploadProfileToIPFS(
   profile: UserProfile,
+  authHeaders: UploadAuthHeadersFn,
 ): Promise<string> {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(await authHeaders(UPLOAD_API_PATHS.profile)),
+  };
   const res = await fetch("/api/upload-profile", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(profile),
   });
 

@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { formatEther } from "viem";
 import {
   useBalance,
   useConnection,
   useReadContract,
+  useSignMessage,
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
@@ -35,40 +36,8 @@ import {
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import Footer from "@/components/Footer";
 import { resolveIpfsUrl } from "@/lib/ipfs";
-
-async function uploadImage(file: File): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await fetch("/api/upload-image", {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-  const data = await res.json();
-  if (!data.uri) throw new Error("Invalid URI");
-  return data.uri;
-}
-
-async function uploadMetadata(
-  name: string,
-  description: string,
-  imageUri: string,
-): Promise<string> {
-  const res = await fetch("/api/upload-profile", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name,
-      description: description || "",
-      image: imageUri,
-      address: `nft-${Date.now()}`,
-    }),
-  });
-  if (!res.ok) throw new Error(`Metadata upload failed: ${res.status}`);
-  const data = await res.json();
-  if (!data.uri) throw new Error("Invalid URI");
-  return data.uri;
-}
+import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
+import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
 
 // ─── Load NFTs panel (owner only, shown when urisLoaded === false) ────────────
 
@@ -103,6 +72,63 @@ function LoadNFTsPanel({
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  const { address } = useConnection();
+  const { signMessageAsync } = useSignMessage();
+
+  const getAuthHeaders = useCallback(
+    (pathname: string) => {
+      if (!address) throw new Error("Carteira necessária");
+      return buildUploadAuthHeaders(signMessageAsync, address, pathname);
+    },
+    [signMessageAsync, address],
+  );
+
+  const uploadImage = useCallback(
+    async (file: File): Promise<string> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const headers = await getAuthHeaders(UPLOAD_API_PATHS.image);
+      const res = await fetch("/api/upload-image", {
+        method: "POST",
+        body: formData,
+        headers,
+      });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      const data = await res.json();
+      if (!data.uri) throw new Error("Invalid URI");
+      return data.uri;
+    },
+    [getAuthHeaders],
+  );
+
+  const uploadMetadata = useCallback(
+    async (
+      name: string,
+      description: string,
+      imageUri: string,
+    ): Promise<string> => {
+      const headers = {
+        "Content-Type": "application/json",
+        ...(await getAuthHeaders(UPLOAD_API_PATHS.profile)),
+      };
+      const res = await fetch("/api/upload-profile", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name,
+          description: description || "",
+          image: imageUri,
+          address: `nft-${Date.now()}`,
+        }),
+      });
+      if (!res.ok) throw new Error(`Metadata upload failed: ${res.status}`);
+      const data = await res.json();
+      if (!data.uri) throw new Error("Invalid URI");
+      return data.uri;
+    },
+    [getAuthHeaders],
+  );
 
   const { mutateAsync, isPending } = useWriteContract();
   const [loadHash, setLoadHash] = useState<`0x${string}` | undefined>();

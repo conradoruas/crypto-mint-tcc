@@ -1,10 +1,18 @@
-export const uploadFileToIPFS = async (file: File) => {
+import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
+import type { UploadAuthHeadersFn } from "@/services/profile";
+
+export const uploadFileToIPFS = async (
+  file: File,
+  authHeaders: UploadAuthHeadersFn,
+) => {
   const formData = new FormData();
   formData.append("file", file);
 
+  const headers = await authHeaders(UPLOAD_API_PATHS.combined);
   const res = await fetch("/api/upload", {
     method: "POST",
     body: formData,
+    headers,
   });
 
   if (!res.ok) {
@@ -19,15 +27,18 @@ export const uploadMetadataToIPFS = async (
   file: File,
   name: string,
   description: string,
+  authHeaders: UploadAuthHeadersFn,
 ) => {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("name", name);
   formData.append("description", description);
 
+  const headers = await authHeaders(UPLOAD_API_PATHS.combined);
   const res = await fetch("/api/upload", {
     method: "POST",
     body: formData,
+    headers,
   });
 
   if (!res.ok) {

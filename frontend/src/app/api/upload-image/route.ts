@@ -1,19 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PINATA_JWT as jwt } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
+import {
+  MAX_UPLOAD_COMBINED_BYTES,
+  runUploadGate,
+  validateImageFile,
+} from "@/lib/uploadSecurity";
 
 export async function POST(req: NextRequest) {
+  const gate = await runUploadGate(
+    req,
+    UPLOAD_API_PATHS.image,
+    MAX_UPLOAD_COMBINED_BYTES,
+  );
+  if (gate instanceof NextResponse) return gate;
 
   try {
     const formData = await req.formData();
-    const file = formData.get("file") as File;
-
-    if (!file) {
-      return NextResponse.json(
-        { error: "Arquivo não enviado" },
-        { status: 400 },
-      );
+    const file = formData.get("file");
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "File required." }, { status: 400 });
     }
+
+    const invalid = validateImageFile(file);
+    if (invalid) return invalid;
 
     const pinataForm = new FormData();
     pinataForm.append("file", file);
@@ -25,23 +36,21 @@ export async function POST(req: NextRequest) {
     });
 
     if (!res.ok) {
-      const err = await res.text();
-      return NextResponse.json({ error: err }, { status: 500 });
+      logger.error("Pinata pinFile failed", undefined, {
+        path: req.nextUrl.pathname,
+        status: res.status,
+      });
+      return NextResponse.json({ error: "Upload failed." }, { status: 502 });
     }
 
     const data = await res.json();
-
     if (!data.IpfsHash) {
-      return NextResponse.json(
-        { error: "IpfsHash não retornado" },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "Upload failed." }, { status: 502 });
     }
 
-    // ✅ Retorna direto o URI da imagem — sem metadados
     return NextResponse.json({ uri: `ipfs://${data.IpfsHash}` });
   } catch (error) {
-    logger.error("Erro no upload de imagem", error, { path: req.nextUrl.pathname });
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    logger.error("upload-image route", error, { path: req.nextUrl.pathname });
+    return NextResponse.json({ error: "Upload failed." }, { status: 500 });
   }
 }
