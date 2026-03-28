@@ -11,11 +11,12 @@ type MockedResponse = MockLink.MockedResponse;
 
 const useReadContract = vi.fn();
 const useReadContracts = vi.fn();
+const useConnection = vi.fn().mockReturnValue({ address: undefined });
 
 vi.mock("wagmi", () => ({
-  useReadContract,
-  useReadContracts,
-  useConnection: vi.fn().mockReturnValue({ address: undefined }),
+  useReadContract: (...args: unknown[]) => useReadContract(...args),
+  useReadContracts: (...args: unknown[]) => useReadContracts(...args),
+  useConnection: () => useConnection(),
   usePublicClient: vi.fn(),
   useWriteContract: vi.fn().mockReturnValue({
     data: undefined,
@@ -34,6 +35,9 @@ const ADDR_BUYER_1 = ensureAddress(
 );
 const ADDR_BUYER_2 = ensureAddress(
   "0x2000000000000000000000000000000000000002",
+);
+const ADDR_BUYER_3 = ensureAddress(
+  "0x3000000000000000000000000000000000000003",
 );
 
 const TOKEN_ID = "1";
@@ -96,6 +100,7 @@ describe("useNFTOffers", () => {
       data: undefined,
       refetch: vi.fn(),
     });
+    useConnection.mockReturnValue({ address: undefined });
 
     const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID), {
       wrapper: makeApolloWrapper(mocks),
@@ -180,7 +185,9 @@ describe("useNFTOffers", () => {
     });
 
     await waitFor(() =>
-      expect(result.current.offers[0]?.amount).toBe(BigInt("777000000000000000")),
+      expect(result.current.offers[0]?.amount).toBe(
+        BigInt("777000000000000000"),
+      ),
     );
   });
 
@@ -266,6 +273,36 @@ describe("useNFTOffers", () => {
     expect(result.current.offers[0]!.buyerAddress).toBe(ADDR_BUYER_1);
   });
 
+  it("filters out buyer's own offers when connected", async () => {
+    const mocks: MockedResponse[] = [
+      {
+        request: mockRequest,
+        result: {
+          data: {
+            offers: [
+              {
+                id: "1",
+                buyer: ADDR_BUYER_1,
+                amount: "100000000000000000",
+                expiresAt: String(NOW + 3600),
+                active: true,
+              },
+            ],
+          },
+        },
+      },
+    ];
+
+    useConnection.mockReturnValue({ address: ADDR_BUYER_1 });
+
+    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID), {
+      wrapper: makeApolloWrapper(mocks),
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.offers).toHaveLength(0);
+  });
+
   it("returns topOffer as highest merged offer", async () => {
     const mocks: MockedResponse[] = [
       {
@@ -282,7 +319,7 @@ describe("useNFTOffers", () => {
               },
               {
                 id: "2",
-                buyer: ADDR_BUYER_1,
+                buyer: ADDR_BUYER_3,
                 amount: "500000000000000000",
                 expiresAt: String(NOW + 7200),
                 active: true,

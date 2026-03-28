@@ -130,9 +130,7 @@ type GqlOfferRow = {
 
 function buildChainOfferMap(
   buyersRaw: readonly `0x${string}`[] | undefined,
-  offerRows:
-    | readonly { result?: unknown; status?: string }[]
-    | undefined,
+  offerRows: readonly { result?: unknown; status?: string }[] | undefined,
 ): Map<string, OfferWithBuyer> {
   const m = new Map<string, OfferWithBuyer>();
   if (
@@ -147,8 +145,7 @@ function buildChainOfferMap(
   for (let i = 0; i < buyersRaw.length; i++) {
     const row = offerRows[i]?.result as OfferData | undefined;
     if (!row?.active || now > row.expiresAt) continue;
-    const buyer =
-      parseAddress(row.buyer) ?? parseAddress(buyersRaw[i]!);
+    const buyer = parseAddress(row.buyer) ?? parseAddress(buyersRaw[i]!);
     if (!buyer) continue;
     m.set(buyer.toLowerCase(), {
       buyer,
@@ -187,9 +184,7 @@ function mergeIndexerAndChainOffers(
   buyersRaw: readonly `0x${string}`[] | undefined,
   chainByBuyer: Map<string, OfferWithBuyer>,
 ): OfferWithBuyer[] {
-  const onChainBuyers = new Set(
-    (buyersRaw ?? []).map((b) => b.toLowerCase()),
-  );
+  const onChainBuyers = new Set((buyersRaw ?? []).map((b) => b.toLowerCase()));
   const merged = new Map<string, OfferWithBuyer>();
 
   for (const o of indexer) {
@@ -214,6 +209,9 @@ function mergeIndexerAndChainOffers(
 }
 
 export function useNFTOffers(nftContract: string, tokenId: string) {
+  const { address } = useConnection();
+  const userAddress = address?.toLowerCase();
+
   const enabled = !!nftContract && !!tokenId;
   const nftAddr = ensureAddress(nftContract);
   const tokenIdBn = BigInt(tokenId || "0");
@@ -231,6 +229,9 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
+    notifyOnNetworkStatusChange: false,
+    // Polling is handled manually (refetch callback), this avoids repeated UX loading states.
+    pollInterval: 0,
   });
 
   const indexerRows = useMemo(
@@ -238,15 +239,16 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     [gqlData?.offers],
   );
 
-  const {
-    data: buyersRaw,
-    refetch: refetchBuyers,
-  } = useReadContract({
+  const { data: buyersRaw, refetch: refetchBuyers } = useReadContract({
     address: MARKETPLACE_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOfferBuyers",
     args: [nftAddr, tokenIdBn],
-    query: { enabled },
+    query: {
+      enabled,
+      refetchInterval: false,
+      refetchOnWindowFocus: false,
+    },
   });
 
   const buyerAddresses = useMemo((): readonly `0x${string}`[] => {
@@ -267,7 +269,11 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
 
   const { data: offerRows, refetch: refetchOfferRows } = useReadContracts({
     contracts: offerReads,
-    query: { enabled: enabled && buyerAddresses.length > 0 },
+    query: {
+      enabled: enabled && buyerAddresses.length > 0,
+      refetchInterval: false,
+      refetchOnWindowFocus: false,
+    },
   });
 
   const chainByBuyer = useMemo(
@@ -275,15 +281,17 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     [buyerAddresses, offerRows],
   );
 
-  const offers = useMemo(
-    () =>
-      mergeIndexerAndChainOffers(
-        indexerRows,
-        Array.isArray(buyersRaw) ? (buyersRaw as `0x${string}`[]) : undefined,
-        chainByBuyer,
-      ),
-    [indexerRows, buyersRaw, chainByBuyer],
-  );
+  const offers = useMemo(() => {
+    const merged = mergeIndexerAndChainOffers(
+      indexerRows,
+      Array.isArray(buyersRaw) ? (buyersRaw as `0x${string}`[]) : undefined,
+      chainByBuyer,
+    );
+
+    if (!userAddress) return merged;
+
+    return merged.filter((o) => o.buyerAddress.toLowerCase() !== userAddress);
+  }, [indexerRows, buyersRaw, chainByBuyer, userAddress]);
 
   const refetch = useCallback(() => {
     gqlRefetch();
@@ -314,11 +322,7 @@ export function useListNFT() {
   const inFlightRef = useRef(false);
 
   const listNFT = useCallback(
-    async (
-      nftContract: `0x${string}`,
-      tokenId: string,
-      priceInEth: string,
-    ) => {
+    async (nftContract: `0x${string}`, tokenId: string, priceInEth: string) => {
       if (inFlightRef.current) {
         throw new Error("Listing already in progress.");
       }
@@ -382,8 +386,7 @@ export function useListNFT() {
     /** True from first wallet prompt until the listing tx is mined. */
     isPending: isFlowBusy,
     /** True while waiting for chain confirmation (not wallet popup). */
-    isConfirming:
-      phase === "approve-confirm" || phase === "exec-confirm",
+    isConfirming: phase === "approve-confirm" || phase === "exec-confirm",
     /** @deprecated Single-hash hook was misleading for two txs; use await listNFT() success. */
     isSuccess: false,
     hash: undefined as `0x${string}` | undefined,
@@ -586,8 +589,7 @@ export function useAcceptOffer() {
     acceptOffer,
     phase,
     isPending: isFlowBusy,
-    isConfirming:
-      phase === "approve-confirm" || phase === "exec-confirm",
+    isConfirming: phase === "approve-confirm" || phase === "exec-confirm",
     /** Use completion of `await acceptOffer()` for success UX; hook no longer tracks a single hash. */
     isSuccess: false,
   };

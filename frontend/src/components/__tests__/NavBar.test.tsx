@@ -13,6 +13,7 @@ vi.mock("wagmi", () => ({
   useConnection: vi.fn().mockReturnValue({ isConnected: false, address: undefined }),
   useBalance: vi.fn().mockReturnValue({ data: undefined }),
   useDisconnect: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useSwitchChain: vi.fn().mockReturnValue({ mutateAsync: vi.fn() }),
 }));
 
 vi.mock("connectkit", () => ({

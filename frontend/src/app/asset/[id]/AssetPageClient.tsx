@@ -90,11 +90,14 @@ function PriceHistory({
     [events, tokenId],
   );
 
-  if (isLoading) {
+  const isSkeleton = isLoading && sales.length === 0;
+
+  if (isSkeleton) {
     return (
       <div className="h-[130px] animate-pulse bg-surface-container-high rounded-sm" />
     );
   }
+
   if (sales.length < 2) {
     return (
       <div className="h-[130px] flex items-center justify-center text-xs text-on-surface-variant/40 uppercase tracking-widest border border-dashed border-outline-variant/15 rounded-sm">
@@ -369,11 +372,7 @@ export default function AssetPageClient() {
     refetch: refetchOffers,
   } = useNFTOffers(nftContract ?? "", tokenId);
 
-  const {
-    listNFT,
-    isPending: isListing,
-    phase: listPhase,
-  } = useListNFT();
+  const { listNFT, isPending: isListing, phase: listPhase } = useListNFT();
   const {
     buyNFT,
     isPending: isBuying,
@@ -985,8 +984,8 @@ export default function AssetPageClient() {
               )}
             </h3>
             <p className="text-[11px] text-on-surface-variant/70 leading-snug -mt-1">
-              Offers load from the indexer for speed, then align with on-chain escrow when
-              your wallet can read the marketplace contract.
+              Offers load from the indexer for speed, then align with on-chain
+              escrow when your wallet can read the marketplace contract.
             </p>
             <OffersTable
               offers={offers}

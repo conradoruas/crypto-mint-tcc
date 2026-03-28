@@ -94,7 +94,7 @@ describe("useActivityFeed", () => {
   });
 
   it("sets priceETH to undefined when price is absent", async () => {
-    const eventNoPrice = { ...BASE_EVENT, price: undefined };
+    const eventNoPrice = { ...BASE_EVENT, price: null };
     const mocks = [
       {
         request: { query: GET_ACTIVITY_FEED_ALL, variables: { first: 50 } },

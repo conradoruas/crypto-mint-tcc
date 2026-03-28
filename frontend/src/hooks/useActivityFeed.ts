@@ -35,6 +35,9 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
       skip: !!filterContract,
       variables: { first: limit },
       pollInterval: 30_000,
+      notifyOnNetworkStatusChange: false,
+      fetchPolicy: "cache-and-network",
+      nextFetchPolicy: "cache-first",
     },
   );
 
@@ -43,6 +46,9 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
       skip: !filterContract,
       variables: { first: limit, nftContract: filterContract },
       pollInterval: 30_000,
+      notifyOnNetworkStatusChange: false,
+      fetchPolicy: "cache-and-network",
+      nextFetchPolicy: "cache-first",
     });
 
   const events: ActivityEvent[] = useMemo(() => {
