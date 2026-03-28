@@ -1,6 +1,6 @@
 "use client";
 
-import { WagmiProvider, createConfig } from "wagmi";
+import { WagmiProvider, createConfig, http } from "wagmi";
 import { sepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectKitProvider, getDefaultConfig } from "connectkit";
@@ -13,6 +13,11 @@ const config = createConfig(
       process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "",
     chains: [sepolia],
     appName: "Meu NFT Marketplace TCC",
+    // Roteia todas as leituras RPC pelo proxy Alchemy server-side.
+    // Garante useBalance, useReadContract e useNFTListing confiáveis.
+    transports: {
+      [sepolia.id]: http("/api/rpc"),
+    },
   }),
 );
 

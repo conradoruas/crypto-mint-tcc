@@ -10,6 +10,8 @@ This app combines three read paths. They update at different speeds and serve di
 
 ## JSON-RPC (Sepolia via Alchemy in this project)
 
+- **Wallet chain:** If the user connects on another network, the nav shows a banner with **Switch to Sepolia** (`useSwitchChain` + `useWrongNetwork`).
+
 - **What it is:** Direct reads from the chain at a node’s tip.
 - **Used for:** `getListing`, `getOffer`, `getOfferBuyers`, `ownerOf`, collection mint/URI flags, and all writes (transactions).
 - **Treat as authoritative** for price, escrow amounts, active listing flag, ownership, and which buyers still have offers.

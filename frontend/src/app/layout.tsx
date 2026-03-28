@@ -39,7 +39,7 @@ export default function RootLayout({
       lang="pt-br"
       className={`dark ${spaceGrotesk.variable} ${manrope.variable}`}
     >
-      <body suppressHydrationWarning>
+      <body>
         <ApolloProvider>
           <Web3Provider>
             <ErrorBoundary>
