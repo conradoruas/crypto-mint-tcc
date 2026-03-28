@@ -11,7 +11,11 @@ import { useState, useMemo, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
 import { useConnection } from "wagmi";
-import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
+import {
+  useIsFavorited,
+  useFavorite,
+  useUserFavorites,
+} from "@/hooks/useFavorites";
 
 type SortOption =
   | "default"
@@ -36,6 +40,8 @@ function filterNFTs(
   nfts: NFTItemWithMarket[],
   search: string,
   onlyListed: boolean,
+  onlyFavorites: boolean,
+  favoriteSet: Set<string>,
 ): NFTItemWithMarket[] {
   return nfts.filter((nft) => {
     const matchSearch =
@@ -43,7 +49,9 @@ function filterNFTs(
       nft.name.toLowerCase().includes(search.toLowerCase()) ||
       nft.tokenId.includes(search.trim());
     const matchListed = !onlyListed || !!nft.listingPrice;
-    return matchSearch && matchListed;
+    const key = `${nft.nftContract.toLowerCase()}-${nft.tokenId}`;
+    const matchFavorite = !onlyFavorites || favoriteSet.has(key);
+    return matchSearch && matchListed && matchFavorite;
   });
 }
 
@@ -230,9 +238,11 @@ function ExploreContent() {
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const [sort, setSort] = useState<SortOption>("default");
   const [onlyListed, setOnlyListed] = useState(false);
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [page, setPage] = useState(1);
 
-  const hasActiveFilters = search !== "" || sort !== "default" || onlyListed;
+  const hasActiveFilters =
+    search !== "" || sort !== "default" || onlyListed || onlyFavorites;
 
   // When filters are active, fetch all NFTs so client-side filtering spans every page.
   // When no filters, use normal server-side pagination.
@@ -246,6 +256,15 @@ function ExploreContent() {
     hasMore,
     refetch: refetchExploreNfts,
   } = useExploreAllNFTs(selectedCollection || undefined, fetchPage, fetchSize);
+
+  const { favorites } = useUserFavorites(address);
+  const favoriteSet = useMemo(
+    () =>
+      new Set(
+        favorites.map((f) => `${f.nftContract.toLowerCase()}-${f.tokenId}`),
+      ),
+    [favorites],
+  );
   const isLoading = isLoadingCollections || isLoadingNFTs;
 
   useEffect(() => {
@@ -256,10 +275,18 @@ function ExploreContent() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [refetchExploreNfts]);
 
+  const isFavoritesEmpty = onlyFavorites && favoriteSet.size === 0;
+
   const allFilteredNFTs = useMemo(() => {
-    const filtered = filterNFTs(nfts, search, onlyListed);
+    const filtered = filterNFTs(
+      nfts,
+      search,
+      onlyListed,
+      onlyFavorites,
+      favoriteSet,
+    );
     return sortNFTs(filtered, sort);
-  }, [nfts, search, onlyListed, sort]);
+  }, [nfts, search, onlyListed, sort, onlyFavorites, favoriteSet]);
 
   // Client-side pagination of filtered results (only when filters are active).
   const totalFilteredPages = hasActiveFilters
@@ -306,10 +333,11 @@ function ExploreContent() {
                 <button
                   onClick={() => {
                     setOnlyListed(false);
+                    setOnlyFavorites(false);
                     setPage(1);
                   }}
                   className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                    !onlyListed
+                    !onlyListed && !onlyFavorites
                       ? "bg-secondary-container text-on-secondary-container border-secondary/20"
                       : "bg-surface-container text-on-surface-variant border-outline-variant/15 hover:border-outline"
                   }`}
@@ -319,6 +347,7 @@ function ExploreContent() {
                 <button
                   onClick={() => {
                     setOnlyListed(true);
+                    setOnlyFavorites(false);
                     setPage(1);
                   }}
                   className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
@@ -328,6 +357,20 @@ function ExploreContent() {
                   }`}
                 >
                   Buy Now
+                </button>
+                <button
+                  onClick={() => {
+                    setOnlyFavorites((v) => !v);
+                    setOnlyListed(false);
+                    setPage(1);
+                  }}
+                  className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+                    onlyFavorites
+                      ? "bg-secondary-container text-on-secondary-container border-secondary/20"
+                      : "bg-surface-container text-on-surface-variant border-outline-variant/15 hover:border-outline"
+                  }`}
+                >
+                  Favorites
                 </button>
               </div>
             </section>
@@ -404,9 +447,10 @@ function ExploreContent() {
                 Browse NFTs across all collections on the Sepolia testnet.
               </p>
               <p className="text-on-surface-variant/80 max-w-xl text-xs mt-3 leading-relaxed">
-                Prices and offers on this grid come from the subgraph indexer and can
-                lag the chain by a few blocks. Open an asset to confirm the listing
-                price and escrow before you spend — metadata comes from Alchemy.
+                Prices and offers on this grid come from the subgraph indexer
+                and can lag the chain by a few blocks. Open an asset to confirm
+                the listing price and escrow before you spend — metadata comes
+                from Alchemy.
               </p>
             </div>
             {/* Search bar */}
@@ -510,6 +554,16 @@ function ExploreContent() {
                 Mint in Collection
               </Link>
             </div>
+          ) : isFavoritesEmpty ? (
+            <div className="text-center py-20 border border-dashed border-outline-variant/20">
+              <Heart size={40} className="mx-auto mb-4 text-error/70" />
+              <h3 className="font-headline text-lg font-bold mb-2">
+                No favorites yet
+              </h3>
+              <p className="mb-6 text-sm text-on-surface-variant">
+                Favorite an item by clicking the heart to see it here.
+              </p>
+            </div>
           ) : displayedNFTs.length === 0 ? (
             <div className="text-center py-20 border border-dashed border-outline-variant/20">
               <Search
@@ -542,10 +596,12 @@ function ExploreContent() {
           )}
 
           {/* Pagination */}
-          {(page > 1 || (hasActiveFilters ? (totalFilteredPages ?? 1) > 1 : hasMore)) && (
+          {(page > 1 ||
+            (hasActiveFilters ? (totalFilteredPages ?? 1) > 1 : hasMore)) && (
             <div className="flex items-center justify-between mt-12 pt-6 border-t border-outline-variant/10">
               <p className="text-xs text-on-surface-variant uppercase tracking-widest">
-                Page {page}{totalFilteredPages ? ` / ${totalFilteredPages}` : ""}
+                Page {page}
+                {totalFilteredPages ? ` / ${totalFilteredPages}` : ""}
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -557,7 +613,11 @@ function ExploreContent() {
                 </button>
                 <button
                   onClick={() => setPage((p) => p + 1)}
-                  disabled={hasActiveFilters ? page >= (totalFilteredPages ?? 1) : !hasMore}
+                  disabled={
+                    hasActiveFilters
+                      ? page >= (totalFilteredPages ?? 1)
+                      : !hasMore
+                  }
                   className="px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
                   Next
