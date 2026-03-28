@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { GET_ALL_NFTS, GET_NFTS_FOR_CONTRACT } from "@/lib/graphql/queries";
@@ -141,13 +141,16 @@ export function useExploreNFTs(
 
   const skip = (page - 1) * pageSize;
 
-  const { data: gqlData, loading: gqlQueryLoading } = useQuery<GqlNFTsData>(
-    GET_NFTS_FOR_CONTRACT,
-    {
-      skip: !collectionAddress,
-      variables: { collection: collectionAddress?.toLowerCase(), first: pageSize, skip },
-    },
-  );
+  const {
+    data: gqlData,
+    loading: gqlQueryLoading,
+    refetch: refetchGql,
+  } = useQuery<GqlNFTsData>(GET_NFTS_FOR_CONTRACT, {
+    skip: !collectionAddress,
+    variables: { collection: collectionAddress?.toLowerCase(), first: pageSize, skip },
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+  });
 
   useEffect(() => {
     if (!collectionAddress || gqlQueryLoading) return;
@@ -178,7 +181,9 @@ export function useExploreNFTs(
     };
   }, [gqlData, gqlQueryLoading, collectionAddress, pageSize]);
 
-  return { nfts, isLoading, hasMore };
+  const refetch = useCallback(() => refetchGql(), [refetchGql]);
+
+  return { nfts, isLoading, hasMore, refetch };
 }
 
 // ─────────────────────────────────────────────
@@ -196,21 +201,31 @@ export function useExploreAllNFTs(
 
   const skip = (page - 1) * pageSize;
 
-  const { data: gqlAllData, loading: gqlAllLoading } = useQuery<GqlNFTsData>(
-    GET_ALL_NFTS,
-    {
-      skip: !!collectionAddress,
-      variables: { first: pageSize + 1, skip },
-    },
-  );
+  const {
+    data: gqlAllData,
+    loading: gqlAllLoading,
+    refetch: refetchAllNfts,
+  } = useQuery<GqlNFTsData>(GET_ALL_NFTS, {
+    skip: !!collectionAddress,
+    variables: { first: pageSize + 1, skip },
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+  });
 
-  const { data: gqlColData, loading: gqlColLoading } = useQuery<GqlNFTsData>(
-    GET_NFTS_FOR_CONTRACT,
-    {
-      skip: !collectionAddress,
-      variables: { collection: collectionAddress?.toLowerCase(), first: pageSize + 1, skip },
+  const {
+    data: gqlColData,
+    loading: gqlColLoading,
+    refetch: refetchColNfts,
+  } = useQuery<GqlNFTsData>(GET_NFTS_FOR_CONTRACT, {
+    skip: !collectionAddress,
+    variables: {
+      collection: collectionAddress?.toLowerCase(),
+      first: pageSize + 1,
+      skip,
     },
-  );
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -249,5 +264,9 @@ export function useExploreAllNFTs(
     };
   }, [gqlAllData, gqlColData, gqlAllLoading, gqlColLoading, collectionAddress, pageSize]);
 
-  return { nfts, isLoading, hasMore };
+  const refetch = useCallback(async () => {
+    await Promise.all([refetchAllNfts(), refetchColNfts()]);
+  }, [refetchAllNfts, refetchColNfts]);
+
+  return { nfts, isLoading, hasMore, refetch };
 }

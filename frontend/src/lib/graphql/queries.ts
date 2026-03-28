@@ -1,5 +1,7 @@
 import { gql } from "@apollo/client";
 
+/** Which layers are authoritative for listings vs metadata: see `src/lib/DATA_SOURCES.md`. */
+
 export const GET_COLLECTIONS = gql`
   query GetCollections {
     collections(orderBy: createdAt, orderDirection: desc) {
@@ -182,6 +184,7 @@ export const GET_LISTING = gql`
   }
 `;
 
+/** Indexer view only; the asset page reads live offers via `getOfferBuyers` + `getOffer`. */
 export const GET_OFFERS_FOR_NFT = gql`
   query GetOffersForNFT($nftContract: Bytes!, $tokenId: BigInt!) {
     offers(

@@ -1,34 +1,54 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { useNFTOffers } from "../useMarketplace";
-import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
-import { makeApolloWrapper } from "@/test/apolloWrapper";
-import { MockLink } from "@apollo/client/testing";
 import { ensureAddress } from "@/lib/schemas";
+import type { OfferData } from "@/types/marketplace";
 
-type MockedResponse = MockLink.MockedResponse;
+const useReadContract = vi.fn();
+const useReadContracts = vi.fn();
 
-const CONTRACT = ensureAddress("0x1000000000000000000000000000000000000001");
+vi.mock("wagmi", () => ({
+  useReadContract,
+  useReadContracts,
+  useConnection: vi.fn().mockReturnValue({ address: undefined }),
+  usePublicClient: vi.fn(),
+  useWriteContract: vi.fn().mockReturnValue({
+    data: undefined,
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useWaitForTransactionReceipt: vi.fn().mockReturnValue({
+    isLoading: false,
+    isSuccess: false,
+  }),
+}));
+
+const CONTRACT = ensureAddress("0x9000000000000000000000000000000000000001");
 const ADDR_BUYER_1 = ensureAddress(
   "0x1000000000000000000000000000000000000001",
 );
 const ADDR_BUYER_2 = ensureAddress(
-  "0x1000000000000000000000000000000000000002",
+  "0x2000000000000000000000000000000000000002",
 );
 
 const TOKEN_ID = "1";
-const NOW = 1_700_000_000; // fixed unix timestamp
+const NOW = 1_700_000_000;
 
-const makeWrapper = (mocks: MockedResponse[]) => makeApolloWrapper(mocks);
-
-const mockRequest = {
-  query: GET_OFFERS_FOR_NFT,
-  variables: { nftContract: CONTRACT.toLowerCase(), tokenId: TOKEN_ID },
-};
-
-// Spy on Date.now so the expiry comparisons inside the hook are deterministic.
-// Using spyOn (not fake timers) preserves async behaviour required by waitFor.
 let dateSpy: ReturnType<typeof vi.spyOn>;
+
+function mockOffer(
+  buyer: `0x${string}`,
+  active: boolean,
+  amountWei: string,
+  expiresAt: bigint,
+): OfferData {
+  return {
+    buyer,
+    amount: BigInt(amountWei),
+    expiresAt,
+    active,
+  };
+}
 
 beforeEach(() => {
   dateSpy = vi.spyOn(Date, "now").mockReturnValue(NOW * 1000);
@@ -36,80 +56,92 @@ beforeEach(() => {
 
 afterEach(() => {
   dateSpy.mockRestore();
+  vi.clearAllMocks();
 });
 
 describe("useNFTOffers", () => {
-  it("is loading before the query resolves", () => {
-    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID), {
-      wrapper: makeWrapper([
-        { request: mockRequest, result: { data: { offers: [] } } },
-      ]),
+  it("is loading before offer buyers resolve", () => {
+    useReadContract.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    useReadContracts.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
     });
 
-    // Checked synchronously — mock exists but hasn't resolved yet
+    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID));
+
     expect(result.current.isLoading).toBe(true);
   });
 
   it("returns only non-expired active offers", async () => {
-    const mocks = [
-      {
-        request: mockRequest,
-        result: {
-          data: {
-            offers: [
-              {
-                id: "1",
-                buyer: ADDR_BUYER_1,
-                amount: "100000000000000000",
-                expiresAt: String(NOW + 3600), // 1 h from now — valid
-                active: true,
-              },
-              {
-                id: "2",
-                buyer: ADDR_BUYER_2,
-                amount: "200000000000000000",
-                expiresAt: String(NOW - 1), // 1 s ago — expired
-                active: true,
-              },
-            ],
-          },
-        },
-      },
-    ];
-
-    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID), {
-      wrapper: makeWrapper(mocks),
+    useReadContract.mockReturnValue({
+      data: [ADDR_BUYER_1, ADDR_BUYER_2],
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
     });
+    useReadContracts.mockReturnValue({
+      data: [
+        {
+          result: mockOffer(
+            ADDR_BUYER_1,
+            true,
+            "100000000000000000",
+            BigInt(NOW + 3600),
+          ),
+        },
+        {
+          result: mockOffer(
+            ADDR_BUYER_2,
+            true,
+            "200000000000000000",
+            BigInt(NOW - 1),
+          ),
+        },
+      ],
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.offers).toHaveLength(1);
-    expect(result.current.offers[0].buyerAddress).toBe(ADDR_BUYER_1);
+    expect(result.current.offers[0]!.buyerAddress).toBe(ADDR_BUYER_1);
   });
 
   it("filters out inactive offers", async () => {
-    const mocks = [
-      {
-        request: mockRequest,
-        result: {
-          data: {
-            offers: [
-              {
-                id: "1",
-                buyer: ADDR_BUYER_1,
-                amount: "100000000000000000",
-                expiresAt: String(NOW + 3600),
-                active: false, // inactive
-              },
-            ],
-          },
-        },
-      },
-    ];
-
-    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID), {
-      wrapper: makeWrapper(mocks),
+    useReadContract.mockReturnValue({
+      data: [ADDR_BUYER_1],
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
     });
+    useReadContracts.mockReturnValue({
+      data: [
+        {
+          result: mockOffer(
+            ADDR_BUYER_1,
+            false,
+            "100000000000000000",
+            BigInt(NOW + 3600),
+          ),
+        },
+      ],
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -117,37 +149,38 @@ describe("useNFTOffers", () => {
     expect(result.current.topOffer).toBeNull();
   });
 
-  it("returns topOffer as the ETH value of the first (highest) offer", async () => {
-    // GraphQL returns them pre-sorted by amount desc — highest first
-    const mocks = [
-      {
-        request: mockRequest,
-        result: {
-          data: {
-            offers: [
-              {
-                id: "2",
-                buyer: ADDR_BUYER_1,
-                amount: "500000000000000000", // 0.5 ETH — highest
-                expiresAt: String(NOW + 7200),
-                active: true,
-              },
-              {
-                id: "1",
-                buyer: ADDR_BUYER_2,
-                amount: "100000000000000000", // 0.1 ETH
-                expiresAt: String(NOW + 3600),
-                active: true,
-              },
-            ],
-          },
-        },
-      },
-    ];
-
-    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID), {
-      wrapper: makeWrapper(mocks),
+  it("returns topOffer as the ETH value of the highest offer", async () => {
+    useReadContract.mockReturnValue({
+      data: [ADDR_BUYER_1, ADDR_BUYER_2],
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
     });
+    useReadContracts.mockReturnValue({
+      data: [
+        {
+          result: {
+            buyer: ADDR_BUYER_1,
+            amount: BigInt("500000000000000000"),
+            expiresAt: BigInt(NOW + 7200),
+            active: true,
+          } satisfies OfferData,
+        },
+        {
+          result: {
+            buyer: ADDR_BUYER_2,
+            amount: BigInt("100000000000000000"),
+            expiresAt: BigInt(NOW + 3600),
+            active: true,
+          } satisfies OfferData,
+        },
+      ],
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -156,28 +189,29 @@ describe("useNFTOffers", () => {
   });
 
   it("returns null topOffer when all offers are expired", async () => {
-    const mocks = [
-      {
-        request: mockRequest,
-        result: {
-          data: {
-            offers: [
-              {
-                id: "1",
-                buyer: ADDR_BUYER_1,
-                amount: "100000000000000000",
-                expiresAt: String(NOW - 60), // expired 1 min ago
-                active: true,
-              },
-            ],
-          },
+    useReadContract.mockReturnValue({
+      data: [ADDR_BUYER_1],
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    useReadContracts.mockReturnValue({
+      data: [
+        {
+          result: mockOffer(
+            ADDR_BUYER_1,
+            true,
+            "100000000000000000",
+            BigInt(NOW - 60),
+          ),
         },
-      },
-    ];
-
-    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID), {
-      wrapper: makeWrapper(mocks),
+      ],
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
     });
+
+    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -185,17 +219,21 @@ describe("useNFTOffers", () => {
     expect(result.current.topOffer).toBeNull();
   });
 
-  it("returns empty offers and null topOffer for empty query result", async () => {
-    const mocks = [
-      {
-        request: mockRequest,
-        result: { data: { offers: [] } },
-      },
-    ];
-
-    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID), {
-      wrapper: makeWrapper(mocks),
+  it("returns empty offers when there are no buyers", async () => {
+    useReadContract.mockReturnValue({
+      data: [],
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
     });
+    useReadContracts.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useNFTOffers(CONTRACT, TOKEN_ID));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -203,12 +241,23 @@ describe("useNFTOffers", () => {
     expect(result.current.topOffer).toBeNull();
   });
 
-  it("skips the query when contract is empty", () => {
-    const { result } = renderHook(() => useNFTOffers("", TOKEN_ID), {
-      wrapper: makeWrapper([]),
+  it("does not load when contract is empty", () => {
+    useReadContract.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    useReadContracts.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isFetching: false,
+      refetch: vi.fn(),
     });
 
-    // With skip=true, loading stays false and offers stays empty
+    const { result } = renderHook(() => useNFTOffers("", TOKEN_ID));
+
     expect(result.current.offers).toHaveLength(0);
+    expect(result.current.isLoading).toBe(false);
   });
 });

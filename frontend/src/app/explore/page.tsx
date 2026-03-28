@@ -7,7 +7,7 @@ import type { NFTItemWithMarket } from "@/types/nft";
 import Image from "next/image";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers, Heart, Tag } from "lucide-react";
-import { useState, useMemo, Suspense } from "react";
+import { useState, useMemo, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
 import { useConnection } from "wagmi";
@@ -244,8 +244,17 @@ function ExploreContent() {
     nfts,
     isLoading: isLoadingNFTs,
     hasMore,
+    refetch: refetchExploreNfts,
   } = useExploreAllNFTs(selectedCollection || undefined, fetchPage, fetchSize);
   const isLoading = isLoadingCollections || isLoadingNFTs;
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refetchExploreNfts();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refetchExploreNfts]);
 
   const allFilteredNFTs = useMemo(() => {
     const filtered = filterNFTs(nfts, search, onlyListed);
@@ -393,6 +402,11 @@ function ExploreContent() {
               </h1>
               <p className="text-on-surface-variant max-w-lg font-light">
                 Browse NFTs across all collections on the Sepolia testnet.
+              </p>
+              <p className="text-on-surface-variant/80 max-w-xl text-xs mt-3 leading-relaxed">
+                Prices and offers on this grid come from the subgraph indexer and can
+                lag the chain by a few blocks. Open an asset to confirm the listing
+                price and escrow before you spend — metadata comes from Alchemy.
               </p>
             </div>
             {/* Search bar */}

@@ -984,6 +984,10 @@ export default function AssetPageClient() {
                 </span>
               )}
             </h3>
+            <p className="text-[11px] text-on-surface-variant/70 leading-snug -mt-1">
+              Offer amounts and buyers are read from the marketplace contract on this
+              network (same source the chain uses for escrow).
+            </p>
             <OffersTable
               offers={offers}
               isLoading={isLoadingOffers}
