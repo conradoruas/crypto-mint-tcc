@@ -19,7 +19,6 @@ import {
   useConnection,
   useBalance,
   useDisconnect,
-  useConfig,
   useSwitchChain,
 } from "wagmi";
 import { useWrongNetwork, APP_CHAIN } from "@/hooks/useWrongNetwork";
