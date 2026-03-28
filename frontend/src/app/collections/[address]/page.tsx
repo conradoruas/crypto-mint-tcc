@@ -11,6 +11,7 @@ import {
   useSignMessage,
   useWriteContract,
   useWaitForTransactionReceipt,
+  usePublicClient,
 } from "wagmi";
 import { Navbar } from "@/components/NavBar";
 import Link from "next/link";
@@ -37,6 +38,7 @@ import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import Footer from "@/components/Footer";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { formatTransactionError } from "@/lib/txErrors";
+import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
 import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
 import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
 
@@ -75,6 +77,7 @@ function LoadNFTsPanel({
   const [error, setError] = useState<string | null>(null);
 
   const { address } = useConnection();
+  const publicClient = usePublicClient();
   const { signMessageAsync } = useSignMessage();
 
   const getAuthHeaders = useCallback(
@@ -192,12 +195,22 @@ function LoadNFTsPanel({
       setProgress(95);
       setIsUploading(false);
 
+      if (!address || !publicClient) {
+        throw new Error("Carteira necessária");
+      }
+      const gas = await estimateContractGasWithBuffer(publicClient, {
+        account: address,
+        address: collectionAddress,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "loadTokenURIs",
+        args: [uris],
+      });
       const tx = await mutateAsync({
         address: collectionAddress,
         abi: NFT_COLLECTION_ABI,
         functionName: "loadTokenURIs",
         args: [uris],
-        gas: BigInt(500000 + uris.length * 30000),
+        gas,
       });
       setLoadHash(tx);
       setProgress(100);
@@ -522,6 +535,7 @@ export default function CollectionPage() {
     (Array.isArray(collectionAddr) ? collectionAddr[0] : collectionAddr) ?? "";
 
   const { address: userAddress, isConnected } = useConnection();
+  const publicClientMain = usePublicClient();
   const [showMintModal, setShowMintModal] = useState(false);
   const [mintSuccess, setMintSuccess] = useState<string | null>(null);
   const [loadSuccess, setLoadSuccess] = useState(false);
@@ -567,10 +581,20 @@ export default function CollectionPage() {
   const handleWithdraw = async () => {
     setWithdrawError(null);
     try {
+      if (!userAddress || !publicClientMain) {
+        throw new Error("Connect your wallet.");
+      }
+      const gas = await estimateContractGasWithBuffer(publicClientMain, {
+        account: userAddress,
+        address: collectionAddress as `0x${string}`,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "withdraw",
+      });
       const tx = await withdrawWrite({
         address: collectionAddress as `0x${string}`,
         abi: NFT_COLLECTION_ABI,
         functionName: "withdraw",
+        gas,
       });
       setWithdrawHash(tx);
     } catch (e) {

@@ -9,6 +9,7 @@ import {
   useSignMessage,
   useWriteContract,
   useWaitForTransactionReceipt,
+  usePublicClient,
 } from "wagmi";
 import { Navbar } from "@/components/NavBar";
 import {
@@ -31,6 +32,7 @@ import {
   type CreateCollectionErrors,
 } from "@/lib/schemas";
 import { formatTransactionError } from "@/lib/txErrors";
+import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
 import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
 import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
 
@@ -59,6 +61,7 @@ function FieldError({ msg }: { msg?: string }) {
 export default function CreateCollectionPage() {
   const router = useRouter();
   const { address, isConnected } = useConnection();
+  const publicClient = usePublicClient();
   const { signMessageAsync } = useSignMessage();
 
   const getAuthHeaders = useCallback(
@@ -265,12 +268,22 @@ export default function CreateCollectionPage() {
       }
       setUploadProgress(95);
       setIsUploadingNFTs(false);
+      if (!address || !publicClient) {
+        throw new Error("Connect your wallet.");
+      }
+      const gas = await estimateContractGasWithBuffer(publicClient, {
+        account: address,
+        address: addr,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "loadTokenURIs",
+        args: [uris],
+      });
       const tx = await mutateAsync({
         address: addr,
         abi: NFT_COLLECTION_ABI,
         functionName: "loadTokenURIs",
         args: [uris],
-        gas: BigInt(500000 + uris.length * 30000),
+        gas,
       });
       setLoadURIsHash(tx);
       setUploadProgress(100);

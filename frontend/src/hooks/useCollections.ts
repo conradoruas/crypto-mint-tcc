@@ -5,6 +5,7 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
   useConnection,
+  usePublicClient,
 } from "wagmi";
 import { parseEther, formatEther, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
@@ -20,6 +21,7 @@ import { resolveIpfsUrl } from "@/lib/ipfs";
 import { useStableArray } from "./useStableArray";
 import { ensureAddress, parseAddress } from "@/lib/schemas";
 import { logger } from "@/lib/logger";
+import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
 
 export type { CollectionInfo, CollectionNFTItem, CreatedNFTItem };
 
@@ -302,6 +304,8 @@ export function useCreatedNFTs(ownerAddress: string | undefined) {
 // ─────────────────────────────────────────────
 
 export function useCreateCollection() {
+  const publicClient = usePublicClient();
+  const { address } = useConnection();
   const { data: hash, mutateAsync, isPending } = useWriteContract();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
@@ -316,6 +320,23 @@ export function useCreateCollection() {
     maxSupply: number;
     mintPrice: string;
   }) => {
+    if (!publicClient || !address) {
+      throw new Error("Carteira não conectada");
+    }
+    const gas = await estimateContractGasWithBuffer(publicClient, {
+      account: address,
+      address: FACTORY_ADDRESS,
+      abi: NFT_COLLECTION_FACTORY_ABI,
+      functionName: "createCollection",
+      args: [
+        params.name,
+        params.symbol,
+        params.description,
+        params.image,
+        BigInt(params.maxSupply),
+        parseEther(params.mintPrice),
+      ],
+    });
     await mutateAsync({
       address: FACTORY_ADDRESS,
       abi: NFT_COLLECTION_FACTORY_ABI,
@@ -328,7 +349,7 @@ export function useCreateCollection() {
         BigInt(params.maxSupply),
         parseEther(params.mintPrice),
       ],
-      gas: BigInt(5000000),
+      gas,
     });
   };
 
@@ -341,6 +362,7 @@ export function useCreateCollection() {
 // ─────────────────────────────────────────────
 
 export function useMintToCollection() {
+  const publicClient = usePublicClient();
   const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
@@ -354,14 +376,24 @@ export function useMintToCollection() {
   ) => {
     const to = recipientAddress ?? address;
     if (!to) throw new Error("Carteira não conectada");
+    if (!publicClient) throw new Error("Carteira não conectada");
 
+    const value = parseEther(mintPriceInEth);
+    const gas = await estimateContractGasWithBuffer(publicClient, {
+      account: to,
+      address: collectionAddress,
+      abi: NFT_COLLECTION_ABI,
+      functionName: "mint",
+      args: [to],
+      value,
+    });
     await mutateAsync({
       address: collectionAddress,
       abi: NFT_COLLECTION_ABI,
       functionName: "mint",
       args: [to],
-      value: parseEther(mintPriceInEth),
-      gas: BigInt(300000),
+      value,
+      gas,
     });
   };
 

@@ -21,6 +21,7 @@ import type {
   OfferWithBuyer,
 } from "@/types/marketplace";
 import { ensureAddress, parseAddress } from "@/lib/schemas";
+import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
 
 // env.ts is server-only — read the NEXT_PUBLIC_ var directly on the client
 const MARKETPLACE_ADDRESS = process.env
@@ -307,6 +308,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
 
 export function useListNFT() {
   const publicClient = usePublicClient();
+  const { address } = useConnection();
   const { mutateAsync } = useWriteContract();
   const [phase, setPhase] = useState<TwoStepTxPhase>("idle");
   const inFlightRef = useRef(false);
@@ -320,31 +322,45 @@ export function useListNFT() {
       if (inFlightRef.current) {
         throw new Error("Listing already in progress.");
       }
-      if (!publicClient) {
+      if (!publicClient || !address) {
         throw new Error("No network connection.");
       }
 
       inFlightRef.current = true;
       try {
         setPhase("approve-wallet");
+        const approveGas = await estimateContractGasWithBuffer(publicClient, {
+          account: address,
+          address: nftContract,
+          abi: NFT_COLLECTION_ABI,
+          functionName: "setApprovalForAll",
+          args: [MARKETPLACE_ADDRESS, true],
+        });
         const approveHash = await mutateAsync({
           address: nftContract,
           abi: NFT_COLLECTION_ABI,
           functionName: "setApprovalForAll",
           args: [MARKETPLACE_ADDRESS, true],
-          gas: BigInt(100000),
+          gas: approveGas,
         });
 
         setPhase("approve-confirm");
         await waitForTransactionReceipt(publicClient, { hash: approveHash });
 
         setPhase("exec-wallet");
+        const listGas = await estimateContractGasWithBuffer(publicClient, {
+          account: address,
+          address: MARKETPLACE_ADDRESS,
+          abi: NFT_MARKETPLACE_ABI,
+          functionName: "listItem",
+          args: [nftContract, BigInt(tokenId), parseEther(priceInEth)],
+        });
         const listHash = await mutateAsync({
           address: MARKETPLACE_ADDRESS,
           abi: NFT_MARKETPLACE_ABI,
           functionName: "listItem",
           args: [nftContract, BigInt(tokenId), parseEther(priceInEth)],
-          gas: BigInt(200000),
+          gas: listGas,
         });
 
         setPhase("exec-confirm");
@@ -354,7 +370,7 @@ export function useListNFT() {
         inFlightRef.current = false;
       }
     },
-    [publicClient, mutateAsync],
+    [publicClient, address, mutateAsync],
   );
 
   const isFlowBusy = phase !== "idle";
@@ -379,6 +395,8 @@ export function useListNFT() {
 // ─────────────────────────────────────────────
 
 export function useBuyNFT() {
+  const publicClient = usePublicClient();
+  const { address } = useConnection();
   const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
@@ -389,13 +407,25 @@ export function useBuyNFT() {
     tokenId: string,
     priceInEth: string,
   ) => {
+    if (!publicClient || !address) {
+      throw new Error("No network connection.");
+    }
+    const value = parseEther(priceInEth);
+    const gas = await estimateContractGasWithBuffer(publicClient, {
+      account: address,
+      address: MARKETPLACE_ADDRESS,
+      abi: NFT_MARKETPLACE_ABI,
+      functionName: "buyItem",
+      args: [nftContract, BigInt(tokenId)],
+      value,
+    });
     await mutateAsync({
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "buyItem",
       args: [nftContract, BigInt(tokenId)],
-      value: parseEther(priceInEth),
-      gas: BigInt(300000),
+      value,
+      gas,
     });
   };
 
@@ -407,18 +437,30 @@ export function useBuyNFT() {
 // ─────────────────────────────────────────────
 
 export function useCancelListing() {
+  const publicClient = usePublicClient();
+  const { address } = useConnection();
   const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
   const cancelListing = async (nftContract: `0x${string}`, tokenId: string) => {
+    if (!publicClient || !address) {
+      throw new Error("No network connection.");
+    }
+    const gas = await estimateContractGasWithBuffer(publicClient, {
+      account: address,
+      address: MARKETPLACE_ADDRESS,
+      abi: NFT_MARKETPLACE_ABI,
+      functionName: "cancelListing",
+      args: [nftContract, BigInt(tokenId)],
+    });
     await mutateAsync({
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "cancelListing",
       args: [nftContract, BigInt(tokenId)],
-      gas: BigInt(100000),
+      gas,
     });
   };
 
@@ -430,6 +472,8 @@ export function useCancelListing() {
 // ─────────────────────────────────────────────
 
 export function useMakeOffer() {
+  const publicClient = usePublicClient();
+  const { address } = useConnection();
   const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
@@ -440,13 +484,25 @@ export function useMakeOffer() {
     tokenId: string,
     amountInEth: string,
   ) => {
+    if (!publicClient || !address) {
+      throw new Error("No network connection.");
+    }
+    const value = parseEther(amountInEth);
+    const gas = await estimateContractGasWithBuffer(publicClient, {
+      account: address,
+      address: MARKETPLACE_ADDRESS,
+      abi: NFT_MARKETPLACE_ABI,
+      functionName: "makeOffer",
+      args: [nftContract, BigInt(tokenId)],
+      value,
+    });
     await mutateAsync({
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "makeOffer",
       args: [nftContract, BigInt(tokenId)],
-      value: parseEther(amountInEth),
-      gas: BigInt(200000),
+      value,
+      gas,
     });
   };
 
@@ -459,6 +515,7 @@ export function useMakeOffer() {
 
 export function useAcceptOffer() {
   const publicClient = usePublicClient();
+  const { address } = useConnection();
   const { mutateAsync } = useWriteContract();
   const [phase, setPhase] = useState<TwoStepTxPhase>("idle");
   const inFlightRef = useRef(false);
@@ -472,31 +529,45 @@ export function useAcceptOffer() {
       if (inFlightRef.current) {
         throw new Error("Accept offer already in progress.");
       }
-      if (!publicClient) {
+      if (!publicClient || !address) {
         throw new Error("No network connection.");
       }
 
       inFlightRef.current = true;
       try {
         setPhase("approve-wallet");
+        const approveGas = await estimateContractGasWithBuffer(publicClient, {
+          account: address,
+          address: nftContract,
+          abi: NFT_COLLECTION_ABI,
+          functionName: "setApprovalForAll",
+          args: [MARKETPLACE_ADDRESS, true],
+        });
         const approveHash = await mutateAsync({
           address: nftContract,
           abi: NFT_COLLECTION_ABI,
           functionName: "setApprovalForAll",
           args: [MARKETPLACE_ADDRESS, true],
-          gas: BigInt(100000),
+          gas: approveGas,
         });
 
         setPhase("approve-confirm");
         await waitForTransactionReceipt(publicClient, { hash: approveHash });
 
         setPhase("exec-wallet");
+        const acceptGas = await estimateContractGasWithBuffer(publicClient, {
+          account: address,
+          address: MARKETPLACE_ADDRESS,
+          abi: NFT_MARKETPLACE_ABI,
+          functionName: "acceptOffer",
+          args: [nftContract, BigInt(tokenId), buyerAddress],
+        });
         const acceptHash = await mutateAsync({
           address: MARKETPLACE_ADDRESS,
           abi: NFT_MARKETPLACE_ABI,
           functionName: "acceptOffer",
           args: [nftContract, BigInt(tokenId), buyerAddress],
-          gas: BigInt(300000),
+          gas: acceptGas,
         });
 
         setPhase("exec-confirm");
@@ -506,7 +577,7 @@ export function useAcceptOffer() {
         inFlightRef.current = false;
       }
     },
-    [publicClient, mutateAsync],
+    [publicClient, address, mutateAsync],
   );
 
   const isFlowBusy = phase !== "idle";
@@ -527,18 +598,30 @@ export function useAcceptOffer() {
 // ─────────────────────────────────────────────
 
 export function useCancelOffer() {
+  const publicClient = usePublicClient();
+  const { address } = useConnection();
   const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
   const cancelOffer = async (nftContract: `0x${string}`, tokenId: string) => {
+    if (!publicClient || !address) {
+      throw new Error("No network connection.");
+    }
+    const gas = await estimateContractGasWithBuffer(publicClient, {
+      account: address,
+      address: MARKETPLACE_ADDRESS,
+      abi: NFT_MARKETPLACE_ABI,
+      functionName: "cancelOffer",
+      args: [nftContract, BigInt(tokenId)],
+    });
     await mutateAsync({
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "cancelOffer",
       args: [nftContract, BigInt(tokenId)],
-      gas: BigInt(150000),
+      gas,
     });
   };
 
@@ -550,6 +633,8 @@ export function useCancelOffer() {
 // ─────────────────────────────────────────────
 
 export function useReclaimExpiredOffer() {
+  const publicClient = usePublicClient();
+  const { address } = useConnection();
   const { data: hash, mutateAsync, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
@@ -560,12 +645,22 @@ export function useReclaimExpiredOffer() {
     tokenId: string,
     buyerAddress: `0x${string}`,
   ) => {
+    if (!publicClient || !address) {
+      throw new Error("No network connection.");
+    }
+    const gas = await estimateContractGasWithBuffer(publicClient, {
+      account: address,
+      address: MARKETPLACE_ADDRESS,
+      abi: NFT_MARKETPLACE_ABI,
+      functionName: "reclaimExpiredOffer",
+      args: [nftContract, BigInt(tokenId), buyerAddress],
+    });
     await mutateAsync({
       address: MARKETPLACE_ADDRESS,
       abi: NFT_MARKETPLACE_ABI,
       functionName: "reclaimExpiredOffer",
       args: [nftContract, BigInt(tokenId), buyerAddress],
-      gas: BigInt(150000),
+      gas,
     });
   };
 
