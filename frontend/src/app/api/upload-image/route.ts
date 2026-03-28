@@ -7,6 +7,7 @@ import {
   runUploadGate,
   validateImageFile,
 } from "@/lib/uploadSecurity";
+import { peekErrorBody } from "@/lib/apiUpstream";
 
 export async function POST(req: NextRequest) {
   const gate = await runUploadGate(
@@ -36,9 +37,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (!res.ok) {
+      const preview = await peekErrorBody(res);
       logger.error("Pinata pinFile failed", undefined, {
         path: req.nextUrl.pathname,
         status: res.status,
+        bodyPreview: preview,
       });
       return NextResponse.json({ error: "Upload failed." }, { status: 502 });
     }

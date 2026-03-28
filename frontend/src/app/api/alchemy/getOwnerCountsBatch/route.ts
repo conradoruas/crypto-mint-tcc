@@ -30,6 +30,13 @@ export async function POST(req: NextRequest) {
           `${ALCHEMY_BASE}/getOwnersForContract?contractAddress=${addr}&withTokenBalances=false`,
           { next: { revalidate: 60 } },
         );
+        if (!res.ok) {
+          logger.warn("getOwnerCountsBatch: Alchemy non-OK", {
+            contractAddress: addr,
+            status: res.status,
+          });
+          return [addr.toLowerCase(), 0] as const;
+        }
         const data = (await res.json()) as { owners?: string[] };
         return [addr.toLowerCase(), data.owners?.length ?? 0] as const;
       } catch (err) {

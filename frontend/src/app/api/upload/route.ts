@@ -7,6 +7,7 @@ import {
   runUploadGate,
   validateImageFile,
 } from "@/lib/uploadSecurity";
+import { peekErrorBody } from "@/lib/apiUpstream";
 import { parseCombinedUploadFields } from "@/lib/uploadPayloadSchemas";
 
 function safeMetadataFileName(name: string): string {
@@ -61,9 +62,11 @@ export async function POST(req: NextRequest) {
     );
 
     if (!imageRes.ok) {
+      const preview = await peekErrorBody(imageRes);
       logger.error("Pinata pinFile failed (combined)", undefined, {
         path: req.nextUrl.pathname,
         status: imageRes.status,
+        bodyPreview: preview,
       });
       return NextResponse.json({ error: "Upload failed." }, { status: 502 });
     }
@@ -101,9 +104,11 @@ export async function POST(req: NextRequest) {
     );
 
     if (!jsonRes.ok) {
+      const preview = await peekErrorBody(jsonRes);
       logger.error("Pinata pinJSON failed (combined)", undefined, {
         path: req.nextUrl.pathname,
         status: jsonRes.status,
+        bodyPreview: preview,
       });
       return NextResponse.json({ error: "Upload failed." }, { status: 502 });
     }
