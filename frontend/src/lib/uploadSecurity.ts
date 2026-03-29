@@ -7,10 +7,10 @@ import { buildUploadAuthMessage } from "@/lib/uploadAuthMessage";
 export const MAX_JSON_UPLOAD_BYTES = 256 * 1024;
 
 /** Max image / multipart file part size (bytes). */
-export const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 /** Max total multipart body (file + fields) for /api/upload. */
-export const MAX_UPLOAD_COMBINED_BYTES = 6 * 1024 * 1024;
+export const MAX_UPLOAD_COMBINED_BYTES = 11 * 1024 * 1024;
 
 const ALLOWED_IMAGE_MIME = new Set([
   "image/jpeg",
@@ -155,7 +155,10 @@ export async function verifyUploadAuth(
 
   if (!address || !ts || !sig) {
     return NextResponse.json(
-      { error: "Authentication required. Sign the upload challenge in your wallet." },
+      {
+        error:
+          "Authentication required. Sign the upload challenge in your wallet.",
+      },
       { status: 401 },
     );
   }
@@ -165,7 +168,10 @@ export async function verifyUploadAuth(
     tsNum = parseInt(ts, 10);
     if (Number.isNaN(tsNum) || tsNum <= 0) throw new Error("bad ts");
   } catch {
-    return NextResponse.json({ error: "Invalid authentication." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Invalid authentication." },
+      { status: 401 },
+    );
   }
 
   const now = Math.floor(Date.now() / 1000);

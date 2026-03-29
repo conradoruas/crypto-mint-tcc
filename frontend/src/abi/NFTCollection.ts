@@ -15,6 +15,13 @@ export const NFT_COLLECTION_ABI = [
     type: "function",
   },
   {
+    inputs: [{ internalType: "string[]", name: "uris", type: "string[]" }],
+    name: "appendTokenURIs",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
     inputs: [],
     name: "withdraw",
     outputs: [],

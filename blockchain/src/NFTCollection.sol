@@ -41,7 +41,16 @@ contract NFTCollection is ERC721URIStorage, ERC2981, Ownable {
     // ─── Dono carrega os URIs antes do lançamento ───
     function loadTokenURIs(string[] calldata uris) external onlyOwner {
         require(_nextTokenId == 0, "Mint ja iniciado");
-        require(uris.length == maxSupply, "Quantidade incorreta de URIs");
+        require(_tokenURIs.length + uris.length <= maxSupply, "Excede maxSupply");
+        for (uint256 i = 0; i < uris.length; i++) {
+            _tokenURIs.push(uris[i]);
+        }
+        require(_tokenURIs.length <= maxSupply, "Excede maxSupply");
+    }
+
+    function appendTokenURIs(string[] calldata uris) external onlyOwner {
+        require(_nextTokenId == 0, "Mint ja iniciado");
+        require(_tokenURIs.length + uris.length <= maxSupply, "Excede maxSupply");
         for (uint256 i = 0; i < uris.length; i++) {
             _tokenURIs.push(uris[i]);
         }

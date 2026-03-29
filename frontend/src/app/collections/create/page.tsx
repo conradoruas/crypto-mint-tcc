@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useCallback } from "react";
+import { useState, useCallback, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   useConnection,
@@ -127,8 +127,12 @@ export default function CreateCollectionPage() {
   const [nfts, setNfts] = useState<NFTDraft[]>([]);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [isUploadingNFTs, setIsUploadingNFTs] = useState(false);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [bulkMetadataFile, setBulkMetadataFile] = useState<File | null>(null);
+  const [bulkImageFiles, setBulkImageFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [bulkParsingError, setBulkParsingError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CreateCollectionErrors>({});
 
   const {
@@ -201,6 +205,80 @@ export default function CreateCollectionPage() {
       }),
     );
 
+  const handleBulkMetadataFileChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    setBulkMetadataFile(event.target.files?.[0] ?? null);
+  };
+
+  const handleBulkImageFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setBulkImageFiles(event.target.files ? Array.from(event.target.files) : []);
+  };
+
+  const handleParseBulkNFTs = async () => {
+    setError(null);
+    setBulkParsingError(null);
+
+    if (!bulkMetadataFile) {
+      setError("Please select a metadata JSON file.");
+      return;
+    }
+    if (bulkImageFiles.length === 0) {
+      setError("Please select matching image files for bulk import.");
+      return;
+    }
+
+    setIsBulkProcessing(true);
+    try {
+      const text = await bulkMetadataFile.text();
+      const json = JSON.parse(text);
+      if (!Array.isArray(json)) {
+        throw new Error("Bulk metadata must be an array of objects.");
+      }
+
+      const parsedNFTs: NFTDraft[] = json.map((item: any, idx: number) => {
+        const name = String(item.name ?? "").trim();
+        const description = String(item.description ?? "").trim();
+        const imageName = String(item.image ?? "").trim();
+
+        if (!name || !imageName) {
+          throw new Error(
+            `Entry ${idx + 1} must contain 'name' and 'image' fields.`,
+          );
+        }
+
+        const imageFile = bulkImageFiles.find(
+          (file) =>
+            file.name === imageName ||
+            file.name === imageName.replace(/^.*[\\/]/, ""),
+        );
+
+        if (!imageFile) {
+          throw new Error(
+            `Image '${imageName}' for entry ${idx + 1} not found in uploaded images.`,
+          );
+        }
+
+        return {
+          id: Date.now() + idx,
+          name,
+          description,
+          file: imageFile,
+          previewUrl: URL.createObjectURL(imageFile),
+        };
+      });
+
+      setNfts(parsedNFTs);
+      setError(null);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to parse bulk metadata.";
+      setBulkParsingError(message);
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
   const handleCreateCollection = async () => {
     setError(null);
     const errors = getZodErrors(createCollectionSchema, {
@@ -271,21 +349,56 @@ export default function CreateCollectionPage() {
       if (!address || !publicClient) {
         throw new Error("Connect your wallet.");
       }
-      const gas = await estimateContractGasWithBuffer(publicClient, {
-        account: address,
-        address: addr,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "loadTokenURIs",
-        args: [uris],
-      });
-      const tx = await mutateAsync({
-        address: addr,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "loadTokenURIs",
-        args: [uris],
-        gas,
-      });
-      setLoadURIsHash(tx);
+
+      const CHUNK_LOAD_SIZE = 200;
+      let lastTxHash: `0x${string}` | undefined;
+
+      if (uris.length === 0) {
+        throw new Error("No NFT metadata URIs to load.");
+      }
+
+      const shouldUseBatch = uris.length <= CHUNK_LOAD_SIZE;
+      if (shouldUseBatch) {
+        const gas = await estimateContractGasWithBuffer(publicClient, {
+          account: address,
+          address: addr,
+          abi: NFT_COLLECTION_ABI,
+          functionName: "loadTokenURIs",
+          args: [uris],
+        });
+        lastTxHash = await mutateAsync({
+          address: addr,
+          abi: NFT_COLLECTION_ABI,
+          functionName: "loadTokenURIs",
+          args: [uris],
+          gas,
+        });
+      } else {
+        for (let i = 0; i < uris.length; i += CHUNK_LOAD_SIZE) {
+          const chunk = uris.slice(i, i + CHUNK_LOAD_SIZE);
+          setUploadProgress(
+            95 + Math.round(((i + chunk.length) / uris.length) * 5),
+          );
+          const gas = await estimateContractGasWithBuffer(publicClient, {
+            account: address,
+            address: addr,
+            abi: NFT_COLLECTION_ABI,
+            functionName: "appendTokenURIs",
+            args: [chunk],
+          });
+          lastTxHash = await mutateAsync({
+            address: addr,
+            abi: NFT_COLLECTION_ABI,
+            functionName: "appendTokenURIs",
+            args: [chunk],
+            gas,
+          });
+        }
+      }
+
+      if (lastTxHash) {
+        setLoadURIsHash(lastTxHash);
+      }
       setUploadProgress(100);
     } catch (e) {
       setError(
@@ -671,6 +784,46 @@ export default function CreateCollectionPage() {
               >
                 <Plus size={12} /> Add NFT
               </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="block text-xs text-on-surface-variant">
+                Bulk metadata file (.json array)
+                <input
+                  type="file"
+                  accept="application/json"
+                  onChange={handleBulkMetadataFileChange}
+                  className="mt-1 w-full"
+                  disabled={isBulkProcessing || isUploadingNFTs || isLoading}
+                />
+              </label>
+
+              <label className="block text-xs text-on-surface-variant">
+                Bulk images (.png, .jpg, etc.)
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleBulkImageFilesChange}
+                  className="mt-1 w-full"
+                  multiple
+                  disabled={isBulkProcessing || isUploadingNFTs || isLoading}
+                />
+              </label>
+
+              <div className="md:col-span-2 flex items-center gap-2">
+                <button
+                  onClick={handleParseBulkNFTs}
+                  disabled={isBulkProcessing || isUploadingNFTs || isLoading}
+                  className="py-2 px-3 font-semibold text-xs rounded-sm bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-all"
+                >
+                  {isBulkProcessing
+                    ? "Parsing bulk metadata..."
+                    : "Load bulk NFTs"}
+                </button>
+                {bulkParsingError && (
+                  <p className="text-xs text-error">{bulkParsingError}</p>
+                )}
+              </div>
             </div>
 
             {nfts.length === 0 ? (
