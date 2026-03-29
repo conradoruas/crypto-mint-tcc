@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useCallback, type ChangeEvent } from "react";
+import { useState, useEffect, useCallback, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   useConnection,
@@ -128,15 +128,35 @@ export default function CreateCollectionPage() {
   const [description, setDescription] = useState("");
   const [mintPrice, setMintPrice] = useState("0.0001");
   const [nfts, setNfts] = useState<NFTDraft[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const NFTs_PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(nfts.length / NFTs_PER_PAGE));
+  const pagedNFTs = nfts.slice(
+    (currentPage - 1) * NFTs_PER_PAGE,
+    currentPage * NFTs_PER_PAGE,
+  );
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [isUploadingNFTs, setIsUploadingNFTs] = useState(false);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [bulkMetadataFile, setBulkMetadataFile] = useState<File | null>(null);
   const [bulkImageFiles, setBulkImageFiles] = useState<File[]>([]);
+  const [bulkMetadataName, setBulkMetadataName] = useState<string>("");
+  const [bulkImageNames, setBulkImageNames] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [bulkParsingError, setBulkParsingError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CreateCollectionErrors>({});
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const {
     createCollection,
@@ -211,11 +231,15 @@ export default function CreateCollectionPage() {
   const handleBulkMetadataFileChange = (
     event: ChangeEvent<HTMLInputElement>,
   ) => {
-    setBulkMetadataFile(event.target.files?.[0] ?? null);
+    const file = event.target.files?.[0] ?? null;
+    setBulkMetadataFile(file);
+    setBulkMetadataName(file?.name ?? "");
   };
 
   const handleBulkImageFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setBulkImageFiles(event.target.files ? Array.from(event.target.files) : []);
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    setBulkImageFiles(files);
+    setBulkImageNames(files.map((f) => f.name));
   };
 
   const handleParseBulkNFTs = async () => {
@@ -648,7 +672,9 @@ export default function CreateCollectionPage() {
                       className="mx-auto text-on-surface-variant/40"
                       size={24}
                     />
-                    <span className={`${uploadButtonClass} border-outline-variant/25 bg-surface-container text-on-surface-variant hover:border-primary/40 hover:text-primary`}>
+                    <span
+                      className={`${uploadButtonClass} border-outline-variant/25 bg-surface-container text-on-surface-variant hover:border-primary/40 hover:text-primary`}
+                    >
                       Select Cover Image
                     </span>
                     <p className="text-[11px] text-on-surface-variant/60 uppercase tracking-widest">
@@ -793,194 +819,244 @@ export default function CreateCollectionPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label className="block text-xs text-on-surface-variant">
-                Bulk metadata file (.json array)
-                <input
-                  type="file"
-                  accept="application/json"
-                  onChange={handleBulkMetadataFileChange}
-                  className="mt-1 w-full"
-                  disabled={isBulkProcessing || isUploadingNFTs || isLoading}
-                />
-              </label>
+              {hasMounted ? (
+                <>
+                  <label className="block text-xs text-on-surface-variant">
+                    Bulk metadata file (.json array)
+                    <div className="mt-2">
+                      <input
+                        type="file"
+                        accept="application/json"
+                        onChange={handleBulkMetadataFileChange}
+                        className="w-full rounded-sm border border-outline-variant/20 bg-surface-container px-3 py-2 text-sm text-on-surface transition-colors focus:border-primary focus:outline-none cursor-pointer"
+                        disabled={
+                          isBulkProcessing || isUploadingNFTs || isLoading
+                        }
+                      />
+                      <p className="mt-1 text-xs text-on-surface-variant">
+                        {bulkMetadataName
+                          ? `Selecionado: ${bulkMetadataName}`
+                          : "Nenhum arquivo JSON selecionado"}
+                      </p>
+                    </div>
+                  </label>
 
-              <label className="block text-xs text-on-surface-variant">
-                Bulk images (.png, .jpg, etc.)
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleBulkImageFilesChange}
-                  className="mt-1 w-full"
-                  multiple
-                  disabled={isBulkProcessing || isUploadingNFTs || isLoading}
-                />
-              </label>
-
-              <div className="md:col-span-2 flex items-center gap-2">
-                <button
-                  onClick={handleParseBulkNFTs}
-                  disabled={isBulkProcessing || isUploadingNFTs || isLoading}
-                  className="py-2 px-3 font-semibold text-xs rounded-sm bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-all"
-                >
-                  {isBulkProcessing
-                    ? "Parsing bulk metadata..."
-                    : "Load bulk NFTs"}
-                </button>
-                {bulkParsingError && (
-                  <p className="text-xs text-error">{bulkParsingError}</p>
-                )}
-              </div>
+                  <label className="block text-xs text-on-surface-variant">
+                    Bulk images (.png, .jpg, etc.)
+                    <div className="mt-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBulkImageFilesChange}
+                        multiple
+                        className="w-full rounded-sm border border-outline-variant/20 bg-surface-container px-3 py-2 text-sm text-on-surface transition-colors focus:border-primary focus:outline-none cursor-pointer"
+                        disabled={
+                          isBulkProcessing || isUploadingNFTs || isLoading
+                        }
+                      />
+                      <p className="mt-1 text-xs text-on-surface-variant">
+                        {bulkImageNames.length > 0
+                          ? `Selecionadas: ${bulkImageNames.join(", ")}`
+                          : "Nenhuma imagem selecionada"}
+                      </p>
+                    </div>
+                  </label>
+                </>
+              ) : (
+                <>
+                  <div className="h-28 rounded-sm border border-outline-variant/20 bg-surface-container" />
+                  <div className="h-28 rounded-sm border border-outline-variant/20 bg-surface-container" />
+                </>
+              )}
             </div>
 
-            {nfts.length === 0 ? (
-              <div className="text-center py-12 border border-dashed border-outline-variant/20 rounded-sm">
-                <ImageIcon
-                  size={36}
-                  className="mx-auto mb-3 text-on-surface-variant/20"
-                />
-                <p className="text-sm text-on-surface-variant mb-4">
-                  No NFTs added yet
-                </p>
-                <button
-                  onClick={addNFT}
-                  className="inline-flex items-center gap-2 font-headline font-bold px-5 py-2.5 text-sm rounded-sm bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed uppercase tracking-wider"
-                >
-                  <Plus size={13} /> Add First NFT
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {nfts.map((nft, index) => (
-                  <div
-                    key={nft.id}
-                    className="p-4 bg-surface-container border border-outline-variant/10 rounded-sm"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="shrink-0 relative">
-                        <input
-                          type="file"
-                          id={`nft-file-${nft.id}`}
-                          className="hidden"
-                          accept="image/*"
-                          onChange={(e) =>
-                            updateNFT(
-                              nft.id,
-                              "file",
-                              e.target.files?.[0] || null,
-                            )
-                          }
-                        />
-                        <label
-                          htmlFor={`nft-file-${nft.id}`}
-                          className={`w-24 h-24 relative flex items-center justify-center cursor-pointer overflow-hidden rounded-sm transition-all border focus-within:ring-2 focus-within:ring-primary/30 ${
-                            nft.file
-                              ? "border-primary/40 bg-primary/5"
-                              : "border-dashed border-outline-variant/20 hover:border-outline-variant/40 bg-surface-container-lowest"
-                          }`}
-                        >
-                          {nft.previewUrl ? (
-                            <Image
-                              src={nft.previewUrl}
-                              alt="NFT Preview"
-                              fill
-                              className="object-cover"
-                              sizes="(max-width: 768px) 100vw, 300px"
-                            />
-                          ) : (
-                            <div className="text-center px-1">
-                              <Upload
-                                size={14}
-                                className="mx-auto mb-1 text-on-surface-variant/40"
-                              />
-                              <span className="text-[8px] font-headline font-bold uppercase tracking-widest text-on-surface-variant/70">
-                                Add Image
-                              </span>
-                            </div>
-                          )}
-                        </label>
-                      </div>
-
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-headline font-bold text-on-surface-variant shrink-0 uppercase tracking-widest">
-                            #{String(index + 1).padStart(3, "0")}
-                          </span>
-                          <input
-                            type="text"
-                            value={nft.name}
-                            onChange={(e) =>
-                              updateNFT(nft.id, "name", e.target.value)
-                            }
-                            className={`${inputClass} flex-1`}
-                            placeholder="NFT Name *"
-                          />
-                        </div>
-                        <textarea
-                          value={nft.description}
-                          onChange={(e) =>
-                            updateNFT(nft.id, "description", e.target.value)
-                          }
-                          className={`${inputClass} h-16 resize-none`}
-                          placeholder="Description (optional)"
-                        />
-                      </div>
-
-                      <button
-                        onClick={() => removeNFT(nft.id)}
-                        className="shrink-0 p-1.5 text-on-surface-variant/30 hover:text-error transition-colors"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                <button
-                  onClick={addNFT}
-                  className="w-full py-3 text-xs flex items-center justify-center gap-2 transition-all border border-dashed border-outline-variant/10 text-on-surface-variant/40 hover:border-primary/30 hover:text-primary rounded-sm font-headline font-bold uppercase tracking-widest"
-                >
-                  <Plus size={12} /> Add Another NFT
-                </button>
-              </div>
-            )}
+            <div className="md:col-span-2 flex items-center gap-2">
+              <button
+                onClick={handleParseBulkNFTs}
+                disabled={isBulkProcessing || isUploadingNFTs || isLoading}
+                className="py-2 px-3 font-semibold text-xs rounded-sm bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-all"
+              >
+                {isBulkProcessing
+                  ? "Parsing bulk metadata..."
+                  : "Load bulk NFTs"}
+              </button>
+              {bulkParsingError && (
+                <p className="text-xs text-error">{bulkParsingError}</p>
+              )}
+            </div>
           </div>
 
-          {error && (
-            <div className="text-sm p-4 bg-error/5 border border-error/20 text-error rounded-sm">
-              {error}
+          {nfts.length === 0 ? (
+            <div className="text-center py-12 border border-dashed border-outline-variant/20 rounded-sm">
+              <ImageIcon
+                size={36}
+                className="mx-auto mb-3 text-on-surface-variant/20"
+              />
+              <p className="text-sm text-on-surface-variant mb-4">
+                No NFTs added yet
+              </p>
+              <button
+                onClick={addNFT}
+                className="inline-flex items-center gap-2 font-headline font-bold px-5 py-2.5 text-sm rounded-sm bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed uppercase tracking-wider"
+              >
+                <Plus size={13} /> Add First NFT
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pagedNFTs.map((nft, index) => (
+                <div
+                  key={nft.id}
+                  className="p-4 bg-surface-container border border-outline-variant/10 rounded-sm"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="shrink-0 relative">
+                      <input
+                        type="file"
+                        id={`nft-file-${nft.id}`}
+                        className="hidden"
+                        accept="image/*"
+                        onChange={(e) =>
+                          updateNFT(nft.id, "file", e.target.files?.[0] || null)
+                        }
+                      />
+                      <label
+                        htmlFor={`nft-file-${nft.id}`}
+                        className={`w-24 h-24 relative flex items-center justify-center cursor-pointer overflow-hidden rounded-sm transition-all border focus-within:ring-2 focus-within:ring-primary/30 ${
+                          nft.file
+                            ? "border-primary/40 bg-primary/5"
+                            : "border-dashed border-outline-variant/20 hover:border-outline-variant/40 bg-surface-container-lowest"
+                        }`}
+                      >
+                        {nft.previewUrl ? (
+                          <Image
+                            src={nft.previewUrl}
+                            alt="NFT Preview"
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, 300px"
+                          />
+                        ) : (
+                          <div className="text-center px-1">
+                            <Upload
+                              size={14}
+                              className="mx-auto mb-1 text-on-surface-variant/40"
+                            />
+                            <span className="text-[8px] font-headline font-bold uppercase tracking-widest text-on-surface-variant/70">
+                              Add Image
+                            </span>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-headline font-bold text-on-surface-variant shrink-0 uppercase tracking-widest">
+                          #
+                          {String(
+                            (currentPage - 1) * NFTs_PER_PAGE + index + 1,
+                          ).padStart(3, "0")}
+                        </span>
+                        <input
+                          type="text"
+                          value={nft.name}
+                          onChange={(e) =>
+                            updateNFT(nft.id, "name", e.target.value)
+                          }
+                          className={`${inputClass} flex-1`}
+                          placeholder="NFT Name *"
+                        />
+                      </div>
+                      <textarea
+                        value={nft.description}
+                        onChange={(e) =>
+                          updateNFT(nft.id, "description", e.target.value)
+                        }
+                        className={`${inputClass} h-16 resize-none`}
+                        placeholder="Description (optional)"
+                      />
+                    </div>
+
+                    <button
+                      onClick={() => removeNFT(nft.id)}
+                      className="shrink-0 p-1.5 text-on-surface-variant/30 hover:text-error transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <div className="flex items-center justify-between px-2 py-1 text-xs text-on-surface-variant bg-surface-container-high rounded-sm">
+                <button
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(1, prev - 1))
+                  }
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 rounded-sm border border-outline-variant/20 hover:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span>
+                  Página {currentPage} de {totalPages}
+                </span>
+                <button
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                  }
+                  disabled={currentPage === totalPages}
+                  className="px-2 py-1 rounded-sm border border-outline-variant/20 hover:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+
+              <button
+                onClick={addNFT}
+                className="w-full py-3 text-xs flex items-center justify-center gap-2 transition-all border border-dashed border-outline-variant/10 text-on-surface-variant/40 hover:border-primary/30 hover:text-primary rounded-sm font-headline font-bold uppercase tracking-widest"
+              >
+                <Plus size={12} /> Add Another NFT
+              </button>
             </div>
           )}
-
-          <div className="relative group overflow-hidden">
-            <button
-              onClick={handleCreateCollection}
-              disabled={isLoading || nfts.length === 0}
-              className={`w-full relative overflow-hidden font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${
-                isLoading || nfts.length === 0
-                  ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
-                  : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
-              }`}
-            >
-              {!isLoading && nfts.length > 0 && (
-                <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
-              )}
-              {isLoading ? (
-                <Loader2 className="animate-spin" size={18} />
-              ) : (
-                <Layers size={18} />
-              )}
-              {isUploadingCover
-                ? "Uploading cover to IPFS..."
-                : isCreating
-                  ? "Awaiting wallet..."
-                  : isConfirmingCreate
-                    ? "Deploying contract..."
-                    : `Create Collection with ${nfts.length} NFT${nfts.length !== 1 ? "s" : ""}`}
-            </button>
-          </div>
         </div>
-        <Footer />
+
+        {error && (
+          <div className="text-sm p-4 bg-error/5 border border-error/20 text-error rounded-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="relative group overflow-hidden">
+          <button
+            onClick={handleCreateCollection}
+            disabled={isLoading || nfts.length === 0}
+            className={`w-full relative overflow-hidden font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${
+              isLoading || nfts.length === 0
+                ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
+                : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
+            }`}
+          >
+            {!isLoading && nfts.length > 0 && (
+              <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+            )}
+            {isLoading ? (
+              <Loader2 className="animate-spin" size={18} />
+            ) : (
+              <Layers size={18} />
+            )}
+            {isUploadingCover
+              ? "Uploading cover to IPFS..."
+              : isCreating
+                ? "Awaiting wallet..."
+                : isConfirmingCreate
+                  ? "Deploying contract..."
+                  : `Create Collection with ${nfts.length} NFT${nfts.length !== 1 ? "s" : ""}`}
+          </button>
+        </div>
       </div>
+      <Footer />
     </main>
   );
 }
