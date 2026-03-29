@@ -53,6 +53,9 @@ const inputClass =
 const inputErrorClass =
   "w-full bg-surface-container-lowest border border-error/40 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-error transition-all placeholder:text-on-surface-variant/40";
 
+const uploadButtonClass =
+  "inline-flex items-center justify-center gap-2 rounded-sm border px-4 py-2.5 text-[11px] font-headline font-bold uppercase tracking-widest transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
   return <p className="mt-1.5 text-xs text-error">{msg}</p>;
@@ -623,10 +626,10 @@ export default function CreateCollectionPage() {
               />
               <label
                 htmlFor="cover-upload"
-                className={`block p-8 text-center cursor-pointer transition-all border rounded-sm ${
+                className={`block p-8 text-center cursor-pointer transition-all border rounded-sm focus-within:ring-2 focus-within:ring-primary/30 ${
                   coverFile
                     ? "border-primary/40 bg-primary/5"
-                    : "border-dashed border-outline-variant/20 hover:border-outline-variant/40"
+                    : "border-dashed border-outline-variant/20 hover:border-outline-variant/40 bg-surface-container-lowest"
                 }`}
               >
                 {coverPreview ? (
@@ -640,18 +643,21 @@ export default function CreateCollectionPage() {
                     />
                   </div>
                 ) : (
-                  <>
+                  <div className="space-y-3">
                     <Upload
-                      className="mx-auto mb-3 text-on-surface-variant/30"
+                      className="mx-auto text-on-surface-variant/40"
                       size={24}
                     />
-                    <p className="text-sm text-on-surface-variant/50">
-                      Click to select a cover image
+                    <span className={`${uploadButtonClass} border-outline-variant/25 bg-surface-container text-on-surface-variant hover:border-primary/40 hover:text-primary`}>
+                      Select Cover Image
+                    </span>
+                    <p className="text-[11px] text-on-surface-variant/60 uppercase tracking-widest">
+                      PNG, JPG or WEBP
                     </p>
-                  </>
+                  </div>
                 )}
                 {coverFile && (
-                  <p className="text-xs mt-2 text-primary font-headline font-bold uppercase tracking-widest">
+                  <p className="text-xs mt-3 text-primary font-headline font-bold uppercase tracking-widest break-all">
                     ✓ {coverFile.name}
                   </p>
                 )}
@@ -866,10 +872,10 @@ export default function CreateCollectionPage() {
                         />
                         <label
                           htmlFor={`nft-file-${nft.id}`}
-                          className={`w-20 h-20 flex items-center justify-center cursor-pointer overflow-hidden rounded-sm transition-all border ${
+                          className={`w-24 h-24 relative flex items-center justify-center cursor-pointer overflow-hidden rounded-sm transition-all border focus-within:ring-2 focus-within:ring-primary/30 ${
                             nft.file
-                              ? "border-primary/40"
-                              : "border-dashed border-outline-variant/20 hover:border-outline-variant/40"
+                              ? "border-primary/40 bg-primary/5"
+                              : "border-dashed border-outline-variant/20 hover:border-outline-variant/40 bg-surface-container-lowest"
                           }`}
                         >
                           {nft.previewUrl ? (
@@ -881,10 +887,15 @@ export default function CreateCollectionPage() {
                               sizes="(max-width: 768px) 100vw, 300px"
                             />
                           ) : (
-                            <Upload
-                              size={14}
-                              className="text-on-surface-variant/30"
-                            />
+                            <div className="text-center px-1">
+                              <Upload
+                                size={14}
+                                className="mx-auto mb-1 text-on-surface-variant/40"
+                              />
+                              <span className="text-[8px] font-headline font-bold uppercase tracking-widest text-on-surface-variant/70">
+                                Add Image
+                              </span>
+                            </div>
                           )}
                         </label>
                       </div>
