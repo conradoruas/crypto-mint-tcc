@@ -127,6 +127,3 @@ export function formatTransactionError(error: unknown, fallback: string): string
       return fallback;
   }
 }
-
-
-// fix typo in above - isUserRejectedMessage not isUser rejected Message
