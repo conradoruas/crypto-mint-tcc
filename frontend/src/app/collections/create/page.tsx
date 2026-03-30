@@ -47,6 +47,13 @@ interface NFTDraft {
   previewUrl: string;
 }
 
+interface BulkMetadataItem {
+  name?: string;
+  description?: string;
+  image?: string;
+  [key: string]: unknown;
+}
+
 const inputClass =
   "w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40";
 
@@ -181,8 +188,8 @@ export default function CreateCollectionPage() {
 
   const lastIndex = creatorCollectionIds
     ? (creatorCollectionIds as bigint[])[
-        (creatorCollectionIds as bigint[]).length - 1
-      ]
+    (creatorCollectionIds as bigint[]).length - 1
+    ]
     : undefined;
 
   const { data: lastCollectionData } = useReadContract({
@@ -263,37 +270,38 @@ export default function CreateCollectionPage() {
         throw new Error("Bulk metadata must be an array of objects.");
       }
 
-      const parsedNFTs: NFTDraft[] = json.map((item: any, idx: number) => {
-        const name = String(item.name ?? "").trim();
-        const description = String(item.description ?? "").trim();
-        const imageName = String(item.image ?? "").trim();
+      const parsedNFTs: NFTDraft[] = json.map(
+        (item: BulkMetadataItem, idx: number) => {
+          const name = String(item.name ?? "").trim();
+          const description = String(item.description ?? "").trim();
+          const imageName = String(item.image ?? "").trim();
 
-        if (!name || !imageName) {
-          throw new Error(
-            `Entry ${idx + 1} must contain 'name' and 'image' fields.`,
+          if (!name || !imageName) {
+            throw new Error(
+              `Entry ${idx + 1} must contain 'name' and 'image' fields.`,
+            );
+          }
+
+          const imageFile = bulkImageFiles.find(
+            (file) =>
+              file.name === imageName ||
+              file.name === imageName.replace(/^.*[\\/]/, ""),
           );
-        }
 
-        const imageFile = bulkImageFiles.find(
-          (file) =>
-            file.name === imageName ||
-            file.name === imageName.replace(/^.*[\\/]/, ""),
-        );
+          if (!imageFile) {
+            throw new Error(
+              `Image '${imageName}' for entry ${idx + 1} not found in uploaded images.`,
+            );
+          }
 
-        if (!imageFile) {
-          throw new Error(
-            `Image '${imageName}' for entry ${idx + 1} not found in uploaded images.`,
-          );
-        }
-
-        return {
-          id: Date.now() + idx,
-          name,
-          description,
-          file: imageFile,
-          previewUrl: URL.createObjectURL(imageFile),
-        };
-      });
+          return {
+            id: Date.now() + idx,
+            name,
+            description,
+            file: imageFile,
+            previewUrl: URL.createObjectURL(imageFile),
+          };
+        });
 
       setNfts(parsedNFTs);
       setError(null);
@@ -568,11 +576,10 @@ export default function CreateCollectionPage() {
             <button
               onClick={() => deployedAddress && handleLoadURIs(deployedAddress)}
               disabled={isLoading || !deployedAddress}
-              className={`w-full relative overflow-hidden font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${
-                isLoading || !deployedAddress
-                  ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
-                  : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
-              }`}
+              className={`w-full relative overflow-hidden font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${isLoading || !deployedAddress
+                ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
+                : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
+                }`}
             >
               {!isLoading && deployedAddress && (
                 <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
@@ -650,11 +657,10 @@ export default function CreateCollectionPage() {
               />
               <label
                 htmlFor="cover-upload"
-                className={`block p-8 text-center cursor-pointer transition-all border rounded-sm focus-within:ring-2 focus-within:ring-primary/30 ${
-                  coverFile
-                    ? "border-primary/40 bg-primary/5"
-                    : "border-dashed border-outline-variant/20 hover:border-outline-variant/40 bg-surface-container-lowest"
-                }`}
+                className={`block p-8 text-center cursor-pointer transition-all border rounded-sm focus-within:ring-2 focus-within:ring-primary/30 ${coverFile
+                  ? "border-primary/40 bg-primary/5"
+                  : "border-dashed border-outline-variant/20 hover:border-outline-variant/40 bg-surface-container-lowest"
+                  }`}
               >
                 {coverPreview ? (
                   <div className="relative h-40">
@@ -922,11 +928,10 @@ export default function CreateCollectionPage() {
                       />
                       <label
                         htmlFor={`nft-file-${nft.id}`}
-                        className={`w-24 h-24 relative flex items-center justify-center cursor-pointer overflow-hidden rounded-sm transition-all border focus-within:ring-2 focus-within:ring-primary/30 ${
-                          nft.file
-                            ? "border-primary/40 bg-primary/5"
-                            : "border-dashed border-outline-variant/20 hover:border-outline-variant/40 bg-surface-container-lowest"
-                        }`}
+                        className={`w-24 h-24 relative flex items-center justify-center cursor-pointer overflow-hidden rounded-sm transition-all border focus-within:ring-2 focus-within:ring-primary/30 ${nft.file
+                          ? "border-primary/40 bg-primary/5"
+                          : "border-dashed border-outline-variant/20 hover:border-outline-variant/40 bg-surface-container-lowest"
+                          }`}
                       >
                         {nft.previewUrl ? (
                           <Image
@@ -1032,11 +1037,10 @@ export default function CreateCollectionPage() {
           <button
             onClick={handleCreateCollection}
             disabled={isLoading || nfts.length === 0}
-            className={`w-full relative overflow-hidden font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${
-              isLoading || nfts.length === 0
-                ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
-                : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
-            }`}
+            className={`w-full relative overflow-hidden font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${isLoading || nfts.length === 0
+              ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
+              : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
+              }`}
           >
             {!isLoading && nfts.length > 0 && (
               <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />

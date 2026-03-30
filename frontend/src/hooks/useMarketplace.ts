@@ -2,7 +2,6 @@
 
 import {
   useWriteContract,
-  useWaitForTransactionReceipt,
   useReadContract,
   useReadContracts,
   useConnection,
