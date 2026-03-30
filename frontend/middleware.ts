@@ -5,8 +5,11 @@
  * See `src/proxy.ts` for the underlying logic.
  */
 import { proxy } from "@/proxy";
+import type { NextRequest } from "next/server";
 
-export { proxy as middleware };
+export function middleware(request: NextRequest) {
+  return proxy(request);
+}
 
 export const config = {
   matcher: ["/api/alchemy/:path*", "/api/rpc"],
