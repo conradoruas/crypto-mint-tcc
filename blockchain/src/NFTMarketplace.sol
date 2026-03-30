@@ -54,6 +54,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     event OfferMade(address indexed nftContract, uint256 indexed tokenId, address indexed buyer, uint256 amount, uint256 expiresAt);
     event OfferAccepted(address indexed nftContract, uint256 indexed tokenId, address seller, address buyer, uint256 amount);
     event OfferCancelled(address indexed nftContract, uint256 indexed tokenId, address indexed buyer);
+    event MarketplaceFeeUpdated(uint256 oldFee, uint256 newFee);
 
     // ─────────────────────────────────────────────
     // Constructor
@@ -306,13 +307,21 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     // Admin
     // ─────────────────────────────────────────────
 
+    /// @notice Altera a taxa do marketplace (basis points, máximo 10%)
+    /// @param newFee Nova taxa em basis points (ex: 250 = 2.5%)
     function setMarketplaceFee(uint256 newFee) external onlyOwner {
         require(newFee <= 1000, "Taxa maxima e 10%");
+        uint256 oldFee = marketplaceFee;
         marketplaceFee = newFee;
+        emit MarketplaceFeeUpdated(oldFee, newFee);
     }
 
+    /// @notice Saca todas as taxas acumuladas para o dono do marketplace
     function withdraw() external onlyOwner {
         (bool success, ) = payable(owner()).call{value: address(this).balance}("");
         require(success, "Transferencia falhou");
     }
+
+    /// @notice Aceita ETH enviado diretamente (taxas acumuladas via buyItem/acceptOffer)
+    receive() external payable {}
 }
