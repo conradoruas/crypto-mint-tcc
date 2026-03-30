@@ -135,44 +135,8 @@ export function useUserFavorites(userAddress: string | undefined) {
   }, [userAddress]);
 
   useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      if (!userAddress) {
-        if (!cancelled) setFavorites([]);
-        return;
-      }
-      const refs = readFavorites(userAddress);
-      if (refs.length === 0) {
-        if (!cancelled) setFavorites([]);
-        return;
-      }
-      if (!cancelled) setIsLoading(true);
-      const tokens = refs.map((r) => ({
-        contractAddress: r.nftContract,
-        tokenId: r.tokenId,
-      }));
-      const metaMap = await fetchAlchemyMeta(tokens);
-      const items: CollectionNFTItem[] = refs.map((ref) => {
-        const key = `${ref.nftContract.toLowerCase()}-${ref.tokenId}`;
-        const meta = metaMap.get(key);
-        return {
-          tokenId: ref.tokenId,
-          name: meta?.name ?? `NFT #${ref.tokenId}`,
-          description: "",
-          image: meta?.image ?? "",
-          nftContract: ref.nftContract,
-        };
-      });
-      if (!cancelled) {
-        setFavorites(items);
-        setIsLoading(false);
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [userAddress]);
+    load();
+  }, [load]);
 
   // Re-sincroniza quando localStorage muda (outra aba ou toggle)
   useEffect(() => {
