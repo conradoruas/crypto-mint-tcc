@@ -135,7 +135,13 @@ export function useUserFavorites(userAddress: string | undefined) {
   }, [userAddress]);
 
   useEffect(() => {
-    load();
+    let ignore = false;
+    void Promise.resolve().then(() => {
+      if (!ignore) load();
+    });
+    return () => {
+      ignore = true;
+    };
   }, [load]);
 
   // Re-sincroniza quando localStorage muda (outra aba ou toggle)
