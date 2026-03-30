@@ -4,7 +4,7 @@
  * Applies rate limiting and origin checks to API proxy routes.
  * See `src/proxy.ts` for the underlying logic.
  */
-import { proxy } from "@/proxy";
+import { proxy } from "@/lib/apiProxy";
 import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
