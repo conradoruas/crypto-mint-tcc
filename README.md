@@ -83,6 +83,41 @@ npm run dev
 - **CSP Headers**: Content Security Policy restricts script/connect/img sources
 - **CORS**: Origin validation on proxy routes
 
+## 🐳 Docker
+
+### Using Docker Compose (recommended)
+
+```bash
+# 1. Create a .env file at the project root with your values
+cp .env.example .env
+# Edit .env with your real values
+
+# 2. Build and run
+docker compose up --build
+
+# App available at http://localhost:3000
+```
+
+### Using Docker directly
+
+```bash
+cd frontend
+
+# Build (NEXT_PUBLIC_* vars are inlined at build time)
+docker build \
+  --build-arg NEXT_PUBLIC_MARKETPLACE_ADDRESS=0x... \
+  --build-arg NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS=0x... \
+  -t cryptomint .
+
+# Run (server-only secrets injected at runtime)
+docker run -p 3000:3000 \
+  -e ALCHEMY_API_KEY=your-key \
+  -e PINATA_JWT=your-jwt \
+  cryptomint
+```
+
+> **Note:** `NEXT_PUBLIC_*` variables are baked into the client JS bundle at build time. If you change them, you must rebuild the image. Server-only vars (`ALCHEMY_API_KEY`, `PINATA_JWT`) are injected at runtime and can be changed without rebuilding.
+
 ## 🧪 Testing
 
 ### Smart Contracts (Foundry)

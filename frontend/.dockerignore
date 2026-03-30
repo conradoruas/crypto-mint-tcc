@@ -1,0 +1,26 @@
+# ── Dependencies ──
+node_modules
+npm-debug.log*
+
+# ── Next.js build ──
+.next
+out
+build
+
+# ── Environment (secrets) ──
+.env
+.env.local
+.env.*.local
+
+# ── IDE / OS ──
+.DS_Store
+*.pem
+.vscode
+.idea
+
+# ── Testing / Coverage ──
+coverage
+
+# ── Blockchain (not needed in frontend image) ──
+../blockchain
+../subgraph
