@@ -11,8 +11,11 @@ import { parseEther, formatEther, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@apollo/client/react";
-import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
-import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
+import {
+  FACTORY_ADDRESS,
+  NFT_COLLECTION_ABI,
+  NFT_COLLECTION_FACTORY_ABI,
+} from "@/constants/contracts";
 import { GET_COLLECTIONS } from "@/lib/graphql/queries";
 import type { AlchemyNFT } from "@/types/alchemy";
 import type { CollectionInfo } from "@/types/collection";
@@ -31,14 +34,22 @@ export type { CollectionInfo, CollectionNFTItem, CreatedNFTItem };
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
-const FACTORY_ADDRESS = ensureAddress(
-  process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS,
-);
+// FACTORY_ADDRESS imported from @/constants/contracts
 
-const publicClient = createPublicClient({
-  chain: sepolia,
-  transport: http("/api/rpc"),
-});
+// Lazy singleton for the RPC fallback path (subgraph disabled).
+// Avoids creating a viem client at module-import time which can
+// cause issues in SSR contexts and prevents tree-shaking.
+let _publicClient: ReturnType<typeof createPublicClient> | null = null;
+function getPublicClient() {
+  if (!_publicClient) {
+    _publicClient = createPublicClient({
+      chain: sepolia,
+      transport: http("/api/rpc"),
+    });
+  }
+  return _publicClient;
+}
+
 
 // ─────────────────────────────────────────────
 // useProfileNFTs
@@ -178,7 +189,7 @@ export function useCollections() {
       const withSupply = await Promise.all(
         rawCollections.map(async (c) => {
           try {
-            const supply = (await publicClient.readContract({
+            const supply = (await getPublicClient().readContract({
               address: c.contractAddress,
               abi: NFT_COLLECTION_ABI,
               functionName: "totalSupply",
