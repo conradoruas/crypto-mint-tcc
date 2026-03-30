@@ -117,18 +117,20 @@ contract NFTMarketplaceTest is Test {
         collection.loadTokenURIs(uris);
     }
 
-    function test_collection_loadURIs_revertsIfWrongCount() public {
+    function test_collection_loadURIs_revertsIfExceedsSupply() public {
         // Cria nova coleção sem URIs carregadas
         vm.prank(seller);
         address addr = factory.createCollection("New", "NW", "", "", 3, MINT_PRICE);
         NFTCollection newCol = NFTCollection(addr);
 
-        string[] memory wrongUris = new string[](2); // supply é 3, mas passamos 2
+        string[] memory wrongUris = new string[](4); // supply é 3, mas passamos 4
         wrongUris[0] = TOKEN_URI;
         wrongUris[1] = TOKEN_URI;
+        wrongUris[2] = TOKEN_URI;
+        wrongUris[3] = TOKEN_URI;
 
         vm.prank(seller);
-        vm.expectRevert("Quantidade incorreta de URIs");
+        vm.expectRevert("Excede maxSupply");
         newCol.loadTokenURIs(wrongUris);
     }
 
