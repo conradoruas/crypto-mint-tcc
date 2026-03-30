@@ -5,6 +5,7 @@ import { ArrowRight, Zap, Shield, Globe } from "lucide-react";
 import { Navbar } from "@/components/NavBar";
 import { StatsSection } from "@/components/StatsSection";
 import { TrendingSection } from "@/components/TrendingSection";
+import Footer from "@/components/Footer";
 
 export default function LandingPage() {
   return (
@@ -148,44 +149,7 @@ export default function LandingPage() {
         </section>
 
         {/* ─── Footer ─── */}
-        <footer className="w-full border-t border-outline-variant/15 bg-background">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-12 py-16 w-full max-w-[1920px] mx-auto items-center">
-            <div>
-              <span className="text-lg font-headline font-black text-on-surface uppercase tracking-tighter mb-4 block">
-                CryptoMint
-              </span>
-              <p className="font-headline text-sm uppercase tracking-widest text-on-surface-variant">
-                © 2026 CryptoMint · TCC UFSC
-              </p>
-            </div>
-            <div className="flex flex-wrap md:justify-end gap-x-8 gap-y-4 text-sm uppercase tracking-widest">
-              <Link
-                href="/explore"
-                className="text-on-surface-variant hover:text-secondary transition-colors"
-              >
-                Explore
-              </Link>
-              <Link
-                href="/collections"
-                className="text-on-surface-variant hover:text-secondary transition-colors"
-              >
-                Collections
-              </Link>
-              <Link
-                href="/create"
-                className="text-on-surface-variant hover:text-secondary transition-colors"
-              >
-                Mint
-              </Link>
-              <Link
-                href="/activity"
-                className="text-on-surface-variant hover:text-secondary transition-colors"
-              >
-                Activity
-              </Link>
-            </div>
-          </div>
-        </footer>
+        <Footer />
       </div>
     </main>
   );
