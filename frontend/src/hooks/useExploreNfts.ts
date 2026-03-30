@@ -3,7 +3,7 @@ import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { GET_ALL_NFTS, GET_NFTS_FOR_CONTRACT } from "@/lib/graphql/queries";
 import type { NFTItem, NFTItemWithMarket } from "@/types/nft";
-import { resolveIpfsUrl } from "@/lib/ipfs";
+import { fetchContractNFTMetadata } from "@/lib/nftMetadata";
 
 export type { NFTItem, NFTItemWithMarket };
 
@@ -38,42 +38,7 @@ type GqlNFT = {
 type GqlNFTsData = { nfts: GqlNFT[] };
 
 // ─── Helpers ───
-
-
-async function fetchAlchemyMetadata(
-  contractAddress: string,
-): Promise<Map<string, { name: string; description: string; image: string }>> {
-  const map = new Map<
-    string,
-    { name: string; description: string; image: string }
-  >();
-  try {
-    const res = await fetch(
-      `/api/alchemy/getNFTsForContract?contractAddress=${contractAddress}&withMetadata=true&refreshCache=false`,
-    );
-    const data = await res.json();
-    for (const nft of data.nfts ?? []) {
-      let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
-      if (!image && nft.tokenUri) {
-        try {
-          const metaRes = await fetch(resolveIpfsUrl(nft.tokenUri));
-          const meta = await metaRes.json();
-          image = resolveIpfsUrl(meta.image ?? "");
-        } catch {
-          image = "";
-        }
-      }
-      map.set(nft.tokenId, {
-        name: nft.name ?? `NFT #${nft.tokenId}`,
-        description: nft.description ?? "",
-        image,
-      });
-    }
-  } catch {
-    /* ignora */
-  }
-  return map;
-}
+// fetchContractNFTMetadata imported from @/lib/nftMetadata
 
 async function mergeWithAlchemy(
   nfts: GqlNFT[],
@@ -93,7 +58,7 @@ async function mergeWithAlchemy(
   const metaMaps = await Promise.all(
     [...byContract.keys()].map(async (addr) => ({
       addr,
-      meta: await fetchAlchemyMetadata(addr),
+      meta: await fetchContractNFTMetadata(addr),
     })),
   );
   const metaByContract = new Map(
