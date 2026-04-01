@@ -7,7 +7,10 @@ import {
   Wallet,
   AlertTriangle,
   Loader2,
+  Menu,
+  X as XIcon,
 } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 import { ConnectKitButton } from "connectkit";
 import { useConnection, useSwitchChain } from "wagmi";
 import { useWrongNetwork, APP_CHAIN } from "@/hooks/useWrongNetwork";
@@ -26,6 +29,7 @@ function NavbarContent() {
   const { isWrongNetwork, currentChainName } = useWrongNetwork();
   const [isSwitchingChain, setIsSwitchingChain] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const { mutateAsync } = useSwitchChain();
 
@@ -95,11 +99,20 @@ function NavbarContent() {
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between px-8 py-4 w-full max-w-[1920px] mx-auto">
-        <div className="flex items-center gap-12">
+      <div className="flex items-center justify-between px-4 sm:px-8 py-4 w-full max-w-[1920px] mx-auto">
+        <div className="flex items-center gap-4 md:gap-12">
+          {/* Mobile Hamburger */}
+          <button
+            className="md:hidden text-on-surface hover:text-primary transition-colors"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? <XIcon size={24} /> : <Menu size={24} />}
+          </button>
+
           <Link
             href="/"
-            className="text-2xl font-bold tracking-tighter text-primary-container uppercase font-headline"
+            className="text-xl sm:text-2xl font-bold tracking-tighter text-primary-container uppercase font-headline"
           >
             <div>
               <span className="text-on-surface lowercase">crypto.</span>
@@ -128,8 +141,11 @@ function NavbarContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
-          <GlobalSearch />
+        <div className="flex items-center gap-4 sm:gap-6">
+          <div className="hidden sm:block">
+            <GlobalSearch />
+          </div>
+          <ThemeToggle />
 
           {isConnected && address ? (
             <div className="flex items-center gap-1 text-on-surface-variant">
@@ -159,14 +175,41 @@ function NavbarContent() {
             {({ isConnected, show, truncatedAddress, ensName }) => (
               <button
                 onClick={show}
-                className="bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed font-headline font-bold px-6 py-2 rounded-sm text-sm tracking-wider active:scale-95 transition-all uppercase hover:brightness-110"
+                className="bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed font-headline font-bold px-4 sm:px-6 py-2 rounded-sm text-xs sm:text-sm tracking-wider active:scale-95 transition-all uppercase hover:brightness-110 shrink-0"
               >
-                {isConnected ? (ensName ?? truncatedAddress) : "Connect Wallet"}
+                {isConnected ? (ensName ?? truncatedAddress) : "Connect"}
               </button>
             )}
           </ConnectKitButton.Custom>
         </div>
       </div>
+
+      {/* Mobile Menu Dropdown */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden border-b border-outline-variant/15 bg-background shadow-lg px-4 py-4 space-y-4 font-headline uppercase tracking-wider text-sm flex flex-col">
+          <div className="sm:hidden mb-2">
+            <GlobalSearch />
+          </div>
+          {navLinks.map((link) => {
+            const isActive = pathname === link.path;
+            return (
+              <Link
+                key={link.path}
+                href={link.path}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={cn(
+                  "transition-colors py-2",
+                  isActive
+                    ? "text-primary-container font-bold"
+                    : "text-on-surface-variant hover:text-on-surface",
+                )}
+              >
+                {link.name}
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </nav>
   );
 }
