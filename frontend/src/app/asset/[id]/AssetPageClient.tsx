@@ -45,6 +45,7 @@ import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { logger } from "@/lib/logger";
 import { formatTransactionError } from "@/lib/txErrors";
+import { toast } from "sonner";
 
 // ─── Price History Chart ──────────────────────────────────────────────────────
 
@@ -282,39 +283,7 @@ function PriceHistory({
 const inputClass =
   "w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40";
 
-function TxMessage({
-  type,
-  text,
-  hash,
-}: {
-  type: "success" | "error";
-  text: string;
-  hash?: string;
-}) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={`p-4 text-sm flex flex-col gap-2 rounded-sm border ${
-        type === "success"
-          ? "bg-primary/5 border-primary/20 text-primary"
-          : "bg-error/5 border-error/20 text-error"
-      }`}
-    >
-      <span>{text}</span>
-      {hash && (
-        <a
-          href={`https://sepolia.etherscan.io/tx/${hash}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 underline font-headline font-bold text-xs uppercase tracking-widest"
-        >
-          View on Etherscan <ExternalLink size={11} />
-        </a>
-      )}
-    </div>
-  );
-}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
   return (
@@ -347,11 +316,6 @@ export default function AssetPageClient() {
   const [offerAmount, setOfferAmount] = useState("");
   const [showListForm, setShowListForm] = useState(false);
   const [showOfferForm, setShowOfferForm] = useState(false);
-  const [txMsg, setTxMsg] = useState<{
-    type: "success" | "error";
-    text: string;
-    hash?: string;
-  } | null>(null);
 
   const {
     owner,
@@ -471,20 +435,18 @@ export default function AssetPageClient() {
 
   useEffect(() => {
     if (isBought) {
-      setTxMsg({
-        type: "success",
-        text: "NFT purchased successfully!",
-        hash: buyHash,
+      toast.success("NFT purchased successfully!", {
+        action: buyHash ? {
+          label: "View Tx",
+          onClick: () => window.open(`https://sepolia.etherscan.io/tx/${buyHash}`, "_blank")
+        } : undefined
       });
       refetchAll();
     }
   }, [isBought, refetchAll, buyHash]);
   useEffect(() => {
     if (isOfferMade) {
-      setTxMsg({
-        type: "success",
-        text: "Offer sent! ETH is held in escrow for 7 days.",
-      });
+      toast.success("Offer sent! ETH is held in escrow for 7 days.");
       setShowOfferForm(false);
       setOfferAmount("");
       refetchMyOffer();
@@ -493,7 +455,7 @@ export default function AssetPageClient() {
   }, [isOfferMade, refetchMyOffer, refetchOffers]);
   useEffect(() => {
     if (isOfferCancelled) {
-      setTxMsg({ type: "success", text: "Offer cancelled. ETH returned." });
+      toast.success("Offer cancelled. ETH returned.");
       refetchMyOffer();
       refetchOffers();
     }
@@ -505,44 +467,32 @@ export default function AssetPageClient() {
     setListErrors(errors);
     if (errors.price) return;
     try {
-      setTxMsg(null);
       await listNFT(nftContract, tokenId, listPrice);
       setShowListForm(false);
       setListPrice("");
-      setTxMsg({ type: "success", text: "NFT listed successfully!" });
+      toast.success("NFT listed successfully!");
       refetchListing();
     } catch (e) {
-      setTxMsg({
-        type: "error",
-        text: formatTransactionError(e, "Could not list this NFT."),
-      });
+      toast.error(formatTransactionError(e, "Could not list this NFT."));
     }
   };
 
   const handleBuy = async () => {
     if (!price) return;
     try {
-      setTxMsg(null);
       await buyNFT(nftContract, tokenId, price);
     } catch (e) {
-      setTxMsg({
-        type: "error",
-        text: formatTransactionError(e, "Could not complete purchase."),
-      });
+      toast.error(formatTransactionError(e, "Could not complete purchase."));
     }
   };
 
   const handleCancelListing = async () => {
     try {
-      setTxMsg(null);
       await cancelListing(nftContract, tokenId);
-      setTxMsg({ type: "success", text: "Listing cancelled." });
+      toast.success("Listing cancelled.");
       refetchListing();
     } catch (e) {
-      setTxMsg({
-        type: "error",
-        text: formatTransactionError(e, "Could not cancel listing."),
-      });
+      toast.error(formatTransactionError(e, "Could not cancel listing."));
     }
   };
 
@@ -553,13 +503,9 @@ export default function AssetPageClient() {
     setOfferErrors(errors);
     if (errors.amount) return;
     try {
-      setTxMsg(null);
       await makeOffer(nftContract, tokenId, offerAmount);
     } catch (e) {
-      setTxMsg({
-        type: "error",
-        text: formatTransactionError(e, "Could not send offer."),
-      });
+      toast.error(formatTransactionError(e, "Could not send offer."));
     }
   };
 
@@ -569,10 +515,7 @@ export default function AssetPageClient() {
 
     if (!result.success) {
       // Aqui você avisa o usuário. Isso evita o erro crítico.
-      setTxMsg({
-        type: "error",
-        text: "Endereço do comprador é inválido. Ação cancelada por segurança.",
-      });
+      toast.error("Endereço do comprador é inválido. Ação cancelada por segurança.");
       return; // Interrompe a execução antes de chamar o contrato
     }
 
@@ -580,31 +523,20 @@ export default function AssetPageClient() {
     const safeBuyer = result.data;
 
     try {
-      setTxMsg(null);
       await acceptOffer(nftContract, tokenId, safeBuyer);
-      setTxMsg({
-        type: "success",
-        text: "Offer accepted! NFT transferred.",
-      });
+      toast.success("Offer accepted! NFT transferred.");
       refetchAll();
     } catch (e) {
       logger.error("acceptOffer failed", e);
-      setTxMsg({
-        type: "error",
-        text: formatTransactionError(e, "Could not accept offer."),
-      });
+      toast.error(formatTransactionError(e, "Could not accept offer."));
     }
   };
 
   const handleCancelOffer = async () => {
     try {
-      setTxMsg(null);
       await cancelOffer(nftContract, tokenId);
     } catch (e) {
-      setTxMsg({
-        type: "error",
-        text: formatTransactionError(e, "Could not cancel offer."),
-      });
+      toast.error(formatTransactionError(e, "Could not cancel offer."));
     }
   };
 
@@ -725,9 +657,7 @@ export default function AssetPageClient() {
             )}
           </div>
 
-          {txMsg && (
-            <TxMessage type={txMsg.type} text={txMsg.text} hash={txMsg.hash} />
-          )}
+
 
           {/* Buy / List Panel */}
           <div className="bg-surface-container-low border border-outline-variant/10 p-6 space-y-4 rounded-sm">
