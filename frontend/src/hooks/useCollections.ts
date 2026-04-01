@@ -2,6 +2,7 @@
 
 import {
   useReadContract,
+  useReadContracts,
   useWriteContract,
   useWaitForTransactionReceipt,
   useConnection,
@@ -176,36 +177,32 @@ export function useCollections() {
     query: { enabled: !!FACTORY_ADDRESS && !SUBGRAPH_ENABLED },
   });
 
-  const [rpcCollections, setRpcCollections] = useState<CollectionInfo[]>([]);
-  const [isLoadingSupply, setIsLoadingSupply] = useState(false);
+  const rawCollections = useMemo(
+    () => (raw as CollectionInfo[] | undefined) ?? [],
+    [raw],
+  );
 
-  useEffect(() => {
-    if (SUBGRAPH_ENABLED) return;
-    const rawCollections = (raw as CollectionInfo[] | undefined) ?? [];
-    if (rawCollections.length === 0) return;
+  const supplyContracts = useMemo(
+    () =>
+      rawCollections.map((c) => ({
+        address: c.contractAddress as `0x${string}`,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "totalSupply" as const,
+      })),
+    [rawCollections],
+  );
 
-    const fetchSupplies = async () => {
-      setIsLoadingSupply(true);
-      const withSupply = await Promise.all(
-        rawCollections.map(async (c) => {
-          try {
-            const supply = (await getPublicClient().readContract({
-              address: c.contractAddress,
-              abi: NFT_COLLECTION_ABI,
-              functionName: "totalSupply",
-            })) as bigint;
-            return { ...c, totalSupply: supply };
-          } catch {
-            return { ...c, totalSupply: BigInt(0) };
-          }
-        }),
-      );
-      setRpcCollections(withSupply);
-      setIsLoadingSupply(false);
-    };
+  const { data: suppliesData, isLoading: isLoadingSupply } = useReadContracts({
+    contracts: supplyContracts,
+    query: { enabled: !SUBGRAPH_ENABLED && rawCollections.length > 0 },
+  });
 
-    fetchSupplies();
-  }, [raw]);
+  const rpcCollections = useMemo(() => {
+    return rawCollections.map((c, i) => ({
+      ...c,
+      totalSupply: (suppliesData?.[i]?.result as bigint) ?? BigInt(0),
+    }));
+  }, [rawCollections, suppliesData]);
 
   const collections = useMemo(() => {
     if (SUBGRAPH_ENABLED) {
