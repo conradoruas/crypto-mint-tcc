@@ -30,19 +30,33 @@ function getOrCreateStats(): MarketplaceStats {
   return stats;
 }
 
-function getOrCreateCollectionStats(collectionId: string): CollectionStats {
+function getOrCreateCollectionStats(
+  collectionId: string,
+  timestamp: BigInt = BigInt.fromI32(0),
+): CollectionStats {
   let stats = CollectionStats.load(collectionId);
   if (!stats) {
     stats = new CollectionStats(collectionId);
     stats.collection = collectionId;
     stats.totalVolume = BigInt.fromI32(0);
     stats.totalSales = BigInt.fromI32(0);
+    stats.volume24h = BigInt.fromI32(0);
+    stats.sales24h = BigInt.fromI32(0);
+    stats.lastUpdated = timestamp;
+    stats.floorPrice = null;
 
     // Link Collection.stats so queries from the Collection side also work
     let collection = Collection.load(collectionId);
     if (collection) {
       collection.stats = collectionId;
       collection.save();
+    }
+  } else {
+    // Check if 24h period has passed
+    if (timestamp.minus(stats.lastUpdated).gt(BigInt.fromI32(86400))) {
+      stats.volume24h = BigInt.fromI32(0);
+      stats.sales24h = BigInt.fromI32(0);
+      stats.lastUpdated = timestamp;
     }
   }
   return stats;
@@ -88,10 +102,14 @@ export function handleItemListed(event: ItemListed): void {
   stats.totalListed = stats.totalListed.plus(BigInt.fromI32(1));
   stats.save();
 
-  // Ensure CollectionStats entity exists for this collection
+  // Ensure CollectionStats entity exists for this collection and update floor
   let colStats = getOrCreateCollectionStats(
     event.params.nftContract.toHexString(),
+    event.block.timestamp
   );
+  if (!colStats.floorPrice || event.params.price.lt(colStats.floorPrice!)) {
+    colStats.floorPrice = event.params.price;
+  }
   colStats.save();
 }
 
@@ -150,12 +168,21 @@ export function handleItemSold(event: ItemSold): void {
   stats.totalVolume = stats.totalVolume.plus(event.params.price);
   stats.save();
 
-  // Collection stats — all-time only (24h is computed on frontend via activityEvents)
+  // Collection stats
   let colStats = getOrCreateCollectionStats(
     event.params.nftContract.toHexString(),
+    event.block.timestamp
   );
   colStats.totalSales = colStats.totalSales.plus(BigInt.fromI32(1));
   colStats.totalVolume = colStats.totalVolume.plus(event.params.price);
+  colStats.sales24h = colStats.sales24h.plus(BigInt.fromI32(1));
+  colStats.volume24h = colStats.volume24h.plus(event.params.price);
+  
+  // If the listing sold was exactly at the floor price, nullify floor so frontend recalculates
+  if (colStats.floorPrice && event.params.price.equals(colStats.floorPrice!)) {
+    colStats.floorPrice = null;
+  }
+  
   colStats.save();
 }
 
@@ -193,6 +220,20 @@ export function handleListingCancelled(event: ListingCancelled): void {
   let stats = getOrCreateStats();
   stats.totalListed = stats.totalListed.minus(BigInt.fromI32(1));
   stats.save();
+
+  // If the listing cancelled was exactly at the floor price, nullify floor
+  let colStats = getOrCreateCollectionStats(
+    event.params.nftContract.toHexString(),
+    event.block.timestamp
+  );
+  if (
+    listing &&
+    colStats.floorPrice &&
+    listing.price.equals(colStats.floorPrice!)
+  ) {
+    colStats.floorPrice = null;
+    colStats.save();
+  }
 }
 
 export function handleOfferMade(event: OfferMade): void {
@@ -284,12 +325,21 @@ export function handleOfferAccepted(event: OfferAccepted): void {
   }
   stats.save();
 
-  // Collection stats (consistência com handleItemSold)
+  // Collection stats
   let colStats = getOrCreateCollectionStats(
     event.params.nftContract.toHexString(),
+    event.block.timestamp
   );
   colStats.totalSales = colStats.totalSales.plus(BigInt.fromI32(1));
   colStats.totalVolume = colStats.totalVolume.plus(event.params.amount);
+  colStats.sales24h = colStats.sales24h.plus(BigInt.fromI32(1));
+  colStats.volume24h = colStats.volume24h.plus(event.params.amount);
+  
+  // If the offer accepted was on an item sitting at the floor price, nullify floor
+  if (listing && colStats.floorPrice && listing.price.equals(colStats.floorPrice!)) {
+    colStats.floorPrice = null;
+  }
+  
   colStats.save();
 }
 

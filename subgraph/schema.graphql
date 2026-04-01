@@ -79,4 +79,8 @@ type CollectionStats @entity {
   collection: Collection!
   totalVolume: BigInt!
   totalSales: BigInt!
+  floorPrice: BigInt
+  volume24h: BigInt!
+  sales24h: BigInt!
+  lastUpdated: BigInt!
 }
