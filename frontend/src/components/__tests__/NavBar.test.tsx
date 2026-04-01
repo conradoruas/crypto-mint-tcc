@@ -115,9 +115,9 @@ describe("Navbar", () => {
 
   // ── wallet button ──────────────────────────────────────────────────────────
 
-  it("shows 'Connect Wallet' button when disconnected", () => {
+  it("shows 'Connect' button when disconnected", () => {
     const { getByText } = render(<Navbar />);
-    expect(getByText(/connect wallet/i)).toBeInTheDocument();
+    expect(getByText(/^connect$/i)).toBeInTheDocument();
   });
 
   it("shows disabled bell and wallet icon buttons when disconnected", () => {

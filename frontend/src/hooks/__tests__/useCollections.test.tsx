@@ -23,6 +23,10 @@ vi.mock("wagmi", () => ({
     isLoading: false,
     refetch: vi.fn(),
   }),
+  useReadContracts: vi.fn().mockReturnValue({
+    data: undefined,
+    isLoading: false,
+  }),
   useWriteContract: vi.fn().mockReturnValue({
     data: undefined,
     mutateAsync: vi.fn(),
