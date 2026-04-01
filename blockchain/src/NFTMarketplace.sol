@@ -7,27 +7,33 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title NFTMarketplace
-/// @notice Marketplace genérico que suporta qualquer coleção ERC721.
-///         Integra com NFTCollectionFactory — qualquer coleção criada pela factory
-///         pode listar, comprar, fazer e aceitar ofertas aqui.
+/// @author CryptoMint
+/// @notice A generic ERC-721 marketplace that supports listings, purchases,
+///         offers, ERC-2981 royalties, and configurable platform fees.
+/// @dev Integrates with NFTCollectionFactory — any collection created by the
+///      factory can list, buy, make and accept offers here.  The marketplace
+///      custodies offer ETH and collects a configurable fee (basis-points)
+///      on every sale.
 contract NFTMarketplace is Ownable, ReentrancyGuard {
 
     // ─────────────────────────────────────────────
     // State
     // ─────────────────────────────────────────────
 
-    /// @notice Taxa do marketplace cobrada sobre cada venda (basis points, ex: 250 = 2.5%)
+    /// @notice Platform fee charged on every sale (basis points, e.g. 250 = 2.5%)
     uint256 public marketplaceFee = 250;
 
-    /// @notice Duração padrão de uma oferta
+    /// @notice Default offer validity period
     uint256 public constant OFFER_DURATION = 7 days;
 
+    /// @notice On-chain listing data
     struct Listing {
         address seller;
         uint256 price;
         bool    active;
     }
 
+    /// @notice On-chain offer data (buyer ETH is held in escrow)
     struct Offer {
         address buyer;
         uint256 amount;
@@ -41,7 +47,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     /// @notice nftContract => tokenId => buyer => Offer
     mapping(address => mapping(uint256 => mapping(address => Offer))) public offers;
 
-    /// @notice nftContract => tokenId => lista de compradores que já ofertaram
+    /// @notice nftContract => tokenId => list of buyers that have placed offers
     mapping(address => mapping(uint256 => address[])) private _offerBuyers;
 
     // ─────────────────────────────────────────────
@@ -63,23 +69,23 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     constructor() Ownable(msg.sender) {}
 
     // ─────────────────────────────────────────────
-    // Marketplace — Listagem
+    // Marketplace — Listing
     // ─────────────────────────────────────────────
 
-    /// @notice Coloca um NFT de qualquer coleção ERC721 à venda
-    /// @param nftContract Endereço do contrato da coleção
-    /// @param tokenId     ID do token a ser listado
-    /// @param price       Preço em wei (mínimo 0.0001 ETH)
+    /// @notice Lists an ERC-721 NFT for sale at a fixed price.
+    /// @param nftContract Address of the ERC-721 collection contract.
+    /// @param tokenId     Token ID to list.
+    /// @param price       Asking price in wei (minimum 0.0001 ETH).
     function listItem(address nftContract, uint256 tokenId, uint256 price) external {
         IERC721 nft = IERC721(nftContract);
 
-        require(nft.ownerOf(tokenId) == msg.sender, "Voce nao e o dono deste NFT");
-        require(price >= 0.0001 ether, "Preco minimo e 0.0001 ETH");
+        require(nft.ownerOf(tokenId) == msg.sender, "Not the NFT owner");
+        require(price >= 0.0001 ether, "Minimum price is 0.0001 ETH");
         require(
             nft.getApproved(tokenId) == address(this) || nft.isApprovedForAll(msg.sender, address(this)),
-            "Contrato nao aprovado para transferir este NFT"
+            "Marketplace not approved to transfer this NFT"
         );
-        require(!listings[nftContract][tokenId].active, "NFT ja esta listado");
+        require(!listings[nftContract][tokenId].active, "NFT is already listed");
 
         listings[nftContract][tokenId] = Listing({
             seller: msg.sender,
@@ -91,62 +97,64 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     }
 
     // ─────────────────────────────────────────────
-    // Marketplace — Compra
+    // Marketplace — Purchase
     // ─────────────────────────────────────────────
 
-    /// @notice Compra um NFT listado. Respeita royalties ERC2981 se implementado.
-    /// @param nftContract Endereço do contrato da coleção
-    /// @param tokenId     ID do token a ser comprado
+    /// @notice Buys a listed NFT.  Respects ERC-2981 royalties when implemented.
+    /// @param nftContract Address of the ERC-721 collection contract.
+    /// @param tokenId     Token ID to buy.
     function buyItem(address nftContract, uint256 tokenId) external payable nonReentrant {
         Listing memory listing = listings[nftContract][tokenId];
 
-        require(listing.active, "NFT nao esta a venda");
-        require(msg.value >= listing.price, "Valor enviado insuficiente");
-        require(msg.sender != listing.seller, "Vendedor nao pode comprar o proprio NFT");
+        require(listing.active, "NFT is not for sale");
+        require(msg.value >= listing.price, "Insufficient payment");
+        require(msg.sender != listing.seller, "Seller cannot buy own NFT");
 
         delete listings[nftContract][tokenId];
 
         (, uint256 royaltyFee, uint256 sellerProceeds) =
             _calculateFees(nftContract, tokenId, listing.price);
 
-        // Transfere o NFT
+        // Transfer NFT
         IERC721(nftContract).transferFrom(listing.seller, msg.sender, tokenId);
 
-        // Paga o vendedor
+        // Pay seller
         (bool sellerPaid, ) = payable(listing.seller).call{value: sellerProceeds}("");
-        require(sellerPaid, "Pagamento ao vendedor falhou");
+        require(sellerPaid, "Seller payment failed");
 
-        // ✅ Paga royalties — usa apenas um try/catch sem código duplicado
+        // Pay royalties
         if (royaltyFee > 0) {
             try IERC2981(nftContract).royaltyInfo(tokenId, listing.price) returns (address receiver, uint256) {
                 if (receiver != address(0)) {
                     (bool royaltyPaid, ) = payable(receiver).call{value: royaltyFee}("");
-                    require(royaltyPaid, "Pagamento de royalty falhou");
+                    require(royaltyPaid, "Royalty payment failed");
                 }
             } catch {}
         }
 
-        // Devolve troco
+        // Refund excess
         uint256 excess = msg.value - listing.price;
         if (excess > 0) {
             (bool refunded, ) = payable(msg.sender).call{value: excess}("");
-            require(refunded, "Devolucao do troco falhou");
+            require(refunded, "Excess refund failed");
         }
 
         emit ItemSold(nftContract, tokenId, listing.seller, msg.sender, listing.price);
     }
 
     // ─────────────────────────────────────────────
-    // Marketplace — Cancelamento de listagem
+    // Marketplace — Cancel listing
     // ─────────────────────────────────────────────
 
-    /// @param nftContract Endereço do contrato da coleção
-    /// @param tokenId     ID do token
+    /// @notice Cancels an active listing.  May be called by the seller or
+    ///         the marketplace owner (admin override).
+    /// @param nftContract Address of the ERC-721 collection contract.
+    /// @param tokenId     Token ID.
     function cancelListing(address nftContract, uint256 tokenId) external {
         Listing memory listing = listings[nftContract][tokenId];
 
-        require(listing.active, "NFT nao esta listado");
-        require(listing.seller == msg.sender || msg.sender == owner(), "Sem permissao para cancelar");
+        require(listing.active, "NFT is not listed");
+        require(listing.seller == msg.sender || msg.sender == owner(), "Not authorized to cancel");
 
         delete listings[nftContract][tokenId];
 
@@ -154,18 +162,21 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     }
 
     // ─────────────────────────────────────────────
-    // Ofertas — Fazer oferta
+    // Offers — Make offer
     // ─────────────────────────────────────────────
 
-    /// @param nftContract Endereço do contrato da coleção
-    /// @param tokenId     ID do token
+    /// @notice Places an offer on any minted NFT.  The ETH sent with this
+    ///         call is held in escrow by the marketplace until the offer is
+    ///         accepted, cancelled, or reclaimed after expiry.
+    /// @param nftContract Address of the ERC-721 collection contract.
+    /// @param tokenId     Token ID.
     function makeOffer(address nftContract, uint256 tokenId) external payable nonReentrant {
         IERC721 nft = IERC721(nftContract);
 
-        require(nft.ownerOf(tokenId) != address(0), "Token nao existe");
-        require(msg.value >= 0.0001 ether, "Oferta minima e 0.0001 ETH");
-        require(nft.ownerOf(tokenId) != msg.sender, "Dono nao pode ofertar no proprio NFT");
-        require(!offers[nftContract][tokenId][msg.sender].active, "Voce ja tem uma oferta ativa neste NFT");
+        require(nft.ownerOf(tokenId) != address(0), "Token does not exist");
+        require(msg.value >= 0.0001 ether, "Minimum offer is 0.0001 ETH");
+        require(nft.ownerOf(tokenId) != msg.sender, "Owner cannot offer on own NFT");
+        require(!offers[nftContract][tokenId][msg.sender].active, "You already have an active offer on this NFT");
 
         uint256 expiresAt = block.timestamp + OFFER_DURATION;
 
@@ -182,24 +193,26 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     }
 
     // ─────────────────────────────────────────────
-    // Ofertas — Aceitar oferta
+    // Offers — Accept offer
     // ─────────────────────────────────────────────
 
-    /// @param nftContract Endereço do contrato da coleção
-    /// @param tokenId     ID do token
-    /// @param buyer       Endereço do comprador cuja oferta será aceita
+    /// @notice Accepts a specific buyer's offer on an NFT the caller owns.
+    ///         If the NFT was also listed, the listing is cancelled automatically.
+    /// @param nftContract Address of the ERC-721 collection contract.
+    /// @param tokenId     Token ID.
+    /// @param buyer       Address of the buyer whose offer will be accepted.
     function acceptOffer(address nftContract, uint256 tokenId, address buyer) external nonReentrant {
         IERC721 nft = IERC721(nftContract);
 
-        require(nft.ownerOf(tokenId) == msg.sender, "Voce nao e o dono deste NFT");
+        require(nft.ownerOf(tokenId) == msg.sender, "Not the NFT owner");
         require(
             nft.getApproved(tokenId) == address(this) || nft.isApprovedForAll(msg.sender, address(this)),
-            "Contrato nao aprovado para transferir este NFT"
+            "Marketplace not approved to transfer this NFT"
         );
 
         Offer memory offer = offers[nftContract][tokenId][buyer];
-        require(offer.active, "Oferta nao esta ativa");
-        require(block.timestamp <= offer.expiresAt, "Oferta expirou");
+        require(offer.active, "Offer is not active");
+        require(block.timestamp <= offer.expiresAt, "Offer has expired");
 
         delete offers[nftContract][tokenId][buyer];
 
@@ -213,16 +226,16 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
         nft.transferFrom(msg.sender, buyer, tokenId);
 
-        // Paga o vendedor
+        // Pay seller
         (bool sellerPaid, ) = payable(msg.sender).call{value: sellerProceeds}("");
-        require(sellerPaid, "Pagamento ao vendedor falhou");
+        require(sellerPaid, "Seller payment failed");
 
-        // ✅ Paga royalties — mesmo padrão do buyItem
+        // Pay royalties
         if (royaltyFee > 0) {
             try IERC2981(nftContract).royaltyInfo(tokenId, offer.amount) returns (address receiver, uint256) {
                 if (receiver != address(0)) {
                     (bool royaltyPaid, ) = payable(receiver).call{value: royaltyFee}("");
-                    require(royaltyPaid, "Pagamento de royalty falhou");
+                    require(royaltyPaid, "Royalty payment failed");
                 }
             } catch {}
         }
@@ -231,33 +244,38 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     }
 
     // ─────────────────────────────────────────────
-    // Ofertas — Cancelar oferta
+    // Offers — Cancel offer
     // ─────────────────────────────────────────────
 
-    /// @param nftContract Endereço do contrato da coleção
-    /// @param tokenId     ID do token
+    /// @notice Cancels the caller's active offer and refunds escrowed ETH.
+    /// @param nftContract Address of the ERC-721 collection contract.
+    /// @param tokenId     Token ID.
     function cancelOffer(address nftContract, uint256 tokenId) external nonReentrant {
         Offer memory offer = offers[nftContract][tokenId][msg.sender];
-        require(offer.active, "Voce nao tem oferta ativa neste NFT");
+        require(offer.active, "You have no active offer on this NFT");
 
         delete offers[nftContract][tokenId][msg.sender];
 
         (bool refunded, ) = payable(msg.sender).call{value: offer.amount}("");
-        require(refunded, "Reembolso falhou");
+        require(refunded, "Refund failed");
 
         emit OfferCancelled(nftContract, tokenId, msg.sender);
     }
 
-    /// @notice Resgata ETH de oferta expirada de volta ao comprador original
+    /// @notice Allows anyone to reclaim ETH from an expired offer back to
+    ///         the original buyer.
+    /// @param nftContract Address of the ERC-721 collection contract.
+    /// @param tokenId     Token ID.
+    /// @param buyer       Address of the original offer maker.
     function reclaimExpiredOffer(address nftContract, uint256 tokenId, address buyer) external nonReentrant {
         Offer memory offer = offers[nftContract][tokenId][buyer];
-        require(offer.active, "Oferta nao esta ativa");
-        require(block.timestamp > offer.expiresAt, "Oferta ainda nao expirou");
+        require(offer.active, "Offer is not active");
+        require(block.timestamp > offer.expiresAt, "Offer has not expired yet");
 
         delete offers[nftContract][tokenId][buyer];
 
         (bool refunded, ) = payable(buyer).call{value: offer.amount}("");
-        require(refunded, "Reembolso falhou");
+        require(refunded, "Refund failed");
 
         emit OfferCancelled(nftContract, tokenId, buyer);
     }
@@ -266,14 +284,17 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     // Views
     // ─────────────────────────────────────────────
 
+    /// @notice Returns the listing for a specific NFT.
     function getListing(address nftContract, uint256 tokenId) external view returns (Listing memory) {
         return listings[nftContract][tokenId];
     }
 
+    /// @notice Returns a buyer's offer for a specific NFT.
     function getOffer(address nftContract, uint256 tokenId, address buyer) external view returns (Offer memory) {
         return offers[nftContract][tokenId][buyer];
     }
 
+    /// @notice Returns all historical offer-maker addresses for a specific NFT.
     function getOfferBuyers(address nftContract, uint256 tokenId) external view returns (address[] memory) {
         return _offerBuyers[nftContract][tokenId];
     }
@@ -282,10 +303,13 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     // Internal
     // ─────────────────────────────────────────────
 
-    /// @notice Calcula taxas do marketplace e royalties ERC2981
-    /// @return marketFee      Taxa do marketplace
-    /// @return royaltyFee     Royalty para o criador (0 se não implementado)
-    /// @return sellerProceeds Valor líquido para o vendedor
+    /// @notice Calculates marketplace fees and ERC-2981 royalties.
+    /// @param nftContract Address of the ERC-721 collection.
+    /// @param tokenId     Token ID (needed for royaltyInfo call).
+    /// @param salePrice   Total sale price in wei.
+    /// @return marketFee      Platform fee portion.
+    /// @return royaltyFee     Creator royalty (0 if ERC-2981 not supported).
+    /// @return sellerProceeds Net amount the seller receives.
     function _calculateFees(address nftContract, uint256 tokenId, uint256 salePrice)
         internal
         view
@@ -298,7 +322,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
             royaltyFee = royaltyAmount;
         } catch {}
 
-        require(marketFee + royaltyFee <= salePrice, "Taxas excedem o preco de venda");
+        require(marketFee + royaltyFee <= salePrice, "Fees exceed sale price");
 
         sellerProceeds = salePrice - marketFee - royaltyFee;
     }
@@ -307,21 +331,21 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     // Admin
     // ─────────────────────────────────────────────
 
-    /// @notice Altera a taxa do marketplace (basis points, máximo 10%)
-    /// @param newFee Nova taxa em basis points (ex: 250 = 2.5%)
+    /// @notice Updates the marketplace fee (max 10% = 1000 basis points).
+    /// @param newFee New fee in basis points (e.g. 250 = 2.5%).
     function setMarketplaceFee(uint256 newFee) external onlyOwner {
-        require(newFee <= 1000, "Taxa maxima e 10%");
+        require(newFee <= 1000, "Maximum fee is 10%");
         uint256 oldFee = marketplaceFee;
         marketplaceFee = newFee;
         emit MarketplaceFeeUpdated(oldFee, newFee);
     }
 
-    /// @notice Saca todas as taxas acumuladas para o dono do marketplace
+    /// @notice Withdraws all accumulated platform fees to the owner.
     function withdraw() external onlyOwner {
         (bool success, ) = payable(owner()).call{value: address(this).balance}("");
-        require(success, "Transferencia falhou");
+        require(success, "Withdrawal failed");
     }
 
-    /// @notice Aceita ETH enviado diretamente (taxas acumuladas via buyItem/acceptOffer)
+    /// @notice Accepts ETH sent directly (accumulated fees via buyItem/acceptOffer).
     receive() external payable {}
 }

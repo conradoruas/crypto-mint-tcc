@@ -3,8 +3,19 @@ pragma solidity ^0.8.20;
 
 import {NFTCollection} from "./NFTCollection.sol";
 
+/// @title NFTCollectionFactory
+/// @author CryptoMint
+/// @notice Factory contract for deploying new NFTCollection instances.
+///         Maintains a registry of all deployed collections and their metadata.
+/// @dev Anyone can call `createCollection()` — the caller becomes the
+///      collection owner and royalty receiver.
 contract NFTCollectionFactory {
 
+    // ─────────────────────────────────────────────
+    // State
+    // ─────────────────────────────────────────────
+
+    /// @notice Metadata returned by the `getCollection()` view.
     struct CollectionInfo {
         address contractAddress;
         address creator;
@@ -17,18 +28,40 @@ contract NFTCollectionFactory {
         uint256 createdAt;
     }
 
-    CollectionInfo[] public collections;
+    /// @dev Flat list of all deployed collections (append-only).
+    CollectionInfo[] private _collections;
 
-    /// @notice creator => lista de índices das suas coleções
-    mapping(address => uint256[]) public creatorCollections;
+    /// @notice Maps creator address => list of indices in `_collections`.
+    mapping(address => uint256[]) private _creatorCollections;
 
+    // ─────────────────────────────────────────────
+    // Events
+    // ─────────────────────────────────────────────
+
+    /// @notice Emitted every time a new collection is deployed.
+    /// @param creator         Address of the deployer / collection owner.
+    /// @param contractAddress Address of the newly deployed NFTCollection.
+    /// @param name            Collection name.
+    /// @param collectionId    Index in the internal registry.
     event CollectionCreated(
         address indexed creator,
         address indexed contractAddress,
-        string name,
+        string  name,
         uint256 indexed collectionId
     );
 
+    // ─────────────────────────────────────────────
+    // Write
+    // ─────────────────────────────────────────────
+
+    /// @notice Deploys a new NFTCollection and registers it in the factory.
+    /// @param name        Collection name (ERC-721 metadata).
+    /// @param symbol      Collection symbol (ERC-721 metadata).
+    /// @param description Off-chain description for the collection.
+    /// @param image       Off-chain cover image URI (IPFS or HTTP).
+    /// @param maxSupply   Maximum number of tokens that can be minted.
+    /// @param mintPrice   Price per mint in wei.
+    /// @return collectionAddress The address of the newly created collection.
     function createCollection(
         string memory name,
         string memory symbol,
@@ -36,10 +69,9 @@ contract NFTCollectionFactory {
         string memory image,
         uint256 maxSupply,
         uint256 mintPrice
-    ) external returns (address) {
-        require(maxSupply > 0,   "Supply deve ser maior que 0");
-        require(bytes(name).length > 0,   "Nome obrigatorio");
-        require(bytes(symbol).length > 0, "Symbol obrigatorio");
+    ) external returns (address collectionAddress) {
+        require(bytes(name).length > 0, "Name is required");
+        require(maxSupply > 0, "Supply must be greater than 0");
 
         NFTCollection collection = new NFTCollection(
             name,
@@ -48,14 +80,14 @@ contract NFTCollectionFactory {
             image,
             maxSupply,
             mintPrice,
-            msg.sender,      // creator vira owner da coleção
-            address(this)
+            msg.sender
         );
 
-        uint256 collectionId = collections.length;
+        collectionAddress = address(collection);
+        uint256 id = _collections.length;
 
-        collections.push(CollectionInfo({
-            contractAddress: address(collection),
+        _collections.push(CollectionInfo({
+            contractAddress: collectionAddress,
             creator:         msg.sender,
             name:            name,
             symbol:          symbol,
@@ -66,26 +98,34 @@ contract NFTCollectionFactory {
             createdAt:       block.timestamp
         }));
 
-        creatorCollections[msg.sender].push(collectionId);
+        _creatorCollections[msg.sender].push(id);
 
-        emit CollectionCreated(msg.sender, address(collection), name, collectionId);
-
-        return address(collection);
+        emit CollectionCreated(msg.sender, collectionAddress, name, id);
     }
 
+    // ─────────────────────────────────────────────
+    // Views
+    // ─────────────────────────────────────────────
+
+    /// @notice Returns metadata for a collection by index.
+    /// @param id Index in the collections registry.
     function getCollection(uint256 id) external view returns (CollectionInfo memory) {
-        return collections[id];
+        return _collections[id];
     }
 
+    /// @notice Returns all registered collections.
     function getAllCollections() external view returns (CollectionInfo[] memory) {
-        return collections;
+        return _collections;
     }
 
+    /// @notice Returns the collection indices created by a specific address.
+    /// @param creator The creator/owner address to query.
     function getCreatorCollections(address creator) external view returns (uint256[] memory) {
-        return creatorCollections[creator];
+        return _creatorCollections[creator];
     }
 
+    /// @notice Returns the total number of registered collections.
     function totalCollections() external view returns (uint256) {
-        return collections.length;
+        return _collections.length;
     }
 }

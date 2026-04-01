@@ -113,7 +113,7 @@ contract NFTMarketplaceTest is Test {
         for (uint256 i = 0; i < MAX_SUPPLY; i++) uris[i] = TOKEN_URI;
 
         vm.prank(seller);
-        vm.expectRevert("Mint ja iniciado");
+        vm.expectRevert("Minting already started");
         collection.loadTokenURIs(uris);
     }
 
@@ -130,7 +130,7 @@ contract NFTMarketplaceTest is Test {
         wrongUris[3] = TOKEN_URI;
 
         vm.prank(seller);
-        vm.expectRevert("Excede maxSupply");
+        vm.expectRevert("Exceeds maxSupply");
         newCol.loadTokenURIs(wrongUris);
     }
 
@@ -173,13 +173,13 @@ contract NFTMarketplaceTest is Test {
         NFTCollection emptyCol = NFTCollection(addr);
 
         vm.prank(buyer);
-        vm.expectRevert("URIs nao carregadas");
+        vm.expectRevert("URIs not loaded");
         emptyCol.mint{value: MINT_PRICE}(buyer);
     }
 
     function test_collection_mint_revertsIfInsufficientPayment() public {
         vm.prank(seller);
-        vm.expectRevert("Valor insuficiente");
+        vm.expectRevert("Insufficient payment");
         collection.mint{value: 0.00001 ether}(seller);
     }
 
@@ -194,7 +194,7 @@ contract NFTMarketplaceTest is Test {
         tiny.mint{value: MINT_PRICE}(seller);
 
         vm.prank(buyer);
-        vm.expectRevert("Supply esgotado");
+        vm.expectRevert("Supply exhausted");
         tiny.mint{value: MINT_PRICE}(buyer);
     }
 
@@ -240,13 +240,13 @@ contract NFTMarketplaceTest is Test {
 
     function test_factory_createCollection_revertsIfNoName() public {
         vm.prank(seller);
-        vm.expectRevert("Nome obrigatorio");
+        vm.expectRevert("Name is required");
         factory.createCollection("", "SYM", "", "", 100, MINT_PRICE);
     }
 
     function test_factory_createCollection_revertsIfZeroSupply() public {
         vm.prank(seller);
-        vm.expectRevert("Supply deve ser maior que 0");
+        vm.expectRevert("Supply must be greater than 0");
         factory.createCollection("Name", "SYM", "", "", 0, MINT_PRICE);
     }
 
@@ -277,7 +277,7 @@ contract NFTMarketplaceTest is Test {
     function test_listItem_revertsIfNotOwner() public {
         uint256 tokenId = _mintNFT(seller);
         vm.prank(stranger);
-        vm.expectRevert("Voce nao e o dono deste NFT");
+        vm.expectRevert("Not the NFT owner");
         marketplace.listItem(address(collection), tokenId, LIST_PRICE);
     }
 
@@ -285,7 +285,7 @@ contract NFTMarketplaceTest is Test {
         uint256 tokenId = _mintNFT(seller);
         vm.startPrank(seller);
         collection.setApprovalForAll(address(marketplace), true);
-        vm.expectRevert("Preco minimo e 0.0001 ETH");
+        vm.expectRevert("Minimum price is 0.0001 ETH");
         marketplace.listItem(address(collection), tokenId, 0.00001 ether);
         vm.stopPrank();
     }
@@ -293,14 +293,14 @@ contract NFTMarketplaceTest is Test {
     function test_listItem_revertsIfNotApproved() public {
         uint256 tokenId = _mintNFT(seller);
         vm.prank(seller);
-        vm.expectRevert("Contrato nao aprovado para transferir este NFT");
+        vm.expectRevert("Marketplace not approved to transfer this NFT");
         marketplace.listItem(address(collection), tokenId, LIST_PRICE);
     }
 
     function test_listItem_revertsIfAlreadyListed() public {
         uint256 tokenId = _mintAndList(seller, LIST_PRICE);
         vm.prank(seller);
-        vm.expectRevert("NFT ja esta listado");
+        vm.expectRevert("NFT is already listed");
         marketplace.listItem(address(collection), tokenId, LIST_PRICE);
     }
 
@@ -338,14 +338,14 @@ contract NFTMarketplaceTest is Test {
     function test_cancelListing_revertsIfNotListed() public {
         uint256 tokenId = _mintNFT(seller);
         vm.prank(seller);
-        vm.expectRevert("NFT nao esta listado");
+        vm.expectRevert("NFT is not listed");
         marketplace.cancelListing(address(collection), tokenId);
     }
 
     function test_cancelListing_revertsIfStranger() public {
         uint256 tokenId = _mintAndList(seller, LIST_PRICE);
         vm.prank(stranger);
-        vm.expectRevert("Sem permissao para cancelar");
+        vm.expectRevert("Not authorized to cancel");
         marketplace.cancelListing(address(collection), tokenId);
     }
 
@@ -390,21 +390,21 @@ contract NFTMarketplaceTest is Test {
     function test_buyItem_revertsIfNotListed() public {
         uint256 tokenId = _mintNFT(seller);
         vm.prank(buyer);
-        vm.expectRevert("NFT nao esta a venda");
+        vm.expectRevert("NFT is not for sale");
         marketplace.buyItem{value: LIST_PRICE}(address(collection), tokenId);
     }
 
     function test_buyItem_revertsIfInsufficientPayment() public {
         uint256 tokenId = _mintAndList(seller, LIST_PRICE);
         vm.prank(buyer);
-        vm.expectRevert("Valor enviado insuficiente");
+        vm.expectRevert("Insufficient payment");
         marketplace.buyItem{value: 0.001 ether}(address(collection), tokenId);
     }
 
     function test_buyItem_revertsIfSellerTriesToBuy() public {
         uint256 tokenId = _mintAndList(seller, LIST_PRICE);
         vm.prank(seller);
-        vm.expectRevert("Vendedor nao pode comprar o proprio NFT");
+        vm.expectRevert("Seller cannot buy own NFT");
         marketplace.buyItem{value: LIST_PRICE}(address(collection), tokenId);
     }
 
@@ -476,14 +476,14 @@ contract NFTMarketplaceTest is Test {
     function test_makeOffer_revertsIfAmountTooLow() public {
         uint256 tokenId = _mintNFT(seller);
         vm.prank(buyer);
-        vm.expectRevert("Oferta minima e 0.0001 ETH");
+        vm.expectRevert("Minimum offer is 0.0001 ETH");
         marketplace.makeOffer{value: 0.00001 ether}(address(collection), tokenId);
     }
 
     function test_makeOffer_revertsIfOwnerTriesToOffer() public {
         uint256 tokenId = _mintNFT(seller);
         vm.prank(seller);
-        vm.expectRevert("Dono nao pode ofertar no proprio NFT");
+        vm.expectRevert("Owner cannot offer on own NFT");
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
     }
 
@@ -494,7 +494,7 @@ contract NFTMarketplaceTest is Test {
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
 
         vm.prank(buyer);
-        vm.expectRevert("Voce ja tem uma oferta ativa neste NFT");
+        vm.expectRevert("You already have an active offer on this NFT");
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
     }
 
@@ -577,7 +577,7 @@ contract NFTMarketplaceTest is Test {
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
 
         vm.prank(stranger);
-        vm.expectRevert("Voce nao e o dono deste NFT");
+        vm.expectRevert("Not the NFT owner");
         marketplace.acceptOffer(address(collection), tokenId, buyer);
     }
 
@@ -586,7 +586,7 @@ contract NFTMarketplaceTest is Test {
 
         vm.startPrank(seller);
         collection.setApprovalForAll(address(marketplace), true);
-        vm.expectRevert("Oferta nao esta ativa");
+        vm.expectRevert("Offer is not active");
         marketplace.acceptOffer(address(collection), tokenId, buyer);
         vm.stopPrank();
     }
@@ -601,7 +601,7 @@ contract NFTMarketplaceTest is Test {
 
         vm.startPrank(seller);
         collection.setApprovalForAll(address(marketplace), true);
-        vm.expectRevert("Oferta expirou");
+        vm.expectRevert("Offer has expired");
         marketplace.acceptOffer(address(collection), tokenId, buyer);
         vm.stopPrank();
     }
@@ -613,7 +613,7 @@ contract NFTMarketplaceTest is Test {
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
 
         vm.prank(seller);
-        vm.expectRevert("Contrato nao aprovado para transferir este NFT");
+        vm.expectRevert("Marketplace not approved to transfer this NFT");
         marketplace.acceptOffer(address(collection), tokenId, buyer);
     }
 
@@ -653,7 +653,7 @@ contract NFTMarketplaceTest is Test {
     function test_cancelOffer_revertsIfNoActiveOffer() public {
         uint256 tokenId = _mintNFT(seller);
         vm.prank(buyer);
-        vm.expectRevert("Voce nao tem oferta ativa neste NFT");
+        vm.expectRevert("You have no active offer on this NFT");
         marketplace.cancelOffer(address(collection), tokenId);
     }
 
@@ -684,7 +684,7 @@ contract NFTMarketplaceTest is Test {
         marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
 
         vm.prank(stranger);
-        vm.expectRevert("Oferta ainda nao expirou");
+        vm.expectRevert("Offer has not expired yet");
         marketplace.reclaimExpiredOffer(address(collection), tokenId, buyer);
     }
 
@@ -692,7 +692,7 @@ contract NFTMarketplaceTest is Test {
         uint256 tokenId = _mintNFT(seller);
         vm.warp(block.timestamp + 8 days);
         vm.prank(stranger);
-        vm.expectRevert("Oferta nao esta ativa");
+        vm.expectRevert("Offer is not active");
         marketplace.reclaimExpiredOffer(address(collection), tokenId, buyer);
     }
 
@@ -708,7 +708,7 @@ contract NFTMarketplaceTest is Test {
 
     function test_setMarketplaceFee_revertsIfTooHigh() public {
         vm.prank(owner);
-        vm.expectRevert("Taxa maxima e 10%");
+        vm.expectRevert("Maximum fee is 10%");
         marketplace.setMarketplaceFee(1001);
     }
 
