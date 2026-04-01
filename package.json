@@ -1,0 +1,24 @@
+{
+  "name": "tcc",
+  "version": "1.0.0",
+  "description": "Marketplace descentralizado para criação e negociação de NFTs com suporte a coleções, ofertas, royalties ERC2981 e listagens — tudo on-chain via Smart Contracts na rede Sepolia.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/conradoruas/tcc.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/conradoruas/tcc/issues"
+  },
+  "homepage": "https://github.com/conradoruas/tcc#readme",
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}
