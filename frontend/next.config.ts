@@ -25,7 +25,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://ipfs.io https://*.ipfs.dweb.link https://nft-cdn.alchemy.com",
-      "connect-src 'self' https://*.alchemy.com wss://*.walletconnect.com https://api.pinata.cloud https://ipfs.io https://*.ipfs.dweb.link https://relay.walletconnect.com https://explorer-api.walletconnect.com",
+      "connect-src 'self' https://*.alchemy.com wss://*.walletconnect.com https://api.pinata.cloud https://ipfs.io https://*.ipfs.dweb.link https://relay.walletconnect.com https://explorer-api.walletconnect.com https://api.studio.thegraph.com",
       "frame-src 'none'",
       "object-src 'none'",
       "base-uri 'self'",
@@ -35,6 +35,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  turbopack: {
+    root: __dirname,
+  },
   images: {
     remotePatterns: [
       {
