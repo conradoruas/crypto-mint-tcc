@@ -40,7 +40,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-br"
-      className={`dark ${spaceGrotesk.variable} ${manrope.variable}`}
+      className={`${spaceGrotesk.variable} ${manrope.variable}`}
       suppressHydrationWarning
     >
       <body className="antialiased min-h-screen bg-background text-on-surface">

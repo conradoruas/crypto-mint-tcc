@@ -82,6 +82,68 @@
   --color-on-error-container: #ffa8a3;
 }
 
+/* Light mode overrides — applied when .dark class is absent from <html> */
+html:not(.dark) {
+  --color-background: #f8f5fd;
+  --color-surface: #f8f5fd;
+  --color-surface-dim: #d9d6e0;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f2eef7;
+  --color-surface-container: #ece8f1;
+  --color-surface-container-high: #e6e2eb;
+  --color-surface-container-highest: #e1dde6;
+  --color-surface-bright: #f8f5fd;
+  --color-surface-variant: #e5e2ec;
+
+  --color-primary: #6200a0;
+  --color-primary-dim: #4f0085;
+  --color-primary-fixed: #f0d4ff;
+  --color-primary-fixed-dim: #e4b8ff;
+  --color-primary-container: #9c00d8;
+  --color-on-primary: #ffffff;
+  --color-on-primary-fixed: #ffffff;
+  --color-on-primary-fixed-variant: #f0d4ff;
+  --color-on-primary-container: #ffffff;
+  --color-inverse-primary: #d575ff;
+  --color-surface-tint: #6200a0;
+
+  --color-secondary: #006a71;
+  --color-secondary-dim: #00565c;
+  --color-secondary-fixed: #a4f4ff;
+  --color-secondary-fixed-dim: #7be8ef;
+  --color-secondary-container: #9ef1f7;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-fixed: #003f43;
+  --color-on-secondary-fixed-variant: #005e64;
+  --color-on-secondary-container: #003f43;
+
+  --color-tertiary: #006266;
+  --color-tertiary-dim: #004e52;
+  --color-tertiary-fixed: #72eff5;
+  --color-tertiary-fixed-dim: #63e1e7;
+  --color-tertiary-container: #97f0f6;
+  --color-on-tertiary: #ffffff;
+  --color-on-tertiary-fixed: #002123;
+  --color-on-tertiary-fixed-variant: #006266;
+  --color-on-tertiary-container: #003f42;
+
+  --color-on-surface: #1b1a1e;
+  --color-on-surface-variant: #48464d;
+  --color-on-background: #1b1a1e;
+
+  --color-outline: #79767e;
+  --color-outline-variant: #c9c6cf;
+
+  --color-inverse-surface: #312f35;
+  --color-inverse-on-surface: #f2eef7;
+
+  --color-error: #ba1a1a;
+  --color-error-dim: #cf2424;
+  --color-error-container: #ffdad6;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #410002;
+}
+
 @layer base {
   body {
     @apply bg-background text-on-surface font-sans;
@@ -95,12 +157,22 @@
   -webkit-backdrop-filter: blur(20px);
 }
 
+html:not(.dark) .glass-panel {
+  background: rgba(255, 255, 255, 0.6);
+}
+
 .neon-glow-primary {
   box-shadow: 0 0 32px rgba(143, 245, 255, 0.08);
 }
 
 .text-gradient-primary {
   background: linear-gradient(135deg, #8ff5ff 0%, #00eefc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+html:not(.dark) .text-gradient-primary {
+  background: linear-gradient(135deg, #6200a0 0%, #9c00d8 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
