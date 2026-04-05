@@ -46,7 +46,13 @@ function isUserRejectedMessage(msg: string): boolean {
 }
 
 function isNetworkMessage(msg: string): boolean {
-  return /failed to fetch|networkerror|load failed|fetch.*network|socket hang up|econnrefused|econnreset|timeout|internet connection|offline/i.test(
+  return /failed to fetch|networkerror|load failed|fetch.*network|socket hang up|econnrefused|econnreset|timeout|internet connection|offline|upstream json-rpc error/i.test(
+    msg,
+  );
+}
+
+function isInsufficientFundsMessage(msg: string): boolean {
+  return /insufficient funds|exceeds the balance|gas required exceeds|have 0 want/i.test(
     msg,
   );
 }
@@ -71,16 +77,25 @@ export function getTransactionErrorKind(error: unknown): TransactionErrorKind {
       node instanceof WaitForTransactionReceiptTimeoutError ||
       node instanceof RpcRequestError
     ) {
-      return "network";
+      const nodeMsg = errorMessage(node);
+      const nodeCode = (node as { code?: number }).code;
+      if (isInsufficientFundsMessage(nodeMsg) || nodeCode === -32003)
+        return "insufficient_funds";
+      if (isUserRejectedMessage(nodeMsg)) return "user_rejected";
+      if (isRevertMessage(nodeMsg)) return "reverted";
+
+      // Only return network if it doesn't look like an application error
+      if (node instanceof HttpRequestError || isNetworkMessage(nodeMsg)) {
+        return "network";
+      }
     }
   }
 
   const msg = errorMessage(error);
   if (isUserRejectedMessage(msg)) return "user_rejected";
+  if (isInsufficientFundsMessage(msg)) return "insufficient_funds";
   if (isNetworkMessage(msg)) return "network";
   if (isRevertMessage(msg)) return "reverted";
-  if (/insufficient funds|exceeds the balance|gas required exceeds/i.test(msg))
-    return "insufficient_funds";
 
   return "unknown";
 }
