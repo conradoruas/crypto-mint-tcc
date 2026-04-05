@@ -148,7 +148,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   );
 
   // ── RPC fallback ──
-  const rpcEnabled = enabled && !SUBGRAPH_ENABLED;
+  const rpcEnabled = enabled;
 
   const { data: buyersRaw, refetch: refetchBuyers } = useReadContract({
     address: MARKETPLACE_ADDRESS,
@@ -202,10 +202,31 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
 
   // ── Unified result ──
   const offers = useMemo(() => {
-    const source = SUBGRAPH_ENABLED ? indexerRows : rpcOffers;
-    if (!userAddress) return source;
-    return source.filter((o) => o.buyerAddress.toLowerCase() !== userAddress);
-  }, [indexerRows, rpcOffers, userAddress]);
+    if (!SUBGRAPH_ENABLED) return rpcOffers;
+
+    const checkedOnChain = new Set(buyerAddresses.map((a) => a.toLowerCase()));
+    const merged = new Map<string, OfferWithBuyer>();
+
+    // 1. Initial set from the indexer (baseline)
+    indexerRows.forEach((o) => {
+      const addr = o.buyerAddress.toLowerCase();
+      // Only keep the indexer version if we haven't checked this buyer on-chain
+      if (!checkedOnChain.has(addr)) {
+        merged.set(addr, o);
+      }
+    });
+
+    // 2. Override with RPC data (the source of truth)
+    rpcOffers.forEach((o) => {
+      merged.set(o.buyerAddress.toLowerCase(), o);
+    });
+
+    const list = Array.from(merged.values())
+      .filter((o) => !userAddress || o.buyerAddress.toLowerCase() !== userAddress)
+      .sort((a, b) => (a.amount === b.amount ? 0 : a.amount > b.amount ? -1 : 1));
+
+    return list;
+  }, [indexerRows, rpcOffers, buyerAddresses, userAddress]);
 
   const refetch = useCallback(() => {
     if (SUBGRAPH_ENABLED) {
