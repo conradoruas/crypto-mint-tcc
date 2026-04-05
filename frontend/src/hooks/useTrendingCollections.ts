@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
-import { useCollections } from "@/hooks/useCollections";
+import { useCollections } from "@/hooks/collections";
 import { GET_TRENDING_DATA } from "@/lib/graphql/queries";
 import { POLL_TRENDING_MS } from "@/constants/polling";
 import type { TrendingCollection } from "@/types/collection";

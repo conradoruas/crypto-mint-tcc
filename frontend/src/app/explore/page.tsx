@@ -1,7 +1,7 @@
 "use client";
 
 import { Navbar } from "@/components/NavBar";
-import { useCollections } from "@/hooks/useCollections";
+import { useCollections } from "@/hooks/collections";
 import { useExploreAllNFTs } from "@/hooks/useExploreNfts";
 import type { NFTItemWithMarket } from "@/types/nft";
 import Link from "next/link";
@@ -11,9 +11,9 @@ import { useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
 import { useConnection } from "wagmi";
 import { useUserFavorites } from "@/hooks/useFavorites";
-import { NFTCard } from "@/components/NFTCard";
+import { NFTCard } from "@/components/marketplace/NFTCard";
 import { Pagination } from "@/components/Pagination";
-import { FilterSidebar, type SortOption } from "@/components/FilterSidebar";
+import { FilterSidebar, type SortOption } from "@/components/marketplace/FilterSidebar";
 
 
 

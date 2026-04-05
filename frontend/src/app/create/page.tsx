@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   ExternalLink,
 } from "lucide-react";
-import { useCollections, useMintToCollection } from "@/hooks/useCollections";
+import { useCollections, useMintToCollection } from "@/hooks/collections";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import Image from "next/image";
 import Link from "next/link";

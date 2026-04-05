@@ -1,6 +1,6 @@
 "use client";
 
-import { useMarketplaceStats } from "@/hooks/useMarketplaceStats";
+import { useMarketplaceStats } from "@/hooks/marketplaceStats";
 import { Layers, Box, Tag, TrendingUp } from "lucide-react";
 
 function StatCard({

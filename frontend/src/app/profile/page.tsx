@@ -9,7 +9,7 @@ import {
   useCreatedNFTs,
   CollectionNFTItem,
   CreatedNFTItem,
-} from "@/hooks/useCollections";
+} from "@/hooks/collections";
 import { useUserFavorites } from "@/hooks/useFavorites";
 import Image from "next/image";
 import Link from "next/link";

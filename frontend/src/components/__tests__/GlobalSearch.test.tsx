@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({
 
 // Collections data controlled per-test via the mock return value
 const mockUseCollections = vi.fn();
-vi.mock("@/hooks/useCollections", () => ({
+vi.mock("@/hooks/collections", () => ({
   useCollections: () => mockUseCollections(),
 }));
 

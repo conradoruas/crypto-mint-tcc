@@ -1,7 +1,7 @@
 "use client";
 
 import { Navbar } from "@/components/NavBar";
-import { useCollections } from "@/hooks/useCollections";
+import { useCollections } from "@/hooks/collections";
 import type { CollectionInfo } from "@/types/collection";
 import Image from "next/image";
 import Link from "next/link";

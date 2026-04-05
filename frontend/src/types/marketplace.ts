@@ -50,3 +50,11 @@ export interface ActivityEvent {
   blockNumber: bigint;
   timestamp?: number;
 }
+
+/** Stages for approve-then-act contract flows (listing, accepting offers). */
+export type TwoStepTxPhase =
+  | "idle"
+  | "approve-wallet"
+  | "approve-confirm"
+  | "exec-wallet"
+  | "exec-confirm";

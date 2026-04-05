@@ -5,7 +5,7 @@ import { Navbar } from "@/components/NavBar";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
 import type { ActivityEvent, ActivityType } from "@/types/marketplace";
 import { getEventConfig, ALL_ACTIVITY_TYPES } from "@/lib/eventConfig";
-import { useCollections } from "@/hooks/useCollections";
+import { useCollections } from "@/hooks/collections";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Activity, ExternalLink, ChevronDown } from "lucide-react";

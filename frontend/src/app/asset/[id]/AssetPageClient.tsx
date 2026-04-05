@@ -30,8 +30,8 @@ import {
   useMakeOffer,
   useAcceptOffer,
   useCancelOffer,
-} from "@/hooks/useMarketplace";
-import { OffersTable, ExpiresIn } from "@/components/OffersTable";
+} from "@/hooks/marketplace";
+import { OffersTable, ExpiresIn } from "@/components/marketplace/OffersTable";
 import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
 import {

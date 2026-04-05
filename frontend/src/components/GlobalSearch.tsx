@@ -6,7 +6,7 @@ import { useStableArray } from "@/hooks/useStableArray";
 import { Search, X, Layers, Image as ImageIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useCollections } from "@/hooks/useCollections";
+import { useCollections } from "@/hooks/collections";
 import { useQuery } from "@apollo/client/react";
 import { GET_ALL_NFTS } from "@/lib/graphql/queries";
 
