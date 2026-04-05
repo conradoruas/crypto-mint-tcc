@@ -7,6 +7,7 @@ import {
   GET_ACTIVITY_FEED,
   GET_ACTIVITY_FEED_ALL,
 } from "@/lib/graphql/queries";
+import { POLL_ACTIVITY_MS } from "@/constants/polling";
 import type { ActivityType, ActivityEvent } from "@/types/marketplace";
 
 export type { ActivityType, ActivityEvent };
@@ -34,7 +35,7 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
     {
       skip: !!filterContract,
       variables: { first: limit },
-      pollInterval: 30_000,
+      pollInterval: POLL_ACTIVITY_MS,
       notifyOnNetworkStatusChange: false,
       fetchPolicy: "cache-and-network",
       nextFetchPolicy: "cache-first",
@@ -45,7 +46,7 @@ export function useActivityFeed(filterContract?: string, limit = 50) {
     useQuery<GqlActivityData>(GET_ACTIVITY_FEED, {
       skip: !filterContract,
       variables: { first: limit, nftContract: filterContract },
-      pollInterval: 30_000,
+      pollInterval: POLL_ACTIVITY_MS,
       notifyOnNetworkStatusChange: false,
       fetchPolicy: "cache-and-network",
       nextFetchPolicy: "cache-first",

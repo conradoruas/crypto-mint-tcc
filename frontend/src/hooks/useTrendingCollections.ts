@@ -5,14 +5,12 @@ import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { useCollections } from "@/hooks/useCollections";
 import { GET_TRENDING_DATA } from "@/lib/graphql/queries";
+import { POLL_TRENDING_MS } from "@/constants/polling";
 import type { TrendingCollection } from "@/types/collection";
 
 export type { TrendingCollection };
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
-
-/** Single poller: refresh window + subgraph data every 5 minutes (no pollInterval + setInterval). */
-const TRENDING_REFRESH_MS = 5 * 60 * 1000;
 
 type GqlSaleEvent = { nftContract: string; price: string; timestamp: string };
 type GqlListing = { nftContract: string; price: string };
@@ -56,21 +54,12 @@ export function useTrendingCollections(limit = 10) {
     data: statsData,
     loading: statsLoading,
     error: statsError,
-    refetch,
   } = useQuery<GqlTrendingData>(GET_TRENDING_DATA, {
     skip: !SUBGRAPH_ENABLED || contractAddresses.length === 0,
     variables: queryVariables,
+    pollInterval: POLL_TRENDING_MS,
+    fetchPolicy: "network-only",
   });
-
-  useEffect(() => {
-    if (!SUBGRAPH_ENABLED || contractAddresses.length === 0) return;
-
-    const id = window.setInterval(() => {
-      void refetch(buildTrendingVariables(contractAddresses));
-    }, TRENDING_REFRESH_MS);
-
-    return () => window.clearInterval(id);
-  }, [refetch, contractAddresses]);
 
   const collectionsRef = useRef(collections);
   useEffect(() => {

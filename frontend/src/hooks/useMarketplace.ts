@@ -24,7 +24,10 @@ import type {
 } from "@/types/marketplace";
 import { ensureAddress, parseAddress } from "@/lib/schemas";
 import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
+import { MAX_OFFER_BUYERS_MULTICALL } from "@/constants/polling";
 import { useContractMutation } from "./useContractMutation";
+
+const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 export type { ListingData, OfferData, OfferWithBuyer };
 
@@ -114,7 +117,7 @@ export function useMyOffer(nftContract: string, tokenId: string) {
 }
 
 // ─────────────────────────────────────────────
-// Hook: ofertas — subgraph first (rápido), RPC reconcilia quando possível
+// Hook: ofertas — subgraph quando disponível, RPC fallback
 // ─────────────────────────────────────────────
 
 /** Stable empty list so `useReadContracts` configs do not churn each render. */
@@ -178,35 +181,6 @@ function indexerOffersFromGql(gqlOffers: GqlOfferRow[] | undefined) {
   return out;
 }
 
-function mergeIndexerAndChainOffers(
-  indexer: OfferWithBuyer[],
-  buyersRaw: readonly `0x${string}`[] | undefined,
-  chainByBuyer: Map<string, OfferWithBuyer>,
-): OfferWithBuyer[] {
-  const onChainBuyers = new Set((buyersRaw ?? []).map((b) => b.toLowerCase()));
-  const merged = new Map<string, OfferWithBuyer>();
-
-  for (const o of indexer) {
-    const k = o.buyerAddress.toLowerCase();
-    if (onChainBuyers.has(k)) {
-      const c = chainByBuyer.get(k);
-      if (c) merged.set(k, c);
-    } else {
-      merged.set(k, o);
-    }
-  }
-
-  for (const [k, v] of chainByBuyer) {
-    if (!merged.has(k)) merged.set(k, v);
-  }
-
-  const list = [...merged.values()];
-  list.sort((a, b) =>
-    a.amount === b.amount ? 0 : a.amount > b.amount ? -1 : 1,
-  );
-  return list;
-}
-
 export function useNFTOffers(nftContract: string, tokenId: string) {
   const { address } = useConnection();
   const userAddress = address?.toLowerCase();
@@ -215,13 +189,14 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   const nftAddr = ensureAddress(nftContract);
   const tokenIdBn = BigInt(tokenId || "0");
 
+  // ── Subgraph path (primary) ───────────────────────────────────────────────
   type GqlOffersData = { offers: GqlOfferRow[] };
   const {
     data: gqlData,
     loading: gqlLoading,
     refetch: gqlRefetch,
   } = useQuery<GqlOffersData>(GET_OFFERS_FOR_NFT, {
-    skip: !enabled,
+    skip: !enabled || !SUBGRAPH_ENABLED,
     variables: {
       nftContract: nftContract?.toLowerCase() ?? "",
       tokenId,
@@ -237,22 +212,29 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     [gqlData?.offers],
   );
 
+  // ── RPC fallback (only when subgraph is disabled) ─────────────────────────
+  const rpcEnabled = enabled && !SUBGRAPH_ENABLED;
+
   const { data: buyersRaw, refetch: refetchBuyers } = useReadContract({
     address: MARKETPLACE_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOfferBuyers",
     args: [nftAddr, tokenIdBn],
     query: {
-      enabled,
+      enabled: rpcEnabled,
       refetchInterval: false,
       refetchOnWindowFocus: false,
     },
   });
 
   const buyerAddresses = useMemo((): readonly `0x${string}`[] => {
-    if (!buyersRaw || !Array.isArray(buyersRaw)) return NO_OFFER_BUYERS;
-    return buyersRaw as `0x${string}`[];
-  }, [buyersRaw]);
+    if (!rpcEnabled || !buyersRaw || !Array.isArray(buyersRaw))
+      return NO_OFFER_BUYERS;
+    const all = buyersRaw as `0x${string}`[];
+    return all.length > MAX_OFFER_BUYERS_MULTICALL
+      ? all.slice(0, MAX_OFFER_BUYERS_MULTICALL)
+      : all;
+  }, [rpcEnabled, buyersRaw]);
 
   const offerReads = useMemo(
     () =>
@@ -268,37 +250,40 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   const { data: offerRows, refetch: refetchOfferRows } = useReadContracts({
     contracts: offerReads,
     query: {
-      enabled: enabled && buyerAddresses.length > 0,
+      enabled: rpcEnabled && buyerAddresses.length > 0,
       refetchInterval: false,
       refetchOnWindowFocus: false,
     },
   });
 
-  const chainByBuyer = useMemo(
-    () => buildChainOfferMap(buyerAddresses, offerRows),
-    [buyerAddresses, offerRows],
-  );
-
-  const offers = useMemo(() => {
-    const merged = mergeIndexerAndChainOffers(
-      indexerRows,
-      Array.isArray(buyersRaw) ? (buyersRaw as `0x${string}`[]) : undefined,
-      chainByBuyer,
+  const rpcOffers = useMemo(() => {
+    const m = buildChainOfferMap(buyerAddresses, offerRows);
+    const list = [...m.values()];
+    list.sort((a, b) =>
+      a.amount === b.amount ? 0 : a.amount > b.amount ? -1 : 1,
     );
+    return list;
+  }, [buyerAddresses, offerRows]);
 
-    if (!userAddress) return merged;
-
-    return merged.filter((o) => o.buyerAddress.toLowerCase() !== userAddress);
-  }, [indexerRows, buyersRaw, chainByBuyer, userAddress]);
+  // ── Unified result ────────────────────────────────────────────────────────
+  const offers = useMemo(() => {
+    const source = SUBGRAPH_ENABLED ? indexerRows : rpcOffers;
+    if (!userAddress) return source;
+    return source.filter((o) => o.buyerAddress.toLowerCase() !== userAddress);
+  }, [indexerRows, rpcOffers, userAddress]);
 
   const refetch = useCallback(() => {
-    gqlRefetch();
-    refetchBuyers();
-    refetchOfferRows();
+    if (SUBGRAPH_ENABLED) {
+      gqlRefetch();
+    } else {
+      refetchBuyers();
+      refetchOfferRows();
+    }
   }, [gqlRefetch, refetchBuyers, refetchOfferRows]);
 
-  /** Spinner only on cold load (no cached indexer payload); never block on RPC. */
-  const isLoading = enabled && gqlLoading && gqlData === undefined;
+  const isLoading = SUBGRAPH_ENABLED
+    ? enabled && gqlLoading && gqlData === undefined
+    : enabled && buyerAddresses.length === 0 && !!nftContract;
 
   return {
     offers,
