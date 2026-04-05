@@ -17,65 +17,7 @@ import { FilterSidebar, type SortOption } from "@/components/FilterSidebar";
 
 
 
-function filterNFTs(
-  nfts: NFTItemWithMarket[],
-  search: string,
-  onlyListed: boolean,
-  onlyFavorites: boolean,
-  favoriteSet: Set<string>,
-): NFTItemWithMarket[] {
-  return nfts.filter((nft) => {
-    const matchSearch =
-      search.trim() === "" ||
-      nft.name.toLowerCase().includes(search.toLowerCase()) ||
-      nft.tokenId.includes(search.trim());
-    const matchListed = !onlyListed || !!nft.listingPrice;
-    const key = `${nft.nftContract.toLowerCase()}-${nft.tokenId}`;
-    const matchFavorite = !onlyFavorites || favoriteSet.has(key);
-    return matchSearch && matchListed && matchFavorite;
-  });
-}
 
-function sortNFTs(
-  nfts: NFTItemWithMarket[],
-  sort: SortOption,
-): NFTItemWithMarket[] {
-  const sorted = [...nfts];
-  switch (sort) {
-    case "price_asc":
-      return sorted.sort((a, b) => {
-        if (!a.listingPrice && !b.listingPrice) return 0;
-        if (!a.listingPrice) return 1;
-        if (!b.listingPrice) return -1;
-        return parseFloat(a.listingPrice) - parseFloat(b.listingPrice);
-      });
-    case "price_desc":
-      return sorted.sort((a, b) => {
-        if (!a.listingPrice && !b.listingPrice) return 0;
-        if (!a.listingPrice) return 1;
-        if (!b.listingPrice) return -1;
-        return parseFloat(b.listingPrice) - parseFloat(a.listingPrice);
-      });
-    case "offer_desc":
-      return sorted.sort((a, b) => {
-        if (!a.topOffer && !b.topOffer) return 0;
-        if (!a.topOffer) return 1;
-        if (!b.topOffer) return -1;
-        return parseFloat(b.topOffer) - parseFloat(a.topOffer);
-      });
-    case "listed_first":
-      return sorted.sort((a, b) => {
-        if (!!a.listingPrice === !!b.listingPrice) return 0;
-        return a.listingPrice ? -1 : 1;
-      });
-    case "id_asc":
-      return sorted.sort((a, b) => parseInt(a.tokenId) - parseInt(b.tokenId));
-    case "id_desc":
-      return sorted.sort((a, b) => parseInt(b.tokenId) - parseInt(a.tokenId));
-    default:
-      return sorted;
-  }
-}
 
 
 
@@ -92,21 +34,26 @@ function ExploreContent() {
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [page, setPage] = useState(1);
 
-  const hasActiveFilters =
-    search !== "" || sort !== "default" || onlyListed || onlyFavorites;
+  // Only favorites remain client-side (impacts pagination logic).
+  const hasClientFilters = onlyFavorites;
 
-  // When filters are active, fetch all NFTs so client-side filtering spans every page.
-  // When no filters, use normal server-side pagination.
-  const fetchPage = hasActiveFilters ? 1 : page;
-  // The Graph caps `first` at 1000; the hook adds +1 internally, so max fetchSize is 999.
-  const fetchSize = hasActiveFilters ? 999 : PAGE_SIZE;
+  // Any filter or sort active (impacts UI elements like "Clear Filters").
+  const hasActiveFilters =
+    search !== "" || sort !== "default" || onlyListed || onlyFavorites || selectedCollection !== "";
 
   const {
     nfts,
     isLoading: isLoadingNFTs,
     hasMore,
     refetch: refetchExploreNfts,
-  } = useExploreAllNFTs(selectedCollection || undefined, fetchPage, fetchSize);
+  } = useExploreAllNFTs(
+    selectedCollection || undefined,
+    page,
+    PAGE_SIZE,
+    onlyListed,
+    search,
+    sort,
+  );
 
   const { favorites } = useUserFavorites(address);
   const favoriteSet = useMemo(
@@ -128,24 +75,19 @@ function ExploreContent() {
 
   const isFavoritesEmpty = onlyFavorites && favoriteSet.size === 0;
 
-  const allFilteredNFTs = useMemo(() => {
-    const filtered = filterNFTs(
-      nfts,
-      search,
-      onlyListed,
-      onlyFavorites,
-      favoriteSet,
-    );
-    return sortNFTs(filtered, sort);
-  }, [nfts, search, onlyListed, sort, onlyFavorites, favoriteSet]);
+  // now handled server-side.
+  const displayedNFTs = useMemo(() => {
+    // Only favorites filter remains client-side because it depends on local state/address
+    if (onlyFavorites) {
+      return nfts.filter((nft) => {
+        const key = `${nft.nftContract.toLowerCase()}-${nft.tokenId}`;
+        return favoriteSet.has(key);
+      });
+    }
+    return nfts;
+  }, [nfts, onlyFavorites, favoriteSet]);
 
-  // Client-side pagination of filtered results (only when filters are active).
-  const totalFilteredPages = hasActiveFilters
-    ? Math.ceil(allFilteredNFTs.length / PAGE_SIZE)
-    : undefined;
-  const displayedNFTs = hasActiveFilters
-    ? allFilteredNFTs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-    : allFilteredNFTs;
+  const totalFilteredPages = undefined;
 
   const clearFilters = () => {
     setSearch("");
@@ -339,7 +281,7 @@ function ExploreContent() {
           <Pagination
             page={page}
             setPage={setPage}
-            hasActiveFilters={hasActiveFilters}
+            hasActiveFilters={hasClientFilters}
             totalFilteredPages={totalFilteredPages}
             hasMore={hasMore}
           />
