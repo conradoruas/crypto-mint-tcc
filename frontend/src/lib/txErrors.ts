@@ -11,6 +11,10 @@ import {
 export type TransactionErrorKind =
   | "user_rejected"
   | "insufficient_funds"
+  | "nonce_expired"
+  | "gas_too_low"
+  | "unauthorized"
+  | "rate_limit"
   | "reverted"
   | "network"
   | "unknown";
@@ -65,6 +69,26 @@ function isRevertMessage(msg: string): boolean {
   );
 }
 
+function isNonceMessage(msg: string): boolean {
+  return /nonce too low|nonce out of order|nonce too high/i.test(msg);
+}
+
+function isGasTooLowMessage(msg: string): boolean {
+  return /intrinsic gas too low|replacement transaction underpriced|max fee per gas less than/i.test(
+    msg,
+  );
+}
+
+function isUnauthorizedMessage(msg: string): boolean {
+  return /caller is not the owner|missing role|not authorized|only owner|not permitted/i.test(
+    msg,
+  );
+}
+
+function isRateLimitMessage(msg: string): boolean {
+  return /too many requests|rate limit exceeded|429/i.test(msg);
+}
+
 /** Classify a wagmi/viem (or wrapped) error for UX and logging. */
 export function getTransactionErrorKind(error: unknown): TransactionErrorKind {
   for (const node of walkErrorChain(error)) {
@@ -79,9 +103,14 @@ export function getTransactionErrorKind(error: unknown): TransactionErrorKind {
     ) {
       const nodeMsg = errorMessage(node);
       const nodeCode = (node as { code?: number }).code;
+
       if (isInsufficientFundsMessage(nodeMsg) || nodeCode === -32003)
         return "insufficient_funds";
       if (isUserRejectedMessage(nodeMsg)) return "user_rejected";
+      if (isNonceMessage(nodeMsg) || nodeCode === -32000) return "nonce_expired";
+      if (isGasTooLowMessage(nodeMsg)) return "gas_too_low";
+      if (isUnauthorizedMessage(nodeMsg)) return "unauthorized";
+      if (isRateLimitMessage(nodeMsg) || nodeCode === -32005) return "rate_limit";
       if (isRevertMessage(nodeMsg)) return "reverted";
 
       // Only return network if it doesn't look like an application error
@@ -94,6 +123,10 @@ export function getTransactionErrorKind(error: unknown): TransactionErrorKind {
   const msg = errorMessage(error);
   if (isUserRejectedMessage(msg)) return "user_rejected";
   if (isInsufficientFundsMessage(msg)) return "insufficient_funds";
+  if (isNonceMessage(msg)) return "nonce_expired";
+  if (isGasTooLowMessage(msg)) return "gas_too_low";
+  if (isUnauthorizedMessage(msg)) return "unauthorized";
+  if (isRateLimitMessage(msg)) return "rate_limit";
   if (isNetworkMessage(msg)) return "network";
   if (isRevertMessage(msg)) return "reverted";
 
@@ -131,6 +164,14 @@ export function formatTransactionError(error: unknown, fallback: string): string
       return "You cancelled the transaction in your wallet.";
     case "insufficient_funds":
       return "Not enough ETH for gas or this transaction.";
+    case "nonce_expired":
+      return "Wallet nonce out of sync. Please reset your MetaMask account (Settings > Advanced > Clear activity tab data) or wait a moment.";
+    case "gas_too_low":
+      return "The gas limit or price is too low for the current network congestion. Try increasing them in your wallet.";
+    case "unauthorized":
+      return "You are not authorized to perform this action (access control check failed).";
+    case "rate_limit":
+      return "Too many requests to the RPC provider. Please wait a few seconds and try again.";
     case "reverted":
       return (
         getRevertDetail(error) ??
