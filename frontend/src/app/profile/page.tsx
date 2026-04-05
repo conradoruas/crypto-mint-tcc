@@ -7,8 +7,8 @@ import {
   useProfileNFTs,
   useCollections,
   useCreatedNFTs,
-  CollectionNFTItem,
-  CreatedNFTItem,
+  type CollectionNFTItem,
+  type CreatedNFTItem,
 } from "@/hooks/collections";
 import { useUserFavorites } from "@/hooks/useFavorites";
 import Image from "next/image";

@@ -10,6 +10,7 @@ import {
 } from "@/constants/contracts";
 import { GET_COLLECTIONS } from "@/lib/graphql/queries";
 import type { CollectionInfo } from "@/types/collection";
+export type { CollectionInfo };
 import { parseAddress } from "@/lib/schemas";
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;

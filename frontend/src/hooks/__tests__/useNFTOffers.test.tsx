@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import { useNFTOffers } from "../useMarketplace";
+import { useNFTOffers } from "../marketplace";
 import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
 import type { MockLink } from "@apollo/client/testing";

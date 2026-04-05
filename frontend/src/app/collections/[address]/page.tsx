@@ -32,7 +32,7 @@ import {
   useCollectionDetails,
   useCollectionNFTs,
   useMintToCollection,
-  CollectionNFTItem,
+  type CollectionNFTItem,
 } from "@/hooks/collections";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import Footer from "@/components/Footer";

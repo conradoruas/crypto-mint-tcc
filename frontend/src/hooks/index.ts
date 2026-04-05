@@ -13,8 +13,8 @@ export {
   useAcceptOffer,
   useCancelOffer,
   useReclaimExpiredOffer,
-} from "./useMarketplace";
-export type { TwoStepTxPhase } from "./useMarketplace";
+} from "./marketplace";
+export type { TwoStepTxPhase } from "./marketplace";
 
 export {
   useProfileNFTs,
@@ -24,7 +24,7 @@ export {
   useCreatedNFTs,
   useCreateCollection,
   useMintToCollection,
-} from "./useCollections";
+} from "./collections";
 
 export { useContractMutation } from "./useContractMutation";
 export { useClickOutside } from "./useClickOutside";

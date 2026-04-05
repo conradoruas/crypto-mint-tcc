@@ -5,8 +5,8 @@ import {
   useCollectionNFTs,
   useCreatorCollections,
   useProfileNFTs,
-  CollectionInfo,
-} from "../useCollections";
+  type CollectionInfo,
+} from "../collections";
 import { GET_COLLECTIONS } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
 import { MockLink } from "@apollo/client/testing";

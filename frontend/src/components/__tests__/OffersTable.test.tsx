@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { OffersTable } from "../OffersTable";
+import { OffersTable } from "../marketplace/OffersTable";
 import type { OfferWithBuyer } from "@/types/marketplace";
 
 // lucide-react icons render SVGs — no mock needed; jsdom handles them fine.
