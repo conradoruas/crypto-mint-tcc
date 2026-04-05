@@ -84,6 +84,7 @@ export const GET_NFTS_FOR_CONTRACT = gql`
     $orderBy: NFT_orderBy
     $orderDirection: OrderDirection
     $where: NFT_filter
+    $now: BigInt!
   ) {
     nfts(
       where: $where
@@ -102,7 +103,7 @@ export const GET_NFTS_FOR_CONTRACT = gql`
         active
         seller
       }
-      offers(where: { active: true }, orderBy: amount, orderDirection: desc) {
+      offers(where: { active: true, expiresAt_gt: $now }, orderBy: amount, orderDirection: desc) {
         id
         amount
         buyer
@@ -121,6 +122,7 @@ export const GET_ALL_NFTS = gql`
     $orderBy: NFT_orderBy
     $orderDirection: OrderDirection
     $where: NFT_filter
+    $now: BigInt!
   ) {
     nfts(
       first: $first
@@ -145,7 +147,7 @@ export const GET_ALL_NFTS = gql`
         active
         seller
       }
-      offers(where: { active: true }, orderBy: amount, orderDirection: desc) {
+      offers(where: { active: true, expiresAt_gt: $now }, orderBy: amount, orderDirection: desc) {
         id
         amount
         buyer

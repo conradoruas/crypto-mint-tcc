@@ -86,8 +86,9 @@ async function resolveNFTsMetadata(
 
   return nfts.map((nft, i) => {
     const meta = metaResults[i];
+    const now = Math.floor(Date.now() / 1000);
     const activeListing = nft.listing?.active ? nft.listing : null;
-    const topOfferRaw = nft.offers?.[0]?.amount;
+    const topOfferRaw = (nft.offers ?? []).find(o => !o.expiresAt || BigInt(o.expiresAt) > now)?.amount;
 
     return {
       tokenId: nft.tokenId,
@@ -126,7 +127,12 @@ export function useExploreNFTs(
     refetch: refetchGql,
   } = useQuery<GqlNFTsData>(GET_NFTS_FOR_CONTRACT, {
     skip: !collectionAddress,
-    variables: { collection: collectionAddress?.toLowerCase(), first: pageSize, skip },
+    variables: { 
+      collection: collectionAddress?.toLowerCase(), 
+      first: pageSize, 
+      skip,
+      now: Math.floor(Date.now() / 1000)
+    },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
   });
@@ -239,6 +245,7 @@ export function useExploreAllNFTs(
       where,
       orderBy,
       orderDirection,
+      now: Math.floor(Date.now() / 1000)
     },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
