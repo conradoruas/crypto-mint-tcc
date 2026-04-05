@@ -3,6 +3,7 @@
 import { useConnection, useSignMessage } from "wagmi";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/NavBar";
+import { WalletGuard } from "@/components/WalletGuard";
 import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Camera, Loader2, ArrowLeft, Check } from "lucide-react";
@@ -99,21 +100,11 @@ export default function EditProfilePage() {
   const hasChanges =
     name !== (currentProfile?.name ?? "") || imageFile !== null;
 
-  if (!isConnected) {
-    return (
-      <main className="min-h-screen bg-background text-on-surface">
-        <Navbar />
-        <p className="text-center py-20 text-sm text-on-surface-variant">
-          Connect your wallet.
-        </p>
-      </main>
-    );
-  }
-
   return (
     <main className="min-h-screen bg-background text-on-surface">
       <Navbar />
-      <div className="pt-32 pb-20 max-w-lg mx-auto px-8">
+      <WalletGuard message="Connect your wallet to edit your profile.">
+        <div className="pt-32 pb-20 max-w-lg mx-auto px-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-10">
           <button
@@ -277,6 +268,7 @@ export default function EditProfilePage() {
           </div>
         )}
       </div>
+      </WalletGuard>
     </main>
   );
 }

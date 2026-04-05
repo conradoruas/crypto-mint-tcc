@@ -8,6 +8,7 @@ import {
 } from "wagmi";
 import { parseEventLogs, formatEther } from "viem";
 import { Navbar } from "@/components/NavBar";
+import { WalletGuard } from "@/components/WalletGuard";
 import {
   Loader2,
   Plus,
@@ -222,7 +223,8 @@ export default function MintPage() {
   return (
     <main className="min-h-screen bg-background text-on-surface">
       <Navbar />
-      <div className="pt-32 pb-20 max-w-[1920px] mx-auto px-8">
+      <WalletGuard message="Connect your wallet to mint your synthetic assets.">
+        <div className="pt-32 pb-20 max-w-[1920px] mx-auto px-8">
         {/* Page Header */}
         <header className="mb-16">
           <div className="flex items-center gap-3 mb-4">
@@ -514,7 +516,8 @@ export default function MintPage() {
           </div>
         </div>
         <Footer />
-      </div>
+        </div>
+      </WalletGuard>
     </main>
   );
 }

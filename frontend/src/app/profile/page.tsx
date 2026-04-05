@@ -2,6 +2,7 @@
 
 import { useConnection } from "wagmi";
 import { Navbar } from "@/components/NavBar";
+import { WalletGuard } from "@/components/WalletGuard";
 import {
   useProfileNFTs,
   useCollections,
@@ -220,23 +221,12 @@ export default function ProfilePage() {
     };
   }, [address]);
 
-  if (!isConnected) {
-    return (
-      <main className="min-h-screen bg-background text-on-surface">
-        <Navbar />
-        <div className="text-center py-32 text-on-surface-variant">
-          Connect your wallet to view your profile.
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="min-h-screen bg-background text-on-surface">
       <Navbar />
-
-      {/* Hero banner */}
-      <section className="relative w-full h-[280px] bg-surface-container-low overflow-hidden mt-16">
+      <WalletGuard message="Connect your wallet to view your profile and assets.">
+        {/* Hero banner */}
+        <section className="relative w-full h-[280px] bg-surface-container-low overflow-hidden mt-16">
         <div className="w-full h-full bg-gradient-to-br from-primary/5 via-surface-container-low to-secondary/5" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
       </section>
@@ -1077,8 +1067,9 @@ export default function ProfilePage() {
               )}
             </>
           ))}
-      </div>
-      <Footer />
+        </div>
+        <Footer />
+      </WalletGuard>
     </main>
   );
 }
