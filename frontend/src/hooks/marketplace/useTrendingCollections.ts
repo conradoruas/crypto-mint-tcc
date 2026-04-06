@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
-import { useCollections } from "@/hooks/collections";
-import { GET_TRENDING_DATA } from "@/lib/graphql/queries";
+import { GET_COLLECTION_STATS_RANKED } from "@/lib/graphql/queries";
 import { POLL_TRENDING_MS } from "@/constants/polling";
 import type { TrendingCollection } from "@/types/collection";
 
@@ -12,173 +11,96 @@ export type { TrendingCollection };
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
-type GqlSaleEvent = { nftContract: string; price: string; timestamp: string };
-type GqlListing = { nftContract: string; price: string };
-type GqlOffer = { nftContract: string; amount: string };
-type GqlTrendingData = {
-  activityEvents: GqlSaleEvent[];
-  listings: GqlListing[];
-  offers: GqlOffer[];
+// ─── GraphQL response types ───
+
+type GqlCollectionStats = {
+  id: string;
+  totalVolume: string;
+  totalSales: string;
+  floorPrice: string | null;
+  volume24h: string;
+  sales24h: string;
+  collection: {
+    id: string;
+    contractAddress: string;
+    name: string;
+    symbol: string;
+    image: string;
+  };
 };
 
-function buildTrendingVariables(contractAddresses: string[]) {
-  const now = Math.floor(Date.now() / 1000);
-  return {
-    sevenDaysAgo: (now - 7 * 86400).toString(),
-    now: now.toString(),
-    contracts: contractAddresses,
-  };
-}
+type GqlCollectionStatsData = {
+  collectionStatses: GqlCollectionStats[];
+};
 
 // ─────────────────────────────────────────────
 // Hook principal
 // ─────────────────────────────────────────────
 
+/**
+ * Fetches trending collections ranked by 24h volume.
+ *
+ * Previous implementation scanned up to 1200 entities (activityEvents +
+ * listings + offers) and aggregated on the client. Now the subgraph
+ * maintains `CollectionStats.volume24h` with day-based resets and we
+ * query a single pre-sorted entity list.
+ */
 export function useTrendingCollections(limit = 10) {
   const [trending, setTrending] = useState<TrendingCollection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { collections } = useCollections();
-
-  const contractAddresses = useMemo(
-    () => collections.map((c) => c.contractAddress.toLowerCase()),
-    [collections],
-  );
-
-  const queryVariables = useMemo(
-    () => buildTrendingVariables(contractAddresses),
-    [contractAddresses],
-  );
-
   const {
-    data: statsData,
-    loading: statsLoading,
-    error: statsError,
-  } = useQuery<GqlTrendingData>(GET_TRENDING_DATA, {
-    skip: !SUBGRAPH_ENABLED || contractAddresses.length === 0,
-    variables: queryVariables,
+    data,
+    loading: gqlLoading,
+  } = useQuery<GqlCollectionStatsData>(GET_COLLECTION_STATS_RANKED, {
+    skip: !SUBGRAPH_ENABLED,
+    variables: { first: limit },
     pollInterval: POLL_TRENDING_MS,
-    fetchPolicy: "network-only",
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
   });
 
-  const collectionsRef = useRef(collections);
   useEffect(() => {
-    collectionsRef.current = collections;
-  }, [collections]);
-
-  const collectionKey = useMemo(
-    () => collections.map((c) => c.contractAddress).join(","),
-    [collections],
-  );
-
-  useEffect(() => {
-    if (statsLoading) return;
-    if (!collectionKey) return;
-
-    type SaleAgg = { count: number; volumeWei: bigint; prices: number[] };
-    const salesByAddr = new Map<string, SaleAgg>();
-    const floorByAddr = new Map<string, string>();
-    const topOfferByAddr = new Map<string, string>();
-
-    if (!statsError && statsData) {
-      const oneDayAgo = Math.floor(Date.now() / 1000) - 86400;
-      for (const ev of statsData.activityEvents ?? []) {
-        const addr = (ev.nftContract ?? "").toLowerCase();
-        if (!addr) continue;
-        const priceWei = BigInt(ev.price ?? "0");
-        const priceEth = parseFloat(formatEther(priceWei));
-        const agg = salesByAddr.get(addr) ?? {
-          count: 0,
-          volumeWei: BigInt(0),
-          prices: [],
-        };
-
-        agg.prices.push(priceEth);
-
-        if (Number(ev.timestamp) > oneDayAgo) {
-          agg.count += 1;
-          agg.volumeWei += priceWei;
-        }
-        salesByAddr.set(addr, agg);
-      }
-
-      for (const listing of statsData.listings ?? []) {
-        const addr = (listing.nftContract ?? "").toLowerCase();
-        if (!addr || !listing.price) continue;
-        const priceEth = parseFloat(formatEther(BigInt(listing.price)));
-        const current = floorByAddr.get(addr);
-        if (!current || priceEth < parseFloat(current)) {
-          floorByAddr.set(addr, priceEth.toFixed(4));
-        }
-      }
-
-      for (const offer of statsData.offers ?? []) {
-        const addr = (offer.nftContract ?? "").toLowerCase();
-        if (!addr || !offer.amount) continue;
-        if (!topOfferByAddr.has(addr)) {
-          topOfferByAddr.set(
-            addr,
-            parseFloat(formatEther(BigInt(offer.amount))).toFixed(4),
-          );
-        }
-      }
-    }
+    if (gqlLoading || !data?.collectionStatses) return;
 
     let cancelled = false;
 
-    const fetchOwners = async () => {
+    const build = async () => {
       setIsLoading(true);
-      const cols = collectionsRef.current;
 
-      const withoutOwners = cols.map((col) => {
-        const addr = col.contractAddress.toLowerCase();
-        const agg = salesByAddr.get(addr);
-
-        const floorPrice = floorByAddr.get(addr) ?? null;
-        const topOffer = topOfferByAddr.get(addr) ?? null;
-        const sales24h = agg?.count ?? 0;
-        const volume24h = agg
-          ? parseFloat(formatEther(agg.volumeWei)).toFixed(4)
-          : "0.0000";
-
-        const floorHistory = agg?.prices.slice(-8) ?? [];
-        let floorChange24h: number | null = null;
-        if (floorHistory.length >= 2) {
-          const first = floorHistory[0];
-          const last = floorHistory[floorHistory.length - 1];
-          if (first > 0) floorChange24h = ((last - first) / first) * 100;
-        }
+      const mapped: TrendingCollection[] = data.collectionStatses.map((s) => {
+        const vol24hWei = BigInt(s.volume24h ?? "0");
+        const floorWei = s.floorPrice ? BigInt(s.floorPrice) : null;
 
         return {
-          contractAddress: col.contractAddress,
-          name: col.name,
-          symbol: col.symbol,
-          image: col.image ?? "",
-          floorPrice,
-          floorChange24h,
-          topOffer,
-          sales24h,
+          contractAddress: s.collection.contractAddress,
+          name: s.collection.name,
+          symbol: s.collection.symbol ?? "",
+          image: s.collection.image ?? "",
+          floorPrice: floorWei
+            ? parseFloat(formatEther(floorWei)).toFixed(4)
+            : null,
+          floorChange24h: null,
+          topOffer: null,
+          sales24h: Number(s.sales24h ?? 0),
           owners: 0,
           listedPct: null,
-          volume24h,
-          floorHistory,
+          volume24h: parseFloat(formatEther(vol24hWei)).toFixed(4),
+          floorHistory: [],
         } as TrendingCollection;
       });
 
-      const top = withoutOwners
-        .sort((a, b) => parseFloat(b.volume24h) - parseFloat(a.volume24h))
-        .slice(0, limit);
-
+      // Fetch owner counts for the top collections (non-critical, best-effort)
       try {
         const res = await globalThis.fetch("/api/alchemy/getOwnerCountsBatch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contractAddresses: top.map((c) => c.contractAddress),
+            contractAddresses: mapped.map((c) => c.contractAddress),
           }),
         });
         const ownerCountMap: Record<string, number> = await res.json();
-        for (const entry of top) {
+        for (const entry of mapped) {
           entry.owners =
             ownerCountMap[entry.contractAddress.toLowerCase()] ?? 0;
         }
@@ -187,17 +109,17 @@ export function useTrendingCollections(limit = 10) {
       }
 
       if (!cancelled) {
-        setTrending(top);
+        setTrending(mapped);
         setIsLoading(false);
       }
     };
 
-    void fetchOwners();
+    void build();
 
     return () => {
       cancelled = true;
     };
-  }, [statsData, statsLoading, statsError, collectionKey, limit]);
+  }, [data, gqlLoading]);
 
-  return { trending, isLoading: statsLoading || isLoading };
+  return { trending, isLoading: gqlLoading || isLoading };
 }

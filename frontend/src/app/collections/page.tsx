@@ -11,8 +11,7 @@ import { useState, useMemo, useEffect } from "react";
 import Footer from "@/components/Footer";
 import { useQuery } from "@apollo/client/react";
 import {
-  GET_TRENDING_COLLECTIONS,
-  GET_TRENDING_DATA,
+  GET_COLLECTION_STATS_RANKED,
 } from "@/lib/graphql/queries";
 
 import { resolveIpfsUrl } from "@/lib/ipfs";
@@ -129,12 +128,22 @@ function SkeletonCard() {
 
 type FilterOption = "Trending" | "Top" | "Recent";
 
-type GqlCollectionStats = {
+type GqlCollectionStatsEntry = {
   id: string;
-  contractAddress: string;
-  stats?: { totalVolume: string; totalSales: string } | null;
+  totalVolume: string;
+  totalSales: string;
+  floorPrice: string | null;
+  volume24h: string;
+  sales24h: string;
+  collection: {
+    id: string;
+    contractAddress: string;
+    name: string;
+    symbol: string;
+    image: string;
+  };
 };
-type GqlTrendingCollectionsData = { collections: GqlCollectionStats[] };
+type GqlCollectionStatsData = { collectionStatses: GqlCollectionStatsEntry[] };
 
 function sortCollections(
   collections: CollectionInfo[],
@@ -167,9 +176,6 @@ function sortCollections(
   }
 }
 
-type GqlSaleEvent = { nftContract: string; price: string; timestamp: string };
-type GqlTrendingData = { activityEvents: GqlSaleEvent[] };
-
 const PAGE_SIZE = 8;
 
 export default function CollectionsPage() {
@@ -178,50 +184,32 @@ export default function CollectionsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const trendingContracts = useMemo(
-    () => collections.map((c) => c.contractAddress.toLowerCase()),
-    [collections],
-  );
-
-  const trendingVars = useMemo(() => {
-    const now = Math.floor(Date.now() / 1000);
-    return {
-      sevenDaysAgo: (now - 7 * 86400).toString(),
-      now: now.toString(),
-      contracts: trendingContracts,
-    };
-  }, [trendingContracts]);
-
-  const { data: trendingData } = useQuery<GqlTrendingData>(GET_TRENDING_DATA, {
-    skip: !SUBGRAPH_ENABLED || trendingContracts.length === 0,
-    variables: trendingVars,
-  });
-
-  const { data: statsData } = useQuery<GqlTrendingCollectionsData>(
-    GET_TRENDING_COLLECTIONS,
-    { skip: !SUBGRAPH_ENABLED },
+  const { data: statsData } = useQuery<GqlCollectionStatsData>(
+    GET_COLLECTION_STATS_RANKED,
+    {
+      skip: !SUBGRAPH_ENABLED,
+      variables: { first: 100 },
+    },
   );
 
   const volume24hMap = useMemo(() => {
     const map = new Map<string, bigint>();
-    const oneDayAgo = Math.floor(Date.now() / 1000) - 86400;
-    for (const ev of trendingData?.activityEvents ?? []) {
-      if (Number(ev.timestamp) <= oneDayAgo) continue;
-      const addr = ev.nftContract.toLowerCase();
-      map.set(addr, (map.get(addr) ?? BigInt(0)) + BigInt(ev.price ?? "0"));
+    for (const entry of statsData?.collectionStatses ?? []) {
+      map.set(
+        entry.collection.contractAddress.toLowerCase(),
+        BigInt(entry.volume24h ?? "0"),
+      );
     }
     return map;
-  }, [trendingData]);
+  }, [statsData]);
 
   const totalVolumeMap = useMemo(() => {
     const map = new Map<string, bigint>();
-    for (const col of statsData?.collections ?? []) {
-      if (col.stats?.totalVolume) {
-        map.set(
-          col.contractAddress.toLowerCase(),
-          BigInt(col.stats.totalVolume),
-        );
-      }
+    for (const entry of statsData?.collectionStatses ?? []) {
+      map.set(
+        entry.collection.contractAddress.toLowerCase(),
+        BigInt(entry.totalVolume ?? "0"),
+      );
     }
     return map;
   }, [statsData]);

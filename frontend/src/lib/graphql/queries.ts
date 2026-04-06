@@ -256,60 +256,29 @@ export const GET_MARKETPLACE_STATS = gql`
   }
 `;
 
-export const GET_TRENDING_COLLECTIONS = gql`
-  query GetTrendingCollections {
-    collections(orderBy: createdAt, orderDirection: desc) {
-      id
-      contractAddress
-      stats {
-        totalVolume
-        totalSales
-      }
-    }
-  }
-`;
-
 /**
- * Trending inputs scoped to known collection contracts (smaller scans than global 1000×3).
- * For richer analytics, add time-bucketed aggregates in the subgraph (e.g. volume24h on CollectionStats).
+ * Pre-sorted trending data from the CollectionStats entity.
+ * Replaces the previous GET_TRENDING_DATA query that scanned 1200 entities
+ * (activityEvents + listings + offers) on the client side.
+ * The subgraph now maintains volume24h/sales24h with proper day-based resets
+ * and DailyCollectionSnapshot entities for accurate historical aggregation.
  */
-export const GET_TRENDING_DATA = gql`
-  query GetTrendingData($sevenDaysAgo: BigInt!, $now: BigInt!, $contracts: [Bytes!]!) {
-    activityEvents(
-      where: {
-        type: "sale"
-        timestamp_gt: $sevenDaysAgo
-        nftContract_in: $contracts
+export const GET_COLLECTION_STATS_RANKED = gql`
+  query GetCollectionStatsRanked($first: Int!) {
+    collectionStatses(first: $first, orderBy: volume24h, orderDirection: desc) {
+      id
+      totalVolume
+      totalSales
+      floorPrice
+      volume24h
+      sales24h
+      collection {
+        id
+        contractAddress
+        name
+        symbol
+        image
       }
-      orderBy: timestamp
-      orderDirection: asc
-      first: 400
-    ) {
-      nftContract
-      price
-      timestamp
-    }
-    listings(
-      where: { active: true, nftContract_in: $contracts }
-      orderBy: price
-      orderDirection: asc
-      first: 400
-    ) {
-      nftContract
-      price
-    }
-    offers(
-      where: {
-        active: true
-        expiresAt_gt: $now
-        nftContract_in: $contracts
-      }
-      orderBy: amount
-      orderDirection: desc
-      first: 400
-    ) {
-      nftContract
-      amount
     }
   }
 `;
