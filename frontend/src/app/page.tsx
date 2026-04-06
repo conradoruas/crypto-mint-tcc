@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Zap, Shield, Globe } from "lucide-react";
-import { Navbar } from "@/components/NavBar";
+import { Navbar } from "@/components/navbar";
 import { StatsSection } from "@/components/marketplace/StatsSection";
 import { TrendingSection } from "@/components/marketplace/TrendingSection";
 import Footer from "@/components/Footer";

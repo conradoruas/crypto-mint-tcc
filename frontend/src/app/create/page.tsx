@@ -7,7 +7,7 @@ import {
   useWaitForTransactionReceipt,
 } from "wagmi";
 import { parseEventLogs, formatEther } from "viem";
-import { Navbar } from "@/components/NavBar";
+import { Navbar } from "@/components/navbar";
 import { WalletGuard } from "@/components/WalletGuard";
 import {
   Loader2,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import { useMarketplaceStats } from "../useMarketplaceStats";
+import { useMarketplaceStats } from "../marketplace";
 import { GET_MARKETPLACE_STATS } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
 import { MockLink } from "@apollo/client/testing";

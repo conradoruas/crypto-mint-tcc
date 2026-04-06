@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { Navbar } from "@/components/NavBar";
-import { useActivityFeed } from "@/hooks/useActivityFeed";
+import { Navbar } from "@/components/navbar";
+import { useActivityFeed } from "@/hooks/activity";
 import type { ActivityEvent, ActivityType } from "@/types/marketplace";
 import { getEventConfig, ALL_ACTIVITY_TYPES } from "@/lib/eventConfig";
 import { useCollections } from "@/hooks/collections";
@@ -16,23 +16,11 @@ import {
   type MetaMap,
 } from "@/lib/alchemyMeta";
 import { useStableArray } from "@/hooks/useStableArray";
+import { shortAddr, formatTimeAgo } from "@/lib/utils";
 
 const EVENT_CONFIG = getEventConfig(16);
 
 const ALL_TYPES = ALL_ACTIVITY_TYPES;
-
-function shortAddr(addr: string) {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
-
-function formatTime(timestamp?: number) {
-  if (!timestamp) return "—";
-  const diff = Math.floor(Date.now() / 1000) - timestamp;
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
 
 function EventRow({
   event,
@@ -122,7 +110,7 @@ function EventRow({
       {/* Time + tx */}
       <td className="py-6 pl-4 text-right">
         <div className="flex items-center justify-end gap-2 text-on-surface-variant text-xs">
-          <span>{formatTime(event.timestamp)}</span>
+          <span>{formatTimeAgo(event.timestamp)}</span>
           <a
             href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
             target="_blank"

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Navbar } from "@/components/NavBar";
+import { Navbar } from "@/components/navbar";
 import Footer from "@/components/Footer";
 import { Search, ArrowLeft, Compass } from "lucide-react";
 

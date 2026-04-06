@@ -2,7 +2,7 @@
 
 import { useConnection, useSignMessage } from "wagmi";
 import { useRouter } from "next/navigation";
-import { Navbar } from "@/components/NavBar";
+import { Navbar } from "@/components/navbar";
 import { WalletGuard } from "@/components/WalletGuard";
 import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";

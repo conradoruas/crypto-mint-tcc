@@ -11,7 +11,7 @@ import {
   useWaitForTransactionReceipt,
   usePublicClient,
 } from "wagmi";
-import { Navbar } from "@/components/NavBar";
+import { Navbar } from "@/components/navbar";
 import { WalletGuard } from "@/components/WalletGuard";
 import {
   Upload,

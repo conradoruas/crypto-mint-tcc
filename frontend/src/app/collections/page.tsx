@@ -1,6 +1,6 @@
 "use client";
 
-import { Navbar } from "@/components/NavBar";
+import { Navbar } from "@/components/navbar";
 import { useCollections } from "@/hooks/collections";
 import type { CollectionInfo } from "@/types/collection";
 import Image from "next/image";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/graphql/queries";
 
 import { resolveIpfsUrl } from "@/lib/ipfs";
+import { shortAddr } from "@/lib/utils";
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
@@ -77,7 +78,7 @@ function CollectionCard({ collection }: { collection: CollectionInfo }) {
           </span>
           <span className="text-[10px] text-on-surface-variant/30">·</span>
           <span className="text-[10px] text-on-surface-variant uppercase tracking-widest">
-            {collection.creator.slice(0, 6)}...{collection.creator.slice(-4)}
+            {shortAddr(collection.creator)}
           </span>
         </div>
 

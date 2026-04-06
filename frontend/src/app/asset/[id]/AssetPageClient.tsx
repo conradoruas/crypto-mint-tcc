@@ -3,7 +3,7 @@
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useConnection } from "wagmi";
-import { Navbar } from "@/components/NavBar";
+import { Navbar } from "@/components/navbar";
 import {
   ShoppingCart,
   ShieldCheck,
@@ -32,8 +32,8 @@ import {
   useCancelOffer,
 } from "@/hooks/marketplace";
 import { OffersTable, ExpiresIn } from "@/components/marketplace/OffersTable";
-import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
-import { useActivityFeed } from "@/hooks/useActivityFeed";
+import { useIsFavorited, useFavorite } from "@/hooks/user";
+import { useActivityFeed } from "@/hooks/activity";
 import {
   listPriceSchema,
   offerAmountSchema,
@@ -43,6 +43,7 @@ import {
 } from "@/lib/schemas";
 import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
 import { resolveIpfsUrl } from "@/lib/ipfs";
+import { shortAddr } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { formatTransactionError } from "@/lib/txErrors";
 import { toast } from "sonner";
@@ -303,15 +304,19 @@ function LoadingSkeleton() {
   );
 }
 
-export default function AssetPageClient() {
+export default function AssetPageClient({
+  initialNft = null,
+}: {
+  initialNft?: NFTItem | null;
+}) {
   const { id } = useParams();
   const searchParams = useSearchParams();
   const tokenId = (Array.isArray(id) ? id[0] : id) ?? "";
   const nftContract = ensureAddress(searchParams.get("contract"));
 
   const { address } = useConnection();
-  const [nft, setNft] = useState<NFTItem | null>(null);
-  const [isLoadingNft, setIsLoadingNft] = useState(true);
+  const [nft, setNft] = useState<NFTItem | null>(initialNft);
+  const [isLoadingNft, setIsLoadingNft] = useState(initialNft == null);
   const [listPrice, setListPrice] = useState("");
   const [offerAmount, setOfferAmount] = useState("");
   const [showListForm, setShowListForm] = useState(false);
@@ -400,7 +405,13 @@ export default function AssetPageClient() {
     refetchOffers();
   }, [refetchListing, refetchMyOffer, refetchOffers]);
 
+  // Skip the client-side fetch when the Server Component already provided initialNft.
+  // Falls back to a client fetch only when the server fetch failed or returned null
+  // (e.g., bot crawlers without JS, or a cold-miss on the server cache).
+  const skipFetch = initialNft != null;
+
   useEffect(() => {
+    if (skipFetch) return;
     if (!nftContract) {
       setIsLoadingNft(false);
       return;
@@ -431,15 +442,21 @@ export default function AssetPageClient() {
       }
     };
     fetchNFT();
-  }, [tokenId, nftContract]);
+  }, [tokenId, nftContract, skipFetch]);
 
   useEffect(() => {
     if (isBought) {
       toast.success("NFT purchased successfully!", {
-        action: buyHash ? {
-          label: "View Tx",
-          onClick: () => window.open(`https://sepolia.etherscan.io/tx/${buyHash}`, "_blank")
-        } : undefined
+        action: buyHash
+          ? {
+              label: "View Tx",
+              onClick: () =>
+                window.open(
+                  `https://sepolia.etherscan.io/tx/${buyHash}`,
+                  "_blank",
+                ),
+            }
+          : undefined,
       });
       refetchAll();
     }
@@ -515,7 +532,9 @@ export default function AssetPageClient() {
 
     if (!result.success) {
       // Aqui você avisa o usuário. Isso evita o erro crítico.
-      toast.error("Endereço do comprador é inválido. Ação cancelada por segurança.");
+      toast.error(
+        "Endereço do comprador é inválido. Ação cancelada por segurança.",
+      );
       return; // Interrompe a execução antes de chamar o contrato
     }
 
@@ -612,7 +631,7 @@ export default function AssetPageClient() {
                   <span className="font-headline font-bold text-sm font-mono text-on-surface">
                     {isOwner
                       ? "You"
-                      : `${owner.slice(0, 6)}...${owner.slice(-4)}`}
+                      : shortAddr(owner)}
                   </span>
                 </div>
               )}
@@ -656,8 +675,6 @@ export default function AssetPageClient() {
               </div>
             )}
           </div>
-
-
 
           {/* Buy / List Panel */}
           <div className="bg-surface-container-low border border-outline-variant/10 p-6 space-y-4 rounded-sm">

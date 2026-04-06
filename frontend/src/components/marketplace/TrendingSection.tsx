@@ -1,6 +1,6 @@
 "use client";
 
-import { useTrendingCollections } from "@/hooks/useTrendingCollections";
+import { useTrendingCollections } from "@/hooks/marketplace";
 import type { TrendingCollection } from "@/types/collection";
 import Image from "next/image";
 import Link from "next/link";

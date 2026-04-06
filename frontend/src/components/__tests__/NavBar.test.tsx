@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
-import { Navbar } from "../NavBar";
+import { Navbar } from "../navbar";
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ vi.mock("@/components/GlobalSearch", () => ({
 }));
 
 // Avoid rendering BellDropdown activity feed
-vi.mock("@/hooks/useActivityFeed", () => ({
+vi.mock("@/hooks/activity", () => ({
   useActivityFeed: vi.fn().mockReturnValue({ events: [], isLoading: false }),
 }));
 

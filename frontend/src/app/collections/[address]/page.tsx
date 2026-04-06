@@ -13,8 +13,7 @@ import {
   useWaitForTransactionReceipt,
   usePublicClient,
 } from "wagmi";
-import { Navbar } from "@/components/NavBar";
-import Link from "next/link";
+import { Navbar } from "@/components/navbar";
 import {
   Loader2,
   Plus,
@@ -32,11 +31,12 @@ import {
   useCollectionDetails,
   useCollectionNFTs,
   useMintToCollection,
-  type CollectionNFTItem,
 } from "@/hooks/collections";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import Footer from "@/components/Footer";
+import { CollectionNFTCard } from "@/components/marketplace/CollectionNFTCard";
 import { resolveIpfsUrl } from "@/lib/ipfs";
+import { shortAddr } from "@/lib/utils";
 import { formatTransactionError } from "@/lib/txErrors";
 import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
 import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
@@ -368,50 +368,6 @@ function LoadNFTsPanel({
         </button>
       </div>
     </div>
-  );
-}
-
-// ─── NFT card ─────────────────────────────────────────────────────────────────
-
-function NFTCard({
-  nft,
-  collectionName,
-}: {
-  nft: CollectionNFTItem;
-  collectionName: string;
-}) {
-  return (
-    <Link
-      href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
-      className="group bg-surface-container-low border border-outline-variant/20 hover:border-primary/40 overflow-hidden transition-all duration-300"
-    >
-      <div className="aspect-square relative bg-surface-container-high">
-        {nft.image ? (
-          <Image
-            src={nft.image}
-            alt={nft.name || "NFT Image"}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-500"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <ImageIcon size={28} className="text-on-surface-variant/30" />
-          </div>
-        )}
-      </div>
-      <div className="p-5">
-        <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1 truncate">
-          {collectionName}
-        </p>
-        <h3 className="font-headline font-bold text-lg truncate text-on-surface group-hover:text-primary transition-colors">
-          {nft.name}
-        </h3>
-        <p className="text-on-surface-variant text-xs mt-1">
-          #{nft.tokenId.padStart(3, "0")}
-        </p>
-      </div>
-    </Link>
   );
 }
 
@@ -749,7 +705,7 @@ export default function CollectionPage() {
               {
                 label: "Criador",
                 value: details.owner
-                  ? `${details.owner.slice(0, 6)}...${details.owner.slice(-4)}`
+                  ? shortAddr(details.owner)
                   : "—",
                 showOwner: !!isOwner,
               },
@@ -858,7 +814,7 @@ export default function CollectionPage() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3">
               {nfts.map((nft) => (
-                <NFTCard
+                <CollectionNFTCard
                   key={nft.tokenId}
                   nft={nft}
                   collectionName={details.name ?? ""}

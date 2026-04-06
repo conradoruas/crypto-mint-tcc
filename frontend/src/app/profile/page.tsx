@@ -1,7 +1,7 @@
 "use client";
 
 import { useConnection } from "wagmi";
-import { Navbar } from "@/components/NavBar";
+import { Navbar } from "@/components/navbar";
 import { WalletGuard } from "@/components/WalletGuard";
 import {
   useProfileNFTs,
@@ -10,7 +10,7 @@ import {
   type CollectionNFTItem,
   type CreatedNFTItem,
 } from "@/hooks/collections";
-import { useUserFavorites } from "@/hooks/useFavorites";
+import { useUserFavorites } from "@/hooks/user";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
@@ -24,31 +24,19 @@ import {
   Heart,
 } from "lucide-react";
 import { fetchProfile, UserProfile } from "@/services/profile";
-import { useActivityFeed } from "@/hooks/useActivityFeed";
+import { useActivityFeed } from "@/hooks/activity";
 import { usePaginationState } from "@/hooks/usePaginationState";
 import { getEventConfig } from "@/lib/eventConfig";
 import Footer from "@/components/Footer";
 import { fetchAlchemyMetaForEvents, type MetaMap } from "@/lib/alchemyMeta";
 import { resolveIpfsUrl } from "@/lib/ipfs";
+import { shortAddr, formatTimeAgo } from "@/lib/utils";
 
 const EVENT_CONFIG = getEventConfig(14);
 
-function shortAddr(addr: string) {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
+type ProfileSortOption = "default" | "id_asc" | "id_desc" | "name_asc" | "name_desc";
 
-function formatTime(ts?: number) {
-  if (!ts) return "—";
-  const diff = Math.floor(Date.now() / 1000) - ts;
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
-type SortOption = "default" | "id_asc" | "id_desc" | "name_asc" | "name_desc";
-
-const SORT_LABELS: Record<SortOption, string> = {
+const SORT_LABELS: Record<ProfileSortOption, string> = {
   default: "Default",
   id_asc: "ID Ascending",
   id_desc: "ID Descending",
@@ -59,7 +47,7 @@ const SORT_LABELS: Record<SortOption, string> = {
 function filterAndSort(
   nfts: CollectionNFTItem[],
   search: string,
-  sort: SortOption,
+  sort: ProfileSortOption,
 ): CollectionNFTItem[] {
   const filtered = nfts.filter((nft) => {
     if (!search.trim()) return true;
@@ -137,7 +125,7 @@ export default function ProfilePage() {
     undefined,
   );
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<SortOption>("default");
+  const [sort, setSort] = useState<ProfileSortOption>("default");
   const [activeTab, setActiveTab] = useState("Collected");
   const [metaMap, setMetaMap] = useState<MetaMap>(new Map());
   const NFT_PAGE_SIZE = 8;
@@ -265,7 +253,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 bg-surface-container px-3 py-1.5 rounded-sm border border-outline-variant/15">
                 <span className="text-primary font-mono text-sm tracking-tight">
-                  {address?.slice(0, 6)}...{address?.slice(-4)}
+                  {address ? shortAddr(address) : ""}
                 </span>
                 <a
                   href={`https://sepolia.etherscan.io/address/${address}`}
@@ -391,10 +379,10 @@ export default function ProfilePage() {
                 <div className="relative">
                   <select
                     value={sort}
-                    onChange={(e) => setSort(e.target.value as SortOption)}
+                    onChange={(e) => setSort(e.target.value as ProfileSortOption)}
                     className="appearance-none bg-surface-container border border-outline-variant/15 rounded-sm px-4 py-2 pr-8 text-sm focus:outline-none focus:border-primary cursor-pointer text-on-surface"
                   >
-                    {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
+                    {(Object.keys(SORT_LABELS) as ProfileSortOption[]).map((key) => (
                       <option key={key} value={key}>
                         {SORT_LABELS[key]}
                       </option>
@@ -574,7 +562,7 @@ export default function ProfilePage() {
                         {/* Time */}
                         <td className="py-5 pl-4 text-right">
                           <div className="flex items-center justify-end gap-2 text-on-surface-variant text-xs whitespace-nowrap">
-                            <span>{formatTime(event.timestamp)}</span>
+                            <span>{formatTimeAgo(event.timestamp)}</span>
                             <a
                               href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
                               target="_blank"

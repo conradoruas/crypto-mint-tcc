@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Heart, Tag } from "lucide-react";
 import type { NFTItemWithMarket } from "@/types/nft";
-import { useIsFavorited, useFavorite } from "@/hooks/useFavorites";
+import { useIsFavorited, useFavorite } from "@/hooks/user";
 
 export function NFTCard({
   nft,

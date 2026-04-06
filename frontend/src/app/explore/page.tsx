@@ -1,8 +1,8 @@
 "use client";
 
-import { Navbar } from "@/components/NavBar";
+import { Navbar } from "@/components/navbar";
 import { useCollections } from "@/hooks/collections";
-import { useExploreAllNFTs } from "@/hooks/useExploreNfts";
+import { useExploreAllNFTs } from "@/hooks/marketplace";
 import type { NFTItemWithMarket } from "@/types/nft";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers, Heart } from "lucide-react";
@@ -10,9 +10,9 @@ import { useState, useMemo, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
 import { useConnection } from "wagmi";
-import { useUserFavorites } from "@/hooks/useFavorites";
+import { useUserFavorites } from "@/hooks/user";
 import { NFTCard } from "@/components/marketplace/NFTCard";
-import { Pagination } from "@/components/Pagination";
+import { Pagination } from "@/components/ui";
 import { FilterSidebar, type SortOption } from "@/components/marketplace/FilterSidebar";
 
 

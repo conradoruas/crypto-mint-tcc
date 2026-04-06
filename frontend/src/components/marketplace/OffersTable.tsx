@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { formatEther } from "viem";
 import { Clock, TrendingUp, Loader2, CheckCircle } from "lucide-react";
 import type { OfferWithBuyer } from "@/types/marketplace";
+import { shortAddr } from "@/lib/utils";
 
 export function ExpiresIn({ expiresAt }: { expiresAt: Date }) {
   const [now, setNow] = useState(() => Date.now());
@@ -121,8 +122,7 @@ export function OffersTable({
                   )}
                 </p>
                 <p className="text-xs text-on-surface-variant font-mono">
-                  {offer.buyerAddress.slice(0, 6)}...
-                  {offer.buyerAddress.slice(-4)}
+                  {shortAddr(offer.buyerAddress)}
                 </p>
               </div>
             </div>

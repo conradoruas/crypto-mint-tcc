@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import { useActivityFeed } from "../useActivityFeed";
+import { useActivityFeed } from "../activity";
 import {
   GET_ACTIVITY_FEED_ALL,
   GET_ACTIVITY_FEED,
