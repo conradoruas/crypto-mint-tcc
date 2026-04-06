@@ -5,8 +5,8 @@ import {
   Bell,
   Activity,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useActivityFeed, ActivityEvent } from "@/hooks/useActivityFeed";
+import { cn, formatTimeShort } from "@/lib/utils";
+import { useActivityFeed, ActivityEvent } from "@/hooks/activity";
 import { getEventConfig } from "@/lib/eventConfig";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { fetchBatchNFTMetadata, type NFTMeta } from "@/lib/nftMetadata";
@@ -14,15 +14,6 @@ import { useStableArray } from "@/hooks/useStableArray";
 import { useClickOutside } from "@/hooks/useClickOutside";
 
 const EVENT_CONFIG = getEventConfig(12);
-
-function formatTime(ts?: number) {
-  if (!ts) return "—";
-  const diff = Math.floor(Date.now() / 1000) - ts;
-  if (diff < 60) return `${diff}s`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  return `${Math.floor(diff / 86400)}d`;
-}
 
 const BELL_STORAGE_KEY = "bell_last_seen_ts";
 
@@ -171,7 +162,7 @@ export function BellDropdown({ address }: { address: string }) {
                       </p>
                     </div>
                     <span className="text-[10px] text-on-surface-variant shrink-0">
-                      {formatTime(event.timestamp)}
+                      {formatTimeShort(event.timestamp)}
                     </span>
                   </Link>
                 );

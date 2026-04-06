@@ -1,4 +1,9 @@
 export { useNFTListing } from "./useNFTListing";
+export { useExploreNFTs, useExploreAllNFTs } from "./useExploreNfts";
+export { useMarketplaceStats } from "./useMarketplaceStats";
+export { useTrendingCollections } from "./useTrendingCollections";
+export type { MarketplaceStats } from "./useMarketplaceStats";
+export type { TrendingCollection } from "./useTrendingCollections";
 export { useNFTOffers, useMyOffer } from "./useNFTOffers";
 export { useListNFT } from "./useListNFT";
 export { useBuyNFT } from "./useBuyNFT";
