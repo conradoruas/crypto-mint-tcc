@@ -13,6 +13,7 @@ type Collection @entity {
   collectionId: BigInt!
   nfts: [NFT!]! @derivedFrom(field: "collection")
   stats: CollectionStats
+  dailySnapshots: [DailyCollectionSnapshot!]! @derivedFrom(field: "collection")
 }
 
 type NFT @entity {
@@ -83,4 +84,13 @@ type CollectionStats @entity {
   volume24h: BigInt!
   sales24h: BigInt!
   lastUpdated: BigInt!
+}
+
+type DailyCollectionSnapshot @entity {
+  id: ID!
+  collection: Collection!
+  dayId: BigInt!
+  date: BigInt!
+  volume: BigInt!
+  sales: BigInt!
 }

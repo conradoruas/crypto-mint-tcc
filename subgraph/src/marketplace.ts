@@ -11,56 +11,14 @@ import {
   Listing,
   Offer,
   ActivityEvent,
-  MarketplaceStats,
-  CollectionStats,
   Collection,
 } from "../generated/schema";
 import { BigInt, Bytes } from "@graphprotocol/graph-ts";
-
-function getOrCreateStats(): MarketplaceStats {
-  let stats = MarketplaceStats.load("global");
-  if (!stats) {
-    stats = new MarketplaceStats("global");
-    stats.totalCollections = BigInt.fromI32(0);
-    stats.totalNFTs = BigInt.fromI32(0);
-    stats.totalListed = BigInt.fromI32(0);
-    stats.totalVolume = BigInt.fromI32(0);
-    stats.totalSales = BigInt.fromI32(0);
-  }
-  return stats;
-}
-
-function getOrCreateCollectionStats(
-  collectionId: string,
-  timestamp: BigInt = BigInt.fromI32(0),
-): CollectionStats {
-  let stats = CollectionStats.load(collectionId);
-  if (!stats) {
-    stats = new CollectionStats(collectionId);
-    stats.collection = collectionId;
-    stats.totalVolume = BigInt.fromI32(0);
-    stats.totalSales = BigInt.fromI32(0);
-    stats.volume24h = BigInt.fromI32(0);
-    stats.sales24h = BigInt.fromI32(0);
-    stats.lastUpdated = timestamp;
-    stats.floorPrice = null;
-
-    // Link Collection.stats so queries from the Collection side also work
-    let collection = Collection.load(collectionId);
-    if (collection) {
-      collection.stats = collectionId;
-      collection.save();
-    }
-  } else {
-    // Check if 24h period has passed
-    if (timestamp.minus(stats.lastUpdated).gt(BigInt.fromI32(86400))) {
-      stats.volume24h = BigInt.fromI32(0);
-      stats.sales24h = BigInt.fromI32(0);
-      stats.lastUpdated = timestamp;
-    }
-  }
-  return stats;
-}
+import {
+  getOrCreateStats,
+  getOrCreateCollectionStats,
+  getOrCreateDailySnapshot,
+} from "./helpers";
 
 export function handleItemListed(event: ItemListed): void {
   let id =
@@ -168,22 +126,26 @@ export function handleItemSold(event: ItemSold): void {
   stats.totalVolume = stats.totalVolume.plus(event.params.price);
   stats.save();
 
-  // Collection stats
-  let colStats = getOrCreateCollectionStats(
-    event.params.nftContract.toHexString(),
-    event.block.timestamp
-  );
+  // Collection stats (with day-based 24h reset)
+  let collectionId = event.params.nftContract.toHexString();
+  let colStats = getOrCreateCollectionStats(collectionId, event.block.timestamp);
   colStats.totalSales = colStats.totalSales.plus(BigInt.fromI32(1));
   colStats.totalVolume = colStats.totalVolume.plus(event.params.price);
   colStats.sales24h = colStats.sales24h.plus(BigInt.fromI32(1));
   colStats.volume24h = colStats.volume24h.plus(event.params.price);
-  
-  // If the listing sold was exactly at the floor price, nullify floor so frontend recalculates
+
+  // If the listing sold was exactly at the floor price, nullify floor so it gets recalculated on next listing
   if (colStats.floorPrice && event.params.price.equals(colStats.floorPrice!)) {
     colStats.floorPrice = null;
   }
-  
+
   colStats.save();
+
+  // Daily snapshot — bucketed aggregate for accurate historical queries
+  let snapshot = getOrCreateDailySnapshot(collectionId, event.block.timestamp);
+  snapshot.volume = snapshot.volume.plus(event.params.price);
+  snapshot.sales = snapshot.sales.plus(BigInt.fromI32(1));
+  snapshot.save();
 }
 
 export function handleListingCancelled(event: ListingCancelled): void {
@@ -197,42 +159,41 @@ export function handleListingCancelled(event: ListingCancelled): void {
     listing.active = false;
     listing.updatedAt = event.block.timestamp;
     listing.save();
+
+    let actId =
+      event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+    let act = new ActivityEvent(actId);
+    act.type = "listing_cancelled";
+    act.nftContract = event.params.nftContract;
+    act.tokenId = event.params.tokenId;
+    act.from = event.params.seller;
+    act.timestamp = event.block.timestamp;
+    act.blockNumber = event.block.number;
+    act.txHash = event.transaction.hash;
+    act.save();
+
+    let stats = getOrCreateStats();
+    stats.totalListed = stats.totalListed.minus(BigInt.fromI32(1));
+    stats.save();
+
+    // If the listing cancelled was exactly at the floor price, nullify floor
+    let colStats = getOrCreateCollectionStats(
+      event.params.nftContract.toHexString(),
+      event.block.timestamp
+    );
+    if (
+      colStats.floorPrice &&
+      listing.price.equals(colStats.floorPrice!)
+    ) {
+      colStats.floorPrice = null;
+      colStats.save();
+    }
   }
 
   let nft = NFT.load(id);
   if (nft) {
     nft.listing = null;
     nft.save();
-  }
-
-  let actId =
-    event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
-  let act = new ActivityEvent(actId);
-  act.type = "listing_cancelled";
-  act.nftContract = event.params.nftContract;
-  act.tokenId = event.params.tokenId;
-  act.from = event.params.seller;
-  act.timestamp = event.block.timestamp;
-  act.blockNumber = event.block.number;
-  act.txHash = event.transaction.hash;
-  act.save();
-
-  let stats = getOrCreateStats();
-  stats.totalListed = stats.totalListed.minus(BigInt.fromI32(1));
-  stats.save();
-
-  // If the listing cancelled was exactly at the floor price, nullify floor
-  let colStats = getOrCreateCollectionStats(
-    event.params.nftContract.toHexString(),
-    event.block.timestamp
-  );
-  if (
-    listing &&
-    colStats.floorPrice &&
-    listing.price.equals(colStats.floorPrice!)
-  ) {
-    colStats.floorPrice = null;
-    colStats.save();
   }
 }
 
@@ -325,22 +286,26 @@ export function handleOfferAccepted(event: OfferAccepted): void {
   }
   stats.save();
 
-  // Collection stats
-  let colStats = getOrCreateCollectionStats(
-    event.params.nftContract.toHexString(),
-    event.block.timestamp
-  );
+  // Collection stats (with day-based 24h reset)
+  let collectionId = event.params.nftContract.toHexString();
+  let colStats = getOrCreateCollectionStats(collectionId, event.block.timestamp);
   colStats.totalSales = colStats.totalSales.plus(BigInt.fromI32(1));
   colStats.totalVolume = colStats.totalVolume.plus(event.params.amount);
   colStats.sales24h = colStats.sales24h.plus(BigInt.fromI32(1));
   colStats.volume24h = colStats.volume24h.plus(event.params.amount);
-  
+
   // If the offer accepted was on an item sitting at the floor price, nullify floor
   if (listing && colStats.floorPrice && listing.price.equals(colStats.floorPrice!)) {
     colStats.floorPrice = null;
   }
-  
+
   colStats.save();
+
+  // Daily snapshot — bucketed aggregate for accurate historical queries
+  let snapshot = getOrCreateDailySnapshot(collectionId, event.block.timestamp);
+  snapshot.volume = snapshot.volume.plus(event.params.amount);
+  snapshot.sales = snapshot.sales.plus(BigInt.fromI32(1));
+  snapshot.save();
 }
 
 export function handleOfferCancelled(event: OfferCancelled): void {

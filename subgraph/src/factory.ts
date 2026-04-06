@@ -1,21 +1,9 @@
 import { CollectionCreated } from "../generated/NFTCollectionFactory/NFTCollectionFactory";
 import { NFTCollectionFactory } from "../generated/NFTCollectionFactory/NFTCollectionFactory";
-import { Collection, MarketplaceStats } from "../generated/schema";
+import { Collection } from "../generated/schema";
 import { NFTCollection } from "../generated/templates";
 import { BigInt } from "@graphprotocol/graph-ts";
-
-function getOrCreateStats(): MarketplaceStats {
-  let stats = MarketplaceStats.load("global");
-  if (!stats) {
-    stats = new MarketplaceStats("global");
-    stats.totalCollections = BigInt.fromI32(0);
-    stats.totalNFTs = BigInt.fromI32(0);
-    stats.totalListed = BigInt.fromI32(0);
-    stats.totalVolume = BigInt.fromI32(0);
-    stats.totalSales = BigInt.fromI32(0);
-  }
-  return stats;
-}
+import { getOrCreateStats } from "./helpers";
 
 export function handleCollectionCreated(event: CollectionCreated): void {
   let id = event.params.contractAddress.toHexString();
@@ -48,7 +36,7 @@ export function handleCollectionCreated(event: CollectionCreated): void {
 
   collection.save();
 
-  // Start tracking NFTMinted events for this new collection contract
+  // Start tracking NFTMinted + Transfer events for this new collection contract
   NFTCollection.create(event.params.contractAddress);
 
   // Update global stats
