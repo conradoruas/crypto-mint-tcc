@@ -41,6 +41,7 @@ dataSources:
         - ActivityEvent
         - MarketplaceStats
         - CollectionStats
+        - DailyCollectionSnapshot
       abis:
         - name: NFTMarketplace
           file: ./abis/NFTMarketplace.json
@@ -80,4 +81,6 @@ templates:
       eventHandlers:
         - event: NFTMinted(indexed address,indexed uint256,string)
           handler: handleNFTMinted
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
       file: ./src/collection.ts
