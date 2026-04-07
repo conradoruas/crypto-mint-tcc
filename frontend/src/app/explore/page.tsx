@@ -3,7 +3,6 @@
 import { Navbar } from "@/components/navbar";
 import { useCollections } from "@/hooks/collections";
 import { useExploreAllNFTs } from "@/hooks/marketplace";
-import type { NFTItemWithMarket } from "@/types/nft";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers, Heart } from "lucide-react";
 import { useState, useMemo, Suspense, useEffect } from "react";
@@ -169,11 +168,10 @@ function ExploreContent() {
                 setOnlyListed((v) => !v);
                 setPage(1);
               }}
-              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                onlyListed
+              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${onlyListed
                   ? "bg-secondary-container text-on-secondary-container border-secondary/20"
                   : "bg-surface-container text-on-surface-variant border-outline-variant/15"
-              }`}
+                }`}
             >
               <SlidersHorizontal size={12} className="inline mr-1" />
               Buy Now Only

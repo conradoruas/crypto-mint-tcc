@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { GET_COLLECTION_STATS_RANKED } from "@/lib/graphql/queries";
@@ -30,7 +30,7 @@ type GqlCollectionStats = {
 };
 
 type GqlCollectionStatsData = {
-  collectionStatses: GqlCollectionStats[];
+  collectionStats: GqlCollectionStats[];
 };
 
 // ─────────────────────────────────────────────
@@ -42,16 +42,17 @@ type GqlCollectionStatsData = {
  *
  * Previous implementation scanned up to 1200 entities (activityEvents +
  * listings + offers) and aggregated on the client. Now the subgraph
- * maintains `CollectionStats.volume24h` with day-based resets and we
+ * maintains `CollectionStat.volume24h` with day-based resets and we
  * query a single pre-sorted entity list.
  */
 export function useTrendingCollections(limit = 10) {
   const [trending, setTrending] = useState<TrendingCollection[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(SUBGRAPH_ENABLED);
 
   const {
     data,
     loading: gqlLoading,
+    error,
   } = useQuery<GqlCollectionStatsData>(GET_COLLECTION_STATS_RANKED, {
     skip: !SUBGRAPH_ENABLED,
     variables: { first: limit },
@@ -61,14 +62,35 @@ export function useTrendingCollections(limit = 10) {
   });
 
   useEffect(() => {
-    if (gqlLoading || !data?.collectionStatses) return;
+    // If subgraph is skipped or error occurs, we don't need to do anything here.
+    if (!SUBGRAPH_ENABLED) return;
+    if (error) {
+      console.error("[useTrendingCollections] GQL Error:", error);
+      return;
+    }
+
+    // If still query-loading or no data yet, wait.
+    if (gqlLoading || !data) return;
 
     let cancelled = false;
 
     const build = async () => {
+      const stats = data.collectionStats ?? [];
+
+
+
+      // If there are no collection stats yet (e.g. fresh subgraph), stop loading
+      if (stats.length === 0) {
+        if (!cancelled) {
+          setTrending([]);
+          setIsLoading(false);
+        }
+        return;
+      }
+
       setIsLoading(true);
 
-      const mapped: TrendingCollection[] = data.collectionStatses.map((s) => {
+      const mapped: TrendingCollection[] = stats.map((s) => {
         const vol24hWei = BigInt(s.volume24h ?? "0");
         const floorWei = s.floorPrice ? BigInt(s.floorPrice) : null;
 
@@ -119,7 +141,8 @@ export function useTrendingCollections(limit = 10) {
     return () => {
       cancelled = true;
     };
-  }, [data, gqlLoading]);
+  }, [data, gqlLoading, error]);
 
   return { trending, isLoading: gqlLoading || isLoading };
 }
+

@@ -16,9 +16,12 @@ import { parseAddress } from "@/lib/schemas";
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 /**
- * Hook to fetch all collections created via the factory, with Subgraph/RPC fallback.
+ * Hook to fetch collections created via the factory, with Subgraph/RPC fallback.
+ * Supports pagination for the Subgraph path.
  */
-export function useCollections() {
+export function useCollections(page: number = 1, pageSize: number = 100) {
+  const skip = (page - 1) * pageSize;
+
   // ── GraphQL path ──
   type GqlCollection = {
     contractAddress: string;
@@ -40,9 +43,11 @@ export function useCollections() {
     refetch: gqlRefetch,
   } = useQuery<GqlCollectionsData>(GET_COLLECTIONS, {
     skip: !SUBGRAPH_ENABLED,
+    variables: { first: pageSize, skip },
   });
 
   // ── RPC path ──
+  // (Note: RPC getAllCollections usually returns all, pagination not natively supported in this fallback)
   const {
     data: raw,
     isLoading: rpcLoading,

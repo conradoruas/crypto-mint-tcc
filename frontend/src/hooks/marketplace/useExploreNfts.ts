@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import {
@@ -121,6 +121,11 @@ export function useExploreNFTs(
 
   const skip = (page - 1) * pageSize;
 
+  // Round 'now' to 60s buckets to keep the Apollo cache stable for 1 minute.
+  // Using a raw Date.now() string as a variable creates a unique cache key every second.
+  // eslint-disable-next-line react-hooks/purity
+  const nowBucketed = useMemo(() => Math.floor(Date.now() / 60000) * 60, []);
+
   const {
     data: gqlData,
     loading: gqlQueryLoading,
@@ -131,7 +136,7 @@ export function useExploreNFTs(
       collection: collectionAddress?.toLowerCase(), 
       first: pageSize, 
       skip,
-      now: Math.floor(Date.now() / 1000)
+      now: nowBucketed
     },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
@@ -189,19 +194,20 @@ export function useExploreAllNFTs(
 
   const skip = (page - 1) * pageSize;
 
+  // Round 'now' to 60s buckets to keep the Apollo cache stable for 1 minute.
+  // eslint-disable-next-line react-hooks/purity
+  const nowBucketed = useMemo(() => Math.floor(Date.now() / 60000) * 60, []);
+
   // Build the GraphQL 'where' filter
-  const where: any = {};
+  const where: Record<string, unknown> = {};
   if (collectionAddress) {
     where.collection = collectionAddress.toLowerCase();
   }
   if (onlyListed) {
     where.listing_ = { active: true };
   }
-  if (search.trim() !== "") {
-    // Basic server-side search by Token ID if it looks like a number
-    if (/^\d+$/.test(search.trim())) {
-      where.tokenId = search.trim();
-    }
+  if (search.trim() !== "" && /^\d+$/.test(search.trim())) {
+    where.tokenId = search.trim();
   }
 
   // Build the GraphQL 'orderBy' and 'orderDirection'
@@ -245,7 +251,7 @@ export function useExploreAllNFTs(
       where,
       orderBy,
       orderDirection,
-      now: Math.floor(Date.now() / 1000)
+      now: nowBucketed
     },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",

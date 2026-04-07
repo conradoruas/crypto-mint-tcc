@@ -3,8 +3,8 @@ import { gql } from "@apollo/client";
 /** Which layers are authoritative for listings vs metadata: see `src/lib/DATA_SOURCES.md`. */
 
 export const GET_COLLECTIONS = gql`
-  query GetCollections {
-    collections(orderBy: createdAt, orderDirection: desc) {
+  query GetCollections($first: Int!, $skip: Int!) {
+    collections(first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {
       id
       contractAddress
       creator
@@ -159,8 +159,14 @@ export const GET_ALL_NFTS = gql`
 
 
 export const GET_NFTS_FOR_OWNER = gql`
-  query GetNFTsForOwner($owner: Bytes!) {
-    nfts(where: { owner: $owner }, orderBy: mintedAt, orderDirection: desc) {
+  query GetNFTsForOwner($owner: Bytes!, $first: Int!, $skip: Int!) {
+    nfts(
+      where: { owner: $owner }
+      first: $first
+      skip: $skip
+      orderBy: mintedAt
+      orderDirection: desc
+    ) {
       id
       tokenId
       tokenUri
@@ -257,15 +263,15 @@ export const GET_MARKETPLACE_STATS = gql`
 `;
 
 /**
- * Pre-sorted trending data from the CollectionStats entity.
+ * Pre-sorted trending data from the CollectionStat entity.
  * Replaces the previous GET_TRENDING_DATA query that scanned 1200 entities
  * (activityEvents + listings + offers) on the client side.
  * The subgraph now maintains volume24h/sales24h with proper day-based resets
  * and DailyCollectionSnapshot entities for accurate historical aggregation.
  */
 export const GET_COLLECTION_STATS_RANKED = gql`
-  query GetCollectionStatsRanked($first: Int!) {
-    collectionStatses(first: $first, orderBy: volume24h, orderDirection: desc) {
+  query GetCollectionStatRanked($first: Int!) {
+    collectionStats(first: $first, orderBy: volume24h, orderDirection: desc) {
       id
       totalVolume
       totalSales

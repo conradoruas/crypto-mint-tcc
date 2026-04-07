@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import type { CollectionNFTItem } from "@/types/nft";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { logger } from "@/lib/logger";
+import type { AlchemyNFT } from "@/types/alchemy";
 
 const PAGE_SIZE_COLLECTION = 20;
+
 
 /**
  * Helper to fetch a paginated list of NFTs from a collection directly from Alchemy.
@@ -30,7 +32,7 @@ async function fetchCollectionPage(
   const data = await res.json();
 
   const items: CollectionNFTItem[] = await Promise.all(
-    (data.nfts ?? []).map(async (nft: any) => {
+    (data.nfts ?? []).map(async (nft: AlchemyNFT) => {
       let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
       if (!image && nft.tokenUri) {
         try {

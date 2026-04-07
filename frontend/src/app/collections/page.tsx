@@ -143,7 +143,7 @@ type GqlCollectionStatsEntry = {
     image: string;
   };
 };
-type GqlCollectionStatsData = { collectionStatses: GqlCollectionStatsEntry[] };
+type GqlCollectionStatsData = { collectionStats: GqlCollectionStatsEntry[] };
 
 function sortCollections(
   collections: CollectionInfo[],
@@ -184,7 +184,7 @@ export default function CollectionsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const { data: statsData } = useQuery<GqlCollectionStatsData>(
+  const { data: statsData, error: statsError } = useQuery<GqlCollectionStatsData>(
     GET_COLLECTION_STATS_RANKED,
     {
       skip: !SUBGRAPH_ENABLED,
@@ -192,9 +192,16 @@ export default function CollectionsPage() {
     },
   );
 
+  useEffect(() => {
+    if (statsError) {
+      console.error("[CollectionsPage] Subgraph stats error:", statsError);
+    }
+  }, [statsError]);
+
   const volume24hMap = useMemo(() => {
     const map = new Map<string, bigint>();
-    for (const entry of statsData?.collectionStatses ?? []) {
+    const stats = statsData?.collectionStats ?? [];
+    for (const entry of stats) {
       map.set(
         entry.collection.contractAddress.toLowerCase(),
         BigInt(entry.volume24h ?? "0"),
@@ -205,7 +212,8 @@ export default function CollectionsPage() {
 
   const totalVolumeMap = useMemo(() => {
     const map = new Map<string, bigint>();
-    for (const entry of statsData?.collectionStatses ?? []) {
+    const stats = statsData?.collectionStats ?? [];
+    for (const entry of stats) {
       map.set(
         entry.collection.contractAddress.toLowerCase(),
         BigInt(entry.totalVolume ?? "0"),
@@ -213,6 +221,7 @@ export default function CollectionsPage() {
     }
     return map;
   }, [statsData]);
+
 
   const filtered = sortCollections(
     collections.filter(
@@ -287,11 +296,10 @@ export default function CollectionsPage() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-6 py-2 text-xs font-headline font-bold uppercase tracking-widest transition-colors ${
-                  filter === f
-                    ? "bg-surface-bright text-primary"
-                    : "text-on-surface-variant hover:text-on-surface"
-                }`}
+                className={`px-6 py-2 text-xs font-headline font-bold uppercase tracking-widest transition-colors ${filter === f
+                  ? "bg-surface-bright text-primary"
+                  : "text-on-surface-variant hover:text-on-surface"
+                  }`}
               >
                 {f}
               </button>
@@ -398,11 +406,10 @@ export default function CollectionsPage() {
                         <button
                           key={p}
                           onClick={() => setPage(p as number)}
-                          className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${
-                            page === p
-                              ? "bg-primary text-on-primary border-primary"
-                              : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"
-                          }`}
+                          className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${page === p
+                            ? "bg-primary text-on-primary border-primary"
+                            : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"
+                            }`}
                         >
                           {p}
                         </button>

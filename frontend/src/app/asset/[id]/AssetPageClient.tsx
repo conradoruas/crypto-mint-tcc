@@ -12,7 +12,6 @@ import {
   Loader2,
   HandCoins,
   CheckCircle,
-  ExternalLink,
   TrendingUp,
   Heart,
   Share2,
@@ -449,13 +448,13 @@ export default function AssetPageClient({
       toast.success("NFT purchased successfully!", {
         action: buyHash
           ? {
-              label: "View Tx",
-              onClick: () =>
-                window.open(
-                  `https://sepolia.etherscan.io/tx/${buyHash}`,
-                  "_blank",
-                ),
-            }
+            label: "View Tx",
+            onClick: () =>
+              window.open(
+                `https://sepolia.etherscan.io/tx/${buyHash}`,
+                "_blank",
+              ),
+          }
           : undefined,
       });
       refetchAll();
@@ -638,11 +637,10 @@ export default function AssetPageClient({
               {address && (
                 <button
                   onClick={() => toggleFavorite(nftContract, tokenId)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm border transition-all text-xs font-bold uppercase tracking-widest ${
-                    isFavorited
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm border transition-all text-xs font-bold uppercase tracking-widest ${isFavorited
                       ? "bg-error/10 border-error/30 text-error"
                       : "bg-surface-container border-outline-variant/15 text-on-surface-variant hover:border-outline"
-                  }`}
+                    }`}
                 >
                   <Heart
                     size={13}
@@ -692,11 +690,10 @@ export default function AssetPageClient({
                   <button
                     onClick={handleCancelListing}
                     disabled={isCancelling}
-                    className={`w-full font-headline font-bold py-4 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest border ${
-                      isCancelling
+                    className={`w-full font-headline font-bold py-4 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest border ${isCancelling
                         ? "bg-surface-container-high text-on-surface-variant/50 border-outline-variant/10 cursor-not-allowed"
                         : "bg-error/5 border-error/20 text-error hover:bg-error/10"
-                    }`}
+                      }`}
                   >
                     {isCancelling ? (
                       <Loader2 className="animate-spin" size={18} />
@@ -710,11 +707,10 @@ export default function AssetPageClient({
                     <button
                       onClick={handleBuy}
                       disabled={isBuying || isBuyConfirming}
-                      className={`w-full relative overflow-hidden font-headline font-bold py-4 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest ${
-                        isBuying || isBuyConfirming
+                      className={`w-full relative overflow-hidden font-headline font-bold py-4 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest ${isBuying || isBuyConfirming
                           ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
                           : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
-                      }`}
+                        }`}
                     >
                       {!(isBuying || isBuyConfirming) && (
                         <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
@@ -767,11 +763,10 @@ export default function AssetPageClient({
                         <button
                           onClick={handleList}
                           disabled={isListing}
-                          className={`flex-1 font-headline font-bold py-3 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest ${
-                            isListing
+                          className={`flex-1 font-headline font-bold py-3 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest ${isListing
                               ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
                               : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110"
-                          }`}
+                            }`}
                         >
                           {isListing ? (
                             <Loader2 className="animate-spin" size={16} />
@@ -827,11 +822,10 @@ export default function AssetPageClient({
                   <button
                     onClick={handleCancelOffer}
                     disabled={isCancellingOffer}
-                    className={`w-full font-headline font-bold py-3 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest border ${
-                      isCancellingOffer
+                    className={`w-full font-headline font-bold py-3 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest border ${isCancellingOffer
                         ? "bg-surface-container-high text-on-surface-variant/50 border-outline-variant/10 cursor-not-allowed"
                         : "bg-error/5 border-error/20 text-error hover:bg-error/10"
-                    }`}
+                      }`}
                   >
                     {isCancellingOffer ? (
                       <Loader2 className="animate-spin" size={16} />
@@ -874,11 +868,10 @@ export default function AssetPageClient({
                     <button
                       onClick={handleMakeOffer}
                       disabled={isMakingOffer || isOfferConfirming}
-                      className={`flex-1 font-headline font-bold py-3 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest ${
-                        isMakingOffer || isOfferConfirming
+                      className={`flex-1 font-headline font-bold py-3 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest ${isMakingOffer || isOfferConfirming
                           ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
                           : "bg-secondary/10 border border-secondary/20 text-secondary hover:bg-secondary/20"
-                      }`}
+                        }`}
                     >
                       {isMakingOffer || isOfferConfirming ? (
                         <Loader2 className="animate-spin" size={16} />
