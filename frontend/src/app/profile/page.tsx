@@ -166,9 +166,7 @@ export default function ProfilePage() {
     collectedPag.reset();
   };
 
-  useEffect(() => {
-    collectedPag.reset();
-  }, [search, sort, selectedCollection, collectedPag]);
+
 
   const { items: paginatedCollected, totalPages: collectedTotalPages } =
     collectedPag.paginate(displayedNFTs);
@@ -317,8 +315,8 @@ export default function ProfilePage() {
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest border-b-2 whitespace-nowrap transition-all ${activeTab === tab
-                    ? "text-primary border-primary"
-                    : "text-on-surface-variant border-transparent hover:text-on-surface"
+                  ? "text-primary border-primary"
+                  : "text-on-surface-variant border-transparent hover:text-on-surface"
                   }`}
               >
                 {tab}
@@ -337,10 +335,10 @@ export default function ProfilePage() {
                       return (
                         <button
                           key={c.contractAddress}
-                          onClick={() => setSelectedCollection(c.contractAddress)}
+                          onClick={() => { setSelectedCollection(c.contractAddress); collectedPag.reset(); }}
                           className={`px-4 py-2 rounded-full text-xs font-headline font-bold uppercase tracking-widest border transition-all ${isActive
-                              ? "bg-primary/10 text-primary border-primary/30"
-                              : "text-on-surface-variant border-outline-variant/15 hover:border-outline"
+                            ? "bg-primary/10 text-primary border-primary/30"
+                            : "text-on-surface-variant border-outline-variant/15 hover:border-outline"
                             }`}
                         >
                           {c.name}
@@ -352,7 +350,7 @@ export default function ProfilePage() {
               )}
 
               {!isLoading && nfts.length > 0 && (
-                <div className="flex gap-3 sm:ml-auto">
+                <div className="flex gap-3 sm:ml-auto items-center">
                   <div className="relative">
                     <Search
                       size={14}
@@ -361,13 +359,13 @@ export default function ProfilePage() {
                     <input
                       type="text"
                       value={search}
-                      onChange={(e) => setSearch(e.target.value)}
+                      onChange={(e) => { setSearch(e.target.value); collectedPag.reset(); }}
                       placeholder="Search..."
                       className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-primary transition-all text-on-surface placeholder:text-on-surface-variant/50 w-48"
                     />
                     {search && (
                       <button
-                        onClick={() => setSearch("")}
+                        onClick={() => { setSearch(""); collectedPag.reset(); }}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface"
                       >
                         <X size={12} />
@@ -377,7 +375,7 @@ export default function ProfilePage() {
                   <div className="relative">
                     <select
                       value={sort}
-                      onChange={(e) => setSort(e.target.value as ProfileSortOption)}
+                      onChange={(e) => { setSort(e.target.value as ProfileSortOption); collectedPag.reset(); }}
                       className="appearance-none bg-surface-container border border-outline-variant/15 rounded-sm px-4 py-2 pr-8 text-sm focus:outline-none focus:border-primary cursor-pointer text-on-surface"
                     >
                       {(Object.keys(SORT_LABELS) as ProfileSortOption[]).map((key) => (
@@ -411,14 +409,14 @@ export default function ProfilePage() {
                         <th
                           key={h}
                           className={`pb-4 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold ${i === 2
-                              ? "text-right px-4"
-                              : i === 3 || i === 4
-                                ? "text-center px-4"
-                                : i === 5
-                                  ? "text-right pl-4"
-                                  : i === 1
-                                    ? "px-4"
-                                    : "pr-4"
+                            ? "text-right px-4"
+                            : i === 3 || i === 4
+                              ? "text-center px-4"
+                              : i === 5
+                                ? "text-right pl-4"
+                                : i === 1
+                                  ? "px-4"
+                                  : "pr-4"
                             }`}
                         >
                           {h}
@@ -530,8 +528,8 @@ export default function ProfilePage() {
                           <td className="py-5 px-4 text-center">
                             <span
                               className={`font-mono text-xs ${isUser(event.from)
-                                  ? "text-primary font-bold"
-                                  : "text-on-surface-variant"
+                                ? "text-primary font-bold"
+                                : "text-on-surface-variant"
                                 }`}
                             >
                               {isUser(event.from) ? "You" : shortAddr(event.from)}
@@ -542,8 +540,8 @@ export default function ProfilePage() {
                             {event.to ? (
                               <span
                                 className={`font-mono text-xs ${isUser(event.to)
-                                    ? "text-secondary font-bold"
-                                    : "text-on-surface-variant"
+                                  ? "text-secondary font-bold"
+                                  : "text-on-surface-variant"
                                   }`}
                               >
                                 {isUser(event.to) ? "You" : shortAddr(event.to)}
