@@ -90,7 +90,7 @@ const COLLECTION_1 = {
 const makeCollectionsMock = (
   collections: CollectionInfo[] = [COLLECTION_1], // Alterado de object[] para any[] para facilitar a tipagem
 ): MockedResponse => ({
-  request: { query: GET_COLLECTIONS },
+  request: { query: GET_COLLECTIONS, variables: { first: 100, skip: 0 } },
   result: {
     data: {
       // Garantimos que cada coleção injetada tenha o __typename
