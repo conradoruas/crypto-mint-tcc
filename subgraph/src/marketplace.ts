@@ -16,7 +16,7 @@ import {
 import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 import {
   getOrCreateStats,
-  getOrCreateCollectionStats,
+  getOrCreateCollectionStat,
   getOrCreateDailySnapshot,
 } from "./helpers";
 
@@ -60,8 +60,8 @@ export function handleItemListed(event: ItemListed): void {
   stats.totalListed = stats.totalListed.plus(BigInt.fromI32(1));
   stats.save();
 
-  // Ensure CollectionStats entity exists for this collection and update floor
-  let colStats = getOrCreateCollectionStats(
+  // Ensure CollectionStat entity exists for this collection and update floor
+  let colStats = getOrCreateCollectionStat(
     event.params.nftContract.toHexString(),
     event.block.timestamp
   );
@@ -128,7 +128,7 @@ export function handleItemSold(event: ItemSold): void {
 
   // Collection stats (with day-based 24h reset)
   let collectionId = event.params.nftContract.toHexString();
-  let colStats = getOrCreateCollectionStats(collectionId, event.block.timestamp);
+  let colStats = getOrCreateCollectionStat(collectionId, event.block.timestamp);
   colStats.totalSales = colStats.totalSales.plus(BigInt.fromI32(1));
   colStats.totalVolume = colStats.totalVolume.plus(event.params.price);
   colStats.sales24h = colStats.sales24h.plus(BigInt.fromI32(1));
@@ -177,7 +177,7 @@ export function handleListingCancelled(event: ListingCancelled): void {
     stats.save();
 
     // If the listing cancelled was exactly at the floor price, nullify floor
-    let colStats = getOrCreateCollectionStats(
+    let colStats = getOrCreateCollectionStat(
       event.params.nftContract.toHexString(),
       event.block.timestamp
     );
@@ -288,7 +288,7 @@ export function handleOfferAccepted(event: OfferAccepted): void {
 
   // Collection stats (with day-based 24h reset)
   let collectionId = event.params.nftContract.toHexString();
-  let colStats = getOrCreateCollectionStats(collectionId, event.block.timestamp);
+  let colStats = getOrCreateCollectionStat(collectionId, event.block.timestamp);
   colStats.totalSales = colStats.totalSales.plus(BigInt.fromI32(1));
   colStats.totalVolume = colStats.totalVolume.plus(event.params.amount);
   colStats.sales24h = colStats.sales24h.plus(BigInt.fromI32(1));

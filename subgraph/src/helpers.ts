@@ -1,7 +1,7 @@
 import { BigInt } from "@graphprotocol/graph-ts";
 import {
   MarketplaceStats,
-  CollectionStats,
+  CollectionStat,
   DailyCollectionSnapshot,
   Collection,
 } from "../generated/schema";
@@ -21,13 +21,13 @@ export function getOrCreateStats(): MarketplaceStats {
   return stats;
 }
 
-export function getOrCreateCollectionStats(
+export function getOrCreateCollectionStat(
   collectionId: string,
   timestamp: BigInt = BigInt.fromI32(0),
-): CollectionStats {
-  let stats = CollectionStats.load(collectionId);
+): CollectionStat {
+  let stats = CollectionStat.load(collectionId);
   if (!stats) {
-    stats = new CollectionStats(collectionId);
+    stats = new CollectionStat(collectionId);
     stats.collection = collectionId;
     stats.totalVolume = BigInt.fromI32(0);
     stats.totalSales = BigInt.fromI32(0);

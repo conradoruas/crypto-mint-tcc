@@ -40,7 +40,7 @@ dataSources:
         - Offer
         - ActivityEvent
         - MarketplaceStats
-        - CollectionStats
+        - CollectionStat
         - DailyCollectionSnapshot
       abis:
         - name: NFTMarketplace
