@@ -36,32 +36,32 @@ function EventRow({
   return (
     <tr className="group hover:bg-surface-container-low transition-colors">
       {/* Event type */}
-      <td className="py-6 pr-4">
-        <div className="flex items-center gap-3">
-          <span className={cfg.colorClass}>{cfg.icon}</span>
-          <span className="font-headline font-bold text-sm text-on-surface">
+      <td className="py-5 pr-3">
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <span className={`shrink-0 ${cfg.colorClass}`}>{cfg.icon}</span>
+          <span className="font-headline font-bold text-sm text-on-surface truncate">
             {cfg.label}
           </span>
         </div>
       </td>
 
       {/* Item */}
-      <td className="py-6 px-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-sm overflow-hidden bg-surface-container-high flex-shrink-0 relative">
+      <td className="py-5 px-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-sm overflow-hidden bg-surface-container-high shrink-0 relative">
             {meta?.image && (
               <Image
                 src={meta.image}
                 alt={meta.name || "NFT Image"}
                 fill
                 className="object-cover"
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                sizes="80px"
                 loading="eager"
               />
             )}
           </div>
-          <div>
-            <div className="font-headline font-bold text-on-surface text-sm leading-none">
+          <div className="min-w-0">
+            <div className="font-headline font-bold text-on-surface text-sm leading-none truncate">
               <Link
                 href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
                 className="hover:text-primary transition-colors"
@@ -70,7 +70,7 @@ function EventRow({
               </Link>
             </div>
             {collectionName && (
-              <div className="text-on-surface-variant text-xs mt-1 uppercase tracking-wider">
+              <div className="text-on-surface-variant text-xs mt-1 uppercase tracking-wider truncate">
                 {collectionName}
               </div>
             )}
@@ -79,9 +79,9 @@ function EventRow({
       </td>
 
       {/* Price */}
-      <td className="py-6 px-4 text-right">
+      <td className="py-5 px-3 text-right whitespace-nowrap">
         {event.priceETH ? (
-          <div className="font-headline font-bold text-on-surface">
+          <div className="font-headline font-bold text-on-surface text-sm">
             {parseFloat(event.priceETH).toFixed(4)} ETH
           </div>
         ) : (
@@ -90,16 +90,16 @@ function EventRow({
       </td>
 
       {/* From */}
-      <td className="py-6 px-4 text-center">
-        <span className="text-primary font-mono text-xs hover:underline cursor-pointer">
+      <td className="py-5 px-3 text-center">
+        <span className="text-primary font-mono text-xs hover:underline cursor-pointer whitespace-nowrap">
           {shortAddr(event.from)}
         </span>
       </td>
 
       {/* To */}
-      <td className="py-6 px-4 text-center">
+      <td className="py-5 px-3 text-center">
         {event.to ? (
-          <span className="text-secondary font-mono text-xs hover:underline cursor-pointer">
+          <span className="text-secondary font-mono text-xs hover:underline cursor-pointer whitespace-nowrap">
             {shortAddr(event.to)}
           </span>
         ) : (
@@ -108,14 +108,14 @@ function EventRow({
       </td>
 
       {/* Time + tx */}
-      <td className="py-6 pl-4 text-right">
-        <div className="flex items-center justify-end gap-2 text-on-surface-variant text-xs">
+      <td className="py-5 pl-3 text-right">
+        <div className="flex items-center justify-end gap-2 text-on-surface-variant text-xs whitespace-nowrap">
           <span>{formatTimeAgo(event.timestamp)}</span>
           <a
             href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-primary transition-colors"
+            className="hover:text-primary transition-colors shrink-0"
           >
             <ExternalLink size={12} />
           </a>
@@ -213,7 +213,7 @@ export default function ActivityPage() {
     metaMap.get(`${nftContract.toLowerCase()}-${tokenId}`);
 
   return (
-    <main className="min-h-screen bg-background text-on-surface">
+    <main className="min-h-screen bg-background text-on-surface overflow-x-hidden">
       <Navbar />
       <div className="pt-32 pb-20 px-8 max-w-[1920px] mx-auto min-h-screen">
         {/* Page Header */}
@@ -237,7 +237,7 @@ export default function ActivityPage() {
 
         {/* Filters */}
         <section className="mb-8 relative z-10">
-          <div className="flex items-center gap-2 pb-4 flex-wrap overflow-x-auto">
+          <div className="flex items-center gap-2 pb-4 flex-wrap">
             {/* Type pill filters */}
             <button
               onClick={() => setSelectedTypes([])}
@@ -295,7 +295,7 @@ export default function ActivityPage() {
                         setShowTypeFilter(false);
                         setPage(1);
                       }}
-                      className="w-full flex items-center px-4 py-3 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all border-b border-outline-variant/10"
+                      className="w-full flex items-center text-left px-4 py-3 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all border-b border-outline-variant/10"
                     >
                       All Collections
                     </button>
@@ -307,7 +307,7 @@ export default function ActivityPage() {
                           setShowTypeFilter(false);
                           setPage(1);
                         }}
-                        className={`w-full flex items-center px-4 py-3 text-sm transition-all border-b border-outline-variant/10 last:border-0 ${
+                        className={`w-full flex items-center text-left px-4 py-3 text-sm transition-all border-b border-outline-variant/10 last:border-0 ${
                           selectedCollection === c.contractAddress
                             ? "text-primary bg-primary/5"
                             : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
@@ -333,27 +333,35 @@ export default function ActivityPage() {
         )}
 
         {/* Ledger table */}
-        <div className="relative z-0 overflow-x-auto">
-          <div className="absolute -top-10 -right-10 w-64 h-64 bg-primary/5 blur-[100px] pointer-events-none" />
-          <table className="w-full text-left border-collapse">
+        <div className="relative z-0">
+          <div className="absolute -top-10 right-0 w-64 h-64 bg-primary/5 blur-[100px] pointer-events-none" />
+          <table className="w-full text-left border-collapse table-fixed">
+            <colgroup>
+              <col className="w-[14%]" />{/* Event */}
+              <col className="w-[28%]" />{/* Item */}
+              <col className="w-[14%]" />{/* Price */}
+              <col className="w-[14%]" />{/* From */}
+              <col className="w-[14%]" />{/* To */}
+              <col className="w-[16%]" />{/* Time */}
+            </colgroup>
             <thead>
               <tr className="border-b border-outline-variant/10">
-                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
+                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
                   Event
                 </th>
-                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
+                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
                   Item
                 </th>
-                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-right">
+                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-right">
                   Price
                 </th>
-                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-center">
+                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-center">
                   From
                 </th>
-                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-center">
+                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-center">
                   To
                 </th>
-                <th className="pb-6 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-right">
+                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-right">
                   Time
                 </th>
               </tr>
