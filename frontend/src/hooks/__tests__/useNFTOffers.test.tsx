@@ -43,9 +43,16 @@ const ADDR_BUYER_3 = ensureAddress(
 const TOKEN_ID = "1";
 const NOW = 1_700_000_000;
 
+// nowBucketed = Math.floor(NOW * 1000 / 60000) * 60
+const NOW_BUCKETED = Math.floor((NOW * 1000) / 60000) * 60;
+
 const mockRequest = {
   query: GET_OFFERS_FOR_NFT,
-  variables: { nftContract: CONTRACT.toLowerCase(), tokenId: TOKEN_ID },
+  variables: {
+    nftContract: CONTRACT.toLowerCase(),
+    tokenId: TOKEN_ID,
+    now: NOW_BUCKETED,
+  },
 };
 
 let dateSpy: ReturnType<typeof vi.spyOn>;
@@ -145,7 +152,7 @@ describe("useNFTOffers", () => {
     expect(result.current.offers[0]!.buyerAddress).toBe(ADDR_BUYER_1);
   });
 
-  it("prefers on-chain amount when buyer is in getOfferBuyers list", async () => {
+  it("uses subgraph data when SUBGRAPH_ENABLED (RPC disabled)", async () => {
     const mocks: MockedResponse[] = [
       {
         request: mockRequest,
@@ -165,6 +172,7 @@ describe("useNFTOffers", () => {
       },
     ];
 
+    // RPC mocks should be ignored when subgraph is enabled
     useReadContract.mockReturnValue({
       data: [ADDR_BUYER_1],
       refetch: vi.fn(),
@@ -184,14 +192,15 @@ describe("useNFTOffers", () => {
       wrapper: makeApolloWrapper(mocks),
     });
 
+    // Should use subgraph amount, not on-chain
     await waitFor(() =>
       expect(result.current.offers[0]?.amount).toBe(
-        BigInt("777000000000000000"),
+        BigInt("100000000000000000"),
       ),
     );
   });
 
-  it("drops indexer row when chain lists buyer but offer inactive", async () => {
+  it("keeps subgraph offer when RPC is disabled (subgraph enabled)", async () => {
     const mocks: MockedResponse[] = [
       {
         request: mockRequest,
@@ -211,6 +220,7 @@ describe("useNFTOffers", () => {
       },
     ];
 
+    // RPC says inactive, but should be ignored when subgraph is enabled
     useReadContract.mockReturnValue({
       data: [ADDR_BUYER_1],
       refetch: vi.fn(),
@@ -233,7 +243,8 @@ describe("useNFTOffers", () => {
       wrapper: makeApolloWrapper(mocks),
     });
 
-    await waitFor(() => expect(result.current.offers).toHaveLength(0));
+    // Subgraph offer is kept because RPC is not used for verification
+    await waitFor(() => expect(result.current.offers).toHaveLength(1));
   });
 
   it("returns only non-expired indexer offers", async () => {

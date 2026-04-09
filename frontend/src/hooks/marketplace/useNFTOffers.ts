@@ -124,6 +124,10 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   const nftAddr = ensureAddress(nftContract);
   const tokenIdBn = BigInt(tokenId || "0");
 
+  // Round 'now' to 60s buckets to keep the Apollo cache stable
+   
+  const nowBucketed = useMemo(() => Math.floor(Date.now() / 60000) * 60, []);
+
   // ── Subgraph path ──
   type GqlOffersData = { offers: GqlOfferRow[] };
   const {
@@ -135,6 +139,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     variables: {
       nftContract: nftContract?.toLowerCase() ?? "",
       tokenId,
+      now: nowBucketed,
     },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
@@ -148,7 +153,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   );
 
   // ── RPC fallback ──
-  const rpcEnabled = enabled;
+  const rpcEnabled = enabled && !SUBGRAPH_ENABLED;
 
   const { data: buyersRaw, refetch: refetchBuyers } = useReadContract({
     address: MARKETPLACE_ADDRESS,
@@ -202,31 +207,11 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
 
   // ── Unified result ──
   const offers = useMemo(() => {
-    if (!SUBGRAPH_ENABLED) return rpcOffers;
+    const list = SUBGRAPH_ENABLED ? indexerRows : rpcOffers;
 
-    const checkedOnChain = new Set(buyerAddresses.map((a) => a.toLowerCase()));
-    const merged = new Map<string, OfferWithBuyer>();
-
-    // 1. Initial set from the indexer (baseline)
-    indexerRows.forEach((o) => {
-      const addr = o.buyerAddress.toLowerCase();
-      // Only keep the indexer version if we haven't checked this buyer on-chain
-      if (!checkedOnChain.has(addr)) {
-        merged.set(addr, o);
-      }
-    });
-
-    // 2. Override with RPC data (the source of truth)
-    rpcOffers.forEach((o) => {
-      merged.set(o.buyerAddress.toLowerCase(), o);
-    });
-
-    const list = Array.from(merged.values())
-      .filter((o) => !userAddress || o.buyerAddress.toLowerCase() !== userAddress)
-      .sort((a, b) => (a.amount === b.amount ? 0 : a.amount > b.amount ? -1 : 1));
-
-    return list;
-  }, [indexerRows, rpcOffers, buyerAddresses, userAddress]);
+    if (!userAddress) return list;
+    return list.filter((o) => o.buyerAddress.toLowerCase() !== userAddress);
+  }, [indexerRows, rpcOffers, userAddress]);
 
   const refetch = useCallback(() => {
     if (SUBGRAPH_ENABLED) {
