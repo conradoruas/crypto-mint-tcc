@@ -206,12 +206,33 @@ describe("useCollections", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// useCollectionNFTs
+// useCollectionNFTs (subgraph path — SUBGRAPH_ENABLED is true in test env)
 // ─────────────────────────────────────────────────────────────────────────────
+
+vi.mock("@/lib/apolloClient", () => ({
+  apolloClient: { query: vi.fn() },
+}));
+
+import { apolloClient } from "@/lib/apolloClient";
+const mockApolloQuery = vi.mocked(apolloClient.query);
+
+/** Helper: build a subgraph response for apolloClient.query() */
+function subgraphResponse(
+  nfts: { tokenId: string; tokenUri?: string }[],
+  totalSupply: number = nfts.length,
+) {
+  return {
+    data: {
+      collection: { totalSupply: String(totalSupply) },
+      nfts: nfts.map((n) => ({ id: `nft-${n.tokenId}`, ...n })),
+    },
+  };
+}
 
 describe("useCollectionNFTs", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
+    mockApolloQuery.mockReset();
   });
 
   afterEach(() => {
@@ -225,18 +246,16 @@ describe("useCollectionNFTs", () => {
     expect(result.current.nfts).toHaveLength(0);
   });
 
-  it("maps Alchemy NFT response to CollectionNFTItem list", async () => {
+  it("maps subgraph NFT response to CollectionNFTItem list", async () => {
+    mockApolloQuery.mockResolvedValue(
+      subgraphResponse([{ tokenId: "1", tokenUri: "https://meta.json" }]),
+    );
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
-        nfts: [
-          {
-            tokenId: "1",
-            name: "NFT One",
-            description: "First NFT",
-            image: { cachedUrl: "https://example.com/nft1.png" },
-          },
-        ],
+        name: "NFT One",
+        description: "First NFT",
+        image: "https://example.com/nft1.png",
       }),
     } as Response);
 
@@ -252,12 +271,13 @@ describe("useCollectionNFTs", () => {
     expect(result.current.nfts[0].nftContract).toBe(ADDR_COL1);
   });
 
-  it("falls back to 'NFT #<id>' when NFT has no name", async () => {
+  it("falls back to 'NFT #<id>' when metadata has no name", async () => {
+    mockApolloQuery.mockResolvedValue(
+      subgraphResponse([{ tokenId: "42", tokenUri: "https://meta42.json" }]),
+    );
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
-      json: async () => ({
-        nfts: [{ tokenId: "42", image: { cachedUrl: "https://img.png" } }],
-      }),
+      json: async () => ({ image: "https://img.png" }),
     } as Response);
 
     const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
@@ -267,35 +287,14 @@ describe("useCollectionNFTs", () => {
     expect(result.current.nfts[0].name).toBe("NFT #42");
   });
 
-  it("uses originalUrl when cachedUrl is absent", async () => {
+  it("resolves IPFS image from metadata", async () => {
+    mockApolloQuery.mockResolvedValue(
+      subgraphResponse([{ tokenId: "1", tokenUri: "ipfs://QmHash" }]),
+    );
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
-      json: async () => ({
-        nfts: [
-          { tokenId: "1", image: { originalUrl: "https://original.png" } },
-        ],
-      }),
+      json: async () => ({ image: "ipfs://QmImg" }),
     } as Response);
-
-    const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.nfts[0].image).toBe("https://original.png");
-  });
-
-  it("fetches metadata from IPFS tokenUri when image is absent", async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          nfts: [{ tokenId: "1", tokenUri: "ipfs://QmHash" }],
-        }),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ image: "ipfs://QmImg" }),
-      } as Response);
 
     const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
 
@@ -304,30 +303,45 @@ describe("useCollectionNFTs", () => {
     expect(result.current.nfts[0].image).toBe("https://ipfs.io/ipfs/QmImg");
   });
 
-  it("sets totalSupply to the count of returned NFTs", async () => {
+  it("falls back to NFT name when tokenUri fetch fails", async () => {
+    mockApolloQuery.mockResolvedValue(
+      subgraphResponse([{ tokenId: "1", tokenUri: "https://broken" }]),
+    );
+    vi.mocked(fetch).mockRejectedValue(new Error("network"));
+
+    const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.nfts[0].name).toBe("NFT #1");
+    expect(result.current.nfts[0].image).toBe("");
+  });
+
+  it("sets totalSupply from the collection entity", async () => {
+    mockApolloQuery.mockResolvedValue(
+      subgraphResponse(
+        [
+          { tokenId: "1", tokenUri: "https://a.json" },
+          { tokenId: "2", tokenUri: "https://b.json" },
+          { tokenId: "3", tokenUri: "https://c.json" },
+        ],
+        10,
+      ),
+    );
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
-      json: async () => ({
-        nfts: [
-          { tokenId: "1", image: { cachedUrl: "https://a.png" } },
-          { tokenId: "2", image: { cachedUrl: "https://b.png" } },
-          { tokenId: "3", image: { cachedUrl: "https://c.png" } },
-        ],
-      }),
+      json: async () => ({ name: "N", image: "https://i.png" }),
     } as Response);
 
     const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.totalSupply).toBe(3);
+    expect(result.current.totalSupply).toBe(10);
   });
 
-  it("returns empty nfts array when response has no nfts", async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      json: async () => ({ nfts: [] }),
-    } as Response);
+  it("returns empty nfts array when subgraph returns no nfts", async () => {
+    mockApolloQuery.mockResolvedValue(subgraphResponse([], 0));
 
     const { result } = renderHook(() => useCollectionNFTs(ADDR_COL1));
 
