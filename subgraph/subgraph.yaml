@@ -28,9 +28,9 @@ dataSources:
     name: NFTMarketplace
     network: sepolia
     source:
-      address: "0xa04EBb648a56332EFA07c369eeF5fCa26Aa0A36C"
+      address: "0xd327c94ce95C99f5cFBf186B4a0988395ECA045F"
       abi: NFTMarketplace
-      startBlock: 10510120
+      startBlock: 10625041
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -58,6 +58,8 @@ dataSources:
           handler: handleOfferAccepted
         - event: OfferCancelled(indexed address,indexed uint256,indexed address)
           handler: handleOfferCancelled
+        - event: OfferExpiredRefund(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleOfferExpiredRefund
       file: ./src/marketplace.ts
 
 templates:
