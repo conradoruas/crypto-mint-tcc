@@ -132,11 +132,13 @@ export function useExploreNFTs(
     refetch: refetchGql,
   } = useQuery<GqlNFTsData>(GET_NFTS_FOR_CONTRACT, {
     skip: !collectionAddress,
-    variables: { 
-      collection: collectionAddress?.toLowerCase(), 
-      first: pageSize, 
+    variables: {
+      first: pageSize,
       skip,
-      now: nowBucketed
+      where: { collection: collectionAddress?.toLowerCase() },
+      orderBy: "tokenId",
+      orderDirection: "asc",
+      now: nowBucketed,
     },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
@@ -245,13 +247,12 @@ export function useExploreAllNFTs(
     refetch: refetchNfts,
   } = useQuery<GqlNFTsData>(collectionAddress ? GET_NFTS_FOR_CONTRACT : GET_ALL_NFTS, {
     variables: {
-      collection: collectionAddress?.toLowerCase(),
       first: pageSize + 1,
       skip,
       where,
       orderBy,
       orderDirection,
-      now: nowBucketed
+      now: nowBucketed,
     },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",

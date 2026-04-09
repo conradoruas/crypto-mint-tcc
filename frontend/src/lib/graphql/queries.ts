@@ -78,7 +78,6 @@ export const GET_ACTIVITY_FEED_ALL = gql`
 
 export const GET_NFTS_FOR_CONTRACT = gql`
   query GetNFTsForContract(
-    $collection: String!
     $first: Int!
     $skip: Int!
     $orderBy: NFT_orderBy
@@ -217,9 +216,9 @@ export const GET_LISTING = gql`
 
 /** Primary list for the asset UI (fast); RPC reconciles rows when `getOfferBuyers` / `getOffer` return. */
 export const GET_OFFERS_FOR_NFT = gql`
-  query GetOffersForNFT($nftContract: Bytes!, $tokenId: BigInt!) {
+  query GetOffersForNFT($nftContract: Bytes!, $tokenId: BigInt!, $now: BigInt!) {
     offers(
-      where: { nftContract: $nftContract, tokenId: $tokenId, active: true }
+      where: { nftContract: $nftContract, tokenId: $tokenId, active: true, expiresAt_gt: $now }
       orderBy: amount
       orderDirection: desc
     ) {
@@ -269,6 +268,35 @@ export const GET_MARKETPLACE_STATS = gql`
  * The subgraph now maintains volume24h/sales24h with proper day-based resets
  * and DailyCollectionSnapshot entities for accurate historical aggregation.
  */
+export const GET_COLLECTION_WITH_NFTS = gql`
+  query GetCollectionWithNFTs($id: ID!, $first: Int!, $skip: Int!) {
+    collection(id: $id) {
+      id
+      contractAddress
+      creator
+      name
+      symbol
+      description
+      image
+      maxSupply
+      mintPrice
+      totalSupply
+    }
+    nfts(
+      where: { collection: $id }
+      first: $first
+      skip: $skip
+      orderBy: tokenId
+      orderDirection: asc
+    ) {
+      id
+      tokenId
+      tokenUri
+      owner
+    }
+  }
+`;
+
 export const GET_COLLECTION_STATS_RANKED = gql`
   query GetCollectionStatRanked($first: Int!) {
     collectionStats(first: $first, orderBy: volume24h, orderDirection: desc) {
