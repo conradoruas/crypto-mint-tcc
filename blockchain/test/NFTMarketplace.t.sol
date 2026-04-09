@@ -697,6 +697,99 @@ contract NFTMarketplaceTest is Test {
     }
 
     // ─────────────────────────────────────────────
+    // Marketplace — Auto-refund oferta expirada via makeOffer
+    // ─────────────────────────────────────────────
+
+    function test_makeOffer_autoRefundsExpiredOffer() public {
+        uint256 tokenId = _mintNFT(seller);
+
+        // Buyer faz oferta inicial
+        vm.prank(buyer);
+        marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
+
+        // Avança 8 dias (oferta expira em 7)
+        vm.warp(block.timestamp + 8 days);
+
+        uint256 buyerBefore    = buyer.balance;
+        uint256 contractBefore = address(marketplace).balance;
+        uint256 newOfferAmount = 0.05 ether;
+
+        // Buyer faz nova oferta — a expirada deve ser reembolsada automaticamente
+        vm.prank(buyer);
+        marketplace.makeOffer{value: newOfferAmount}(address(collection), tokenId);
+
+        // Oferta antiga foi desativada, nova está ativa
+        NFTMarketplace.Offer memory offer = marketplace.getOffer(address(collection), tokenId, buyer);
+        assertTrue(offer.active);
+        assertEq(offer.amount, newOfferAmount);
+
+        // Buyer recebeu o refund da oferta antiga (saldo = antes + refund - nova oferta)
+        assertApproxEqAbs(buyer.balance, buyerBefore + OFFER_AMOUNT - newOfferAmount, 0.001 ether);
+
+        // Contrato: perdeu a oferta antiga, ganhou a nova
+        assertEq(address(marketplace).balance, contractBefore - OFFER_AMOUNT + newOfferAmount);
+    }
+
+    function test_makeOffer_autoRefundEmitsEvent() public {
+        uint256 tokenId = _mintNFT(seller);
+
+        vm.prank(buyer);
+        marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
+
+        vm.warp(block.timestamp + 8 days);
+
+        // Deve emitir OfferExpiredRefund antes do OfferMade
+        vm.expectEmit(true, true, true, true);
+        emit NFTMarketplace.OfferExpiredRefund(address(collection), tokenId, buyer, OFFER_AMOUNT);
+        vm.prank(buyer);
+        marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
+    }
+
+    function test_makeOffer_revertsIfActiveOfferNotExpired() public {
+        uint256 tokenId = _mintNFT(seller);
+
+        vm.prank(buyer);
+        marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
+
+        // Avança apenas 3 dias — oferta ainda ativa
+        vm.warp(block.timestamp + 3 days);
+
+        vm.prank(buyer);
+        vm.expectRevert("You already have an active offer on this NFT");
+        marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
+    }
+
+    function test_makeOffer_autoRefundThenNewOfferCanBeAccepted() public {
+        uint256 tokenId = _mintNFT(seller);
+
+        // Oferta inicial
+        vm.prank(buyer);
+        marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
+
+        // Expira
+        vm.warp(block.timestamp + 8 days);
+
+        // Nova oferta (auto-refund da antiga)
+        uint256 newOfferAmount = 0.04 ether;
+        vm.prank(buyer);
+        marketplace.makeOffer{value: newOfferAmount}(address(collection), tokenId);
+
+        // Seller aceita a nova oferta
+        uint256 sellerBefore = seller.balance;
+        vm.startPrank(seller);
+        collection.setApprovalForAll(address(marketplace), true);
+        marketplace.acceptOffer(address(collection), tokenId, buyer);
+        vm.stopPrank();
+
+        // NFT transferido, oferta desativada
+        assertEq(collection.ownerOf(tokenId), buyer);
+        assertFalse(marketplace.getOffer(address(collection), tokenId, buyer).active);
+
+        uint256 fee = (newOfferAmount * FEE_BPS) / 10000;
+        assertEq(seller.balance, sellerBefore + newOfferAmount - fee);
+    }
+
+    // ─────────────────────────────────────────────
     // Admin
     // ─────────────────────────────────────────────
 

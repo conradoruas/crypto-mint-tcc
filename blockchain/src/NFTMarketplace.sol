@@ -60,6 +60,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     event OfferMade(address indexed nftContract, uint256 indexed tokenId, address indexed buyer, uint256 amount, uint256 expiresAt);
     event OfferAccepted(address indexed nftContract, uint256 indexed tokenId, address seller, address buyer, uint256 amount);
     event OfferCancelled(address indexed nftContract, uint256 indexed tokenId, address indexed buyer);
+    event OfferExpiredRefund(address indexed nftContract, uint256 indexed tokenId, address indexed buyer, uint256 amount);
     event MarketplaceFeeUpdated(uint256 oldFee, uint256 newFee);
 
     // ─────────────────────────────────────────────
@@ -176,7 +177,20 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         require(nft.ownerOf(tokenId) != address(0), "Token does not exist");
         require(msg.value >= 0.0001 ether, "Minimum offer is 0.0001 ETH");
         require(nft.ownerOf(tokenId) != msg.sender, "Owner cannot offer on own NFT");
-        require(!offers[nftContract][tokenId][msg.sender].active, "You already have an active offer on this NFT");
+
+        // Auto-refund expired offer: if the caller has an active but expired
+        // offer, refund it automatically so a new offer can be placed.
+        Offer memory existing = offers[nftContract][tokenId][msg.sender];
+        if (existing.active) {
+            require(block.timestamp > existing.expiresAt, "You already have an active offer on this NFT");
+
+            delete offers[nftContract][tokenId][msg.sender];
+
+            (bool refunded, ) = payable(msg.sender).call{value: existing.amount}("");
+            require(refunded, "Expired offer refund failed");
+
+            emit OfferExpiredRefund(nftContract, tokenId, msg.sender, existing.amount);
+        }
 
         uint256 expiresAt = block.timestamp + OFFER_DURATION;
 
