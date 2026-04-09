@@ -4,6 +4,7 @@ import {
   CollectionStat,
   DailyCollectionSnapshot,
   Collection,
+  Listing,
 } from "../generated/schema";
 
 const SECONDS_PER_DAY = 86400;
@@ -35,6 +36,7 @@ export function getOrCreateCollectionStat(
     stats.sales24h = BigInt.fromI32(0);
     stats.lastUpdated = timestamp;
     stats.floorPrice = null;
+    stats.activeListingIds = [];
 
     // Link Collection.stats so queries from the Collection side also work
     let collection = Collection.load(collectionId);
@@ -55,6 +57,35 @@ export function getOrCreateCollectionStat(
     }
   }
   return stats;
+}
+
+export function addActiveListing(colStats: CollectionStat, listingId: string): void {
+  let ids = colStats.activeListingIds;
+  ids.push(listingId);
+  colStats.activeListingIds = ids;
+}
+
+export function removeActiveListingAndRecalcFloor(colStats: CollectionStat, listingId: string): void {
+  let ids = colStats.activeListingIds;
+  let newIds: string[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    if (ids[i] != listingId) {
+      newIds.push(ids[i]);
+    }
+  }
+  colStats.activeListingIds = newIds;
+
+  // Recalculate floor from remaining active listings
+  let floor: BigInt | null = null;
+  for (let i = 0; i < newIds.length; i++) {
+    let listing = Listing.load(newIds[i]);
+    if (listing && listing.active) {
+      if (!floor || listing.price.lt(floor!)) {
+        floor = listing.price;
+      }
+    }
+  }
+  colStats.floorPrice = floor;
 }
 
 export function getOrCreateDailySnapshot(

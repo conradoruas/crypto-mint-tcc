@@ -84,6 +84,7 @@ type CollectionStat @entity {
   volume24h: BigInt!
   sales24h: BigInt!
   lastUpdated: BigInt!
+  activeListingIds: [String!]!
 }
 
 type DailyCollectionSnapshot @entity {

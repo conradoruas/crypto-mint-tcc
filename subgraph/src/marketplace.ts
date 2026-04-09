@@ -5,19 +5,21 @@ import {
   OfferMade,
   OfferAccepted,
   OfferCancelled,
+  OfferExpiredRefund,
 } from "../generated/NFTMarketplace/NFTMarketplace";
 import {
   NFT,
   Listing,
   Offer,
   ActivityEvent,
-  Collection,
 } from "../generated/schema";
 import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 import {
   getOrCreateStats,
   getOrCreateCollectionStat,
   getOrCreateDailySnapshot,
+  addActiveListing,
+  removeActiveListingAndRecalcFloor,
 } from "./helpers";
 
 export function handleItemListed(event: ItemListed): void {
@@ -60,11 +62,12 @@ export function handleItemListed(event: ItemListed): void {
   stats.totalListed = stats.totalListed.plus(BigInt.fromI32(1));
   stats.save();
 
-  // Ensure CollectionStat entity exists for this collection and update floor
+  // Track active listing and update floor price
   let colStats = getOrCreateCollectionStat(
     event.params.nftContract.toHexString(),
     event.block.timestamp
   );
+  addActiveListing(colStats, id);
   if (!colStats.floorPrice || event.params.price.lt(colStats.floorPrice!)) {
     colStats.floorPrice = event.params.price;
   }
@@ -134,10 +137,8 @@ export function handleItemSold(event: ItemSold): void {
   colStats.sales24h = colStats.sales24h.plus(BigInt.fromI32(1));
   colStats.volume24h = colStats.volume24h.plus(event.params.price);
 
-  // If the listing sold was exactly at the floor price, nullify floor so it gets recalculated on next listing
-  if (colStats.floorPrice && event.params.price.equals(colStats.floorPrice!)) {
-    colStats.floorPrice = null;
-  }
+  // Remove sold listing and recalculate floor from remaining active listings
+  removeActiveListingAndRecalcFloor(colStats, id);
 
   colStats.save();
 
@@ -176,18 +177,13 @@ export function handleListingCancelled(event: ListingCancelled): void {
     stats.totalListed = stats.totalListed.minus(BigInt.fromI32(1));
     stats.save();
 
-    // If the listing cancelled was exactly at the floor price, nullify floor
+    // Remove cancelled listing and recalculate floor from remaining active listings
     let colStats = getOrCreateCollectionStat(
       event.params.nftContract.toHexString(),
       event.block.timestamp
     );
-    if (
-      colStats.floorPrice &&
-      listing.price.equals(colStats.floorPrice!)
-    ) {
-      colStats.floorPrice = null;
-      colStats.save();
-    }
+    removeActiveListingAndRecalcFloor(colStats, id);
+    colStats.save();
   }
 
   let nft = NFT.load(id);
@@ -294,9 +290,9 @@ export function handleOfferAccepted(event: OfferAccepted): void {
   colStats.sales24h = colStats.sales24h.plus(BigInt.fromI32(1));
   colStats.volume24h = colStats.volume24h.plus(event.params.amount);
 
-  // If the offer accepted was on an item sitting at the floor price, nullify floor
-  if (listing && colStats.floorPrice && listing.price.equals(colStats.floorPrice!)) {
-    colStats.floorPrice = null;
+  // If there was an active listing, remove it and recalculate floor
+  if (hadActiveListing) {
+    removeActiveListingAndRecalcFloor(colStats, nftId);
   }
 
   colStats.save();
@@ -329,6 +325,34 @@ export function handleOfferCancelled(event: OfferCancelled): void {
   act.nftContract = event.params.nftContract;
   act.tokenId = event.params.tokenId;
   act.from = event.params.buyer;
+  act.timestamp = event.block.timestamp;
+  act.blockNumber = event.block.number;
+  act.txHash = event.transaction.hash;
+  act.save();
+}
+
+export function handleOfferExpiredRefund(event: OfferExpiredRefund): void {
+  let id =
+    event.params.nftContract.toHexString() +
+    "-" +
+    event.params.tokenId.toString() +
+    "-" +
+    event.params.buyer.toHexString();
+
+  let offer = Offer.load(id);
+  if (offer) {
+    offer.active = false;
+    offer.save();
+  }
+
+  let actId =
+    event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+  let act = new ActivityEvent(actId);
+  act.type = "offer_expired_refund";
+  act.nftContract = event.params.nftContract;
+  act.tokenId = event.params.tokenId;
+  act.from = event.params.buyer;
+  act.price = event.params.amount;
   act.timestamp = event.block.timestamp;
   act.blockNumber = event.block.number;
   act.txHash = event.transaction.hash;
