@@ -135,6 +135,13 @@ contract NFTCollection is ERC721, ERC2981, Ownable {
 
         _safeMint(to, tokenId);
 
+        // Refund excess ETH
+        uint256 excess = msg.value - mintPrice;
+        if (excess > 0) {
+            (bool refunded, ) = payable(msg.sender).call{value: excess}("");
+            require(refunded, "Excess refund failed");
+        }
+
         emit NFTMinted(to, tokenId, chosenUri);
     }
 

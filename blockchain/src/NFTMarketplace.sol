@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IERC2981} from "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -23,22 +24,29 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     /// @notice Platform fee charged on every sale (basis points, e.g. 250 = 2.5%)
     uint256 public marketplaceFee = 250;
 
+    /// @notice Accumulated platform fees available for withdrawal (separate from escrow)
+    uint256 public accumulatedFees;
+
     /// @notice Default offer validity period
     uint256 public constant OFFER_DURATION = 7 days;
 
-    /// @notice On-chain listing data
+    /// @notice On-chain listing data (packed: 2 storage slots)
+    /// Slot 1: seller (20 bytes) + active (1 byte) = 21 bytes
+    /// Slot 2: price  (16 bytes, uint128 supports up to ~3.4e38 wei ≈ 340B ETH)
     struct Listing {
-        address seller;
-        uint256 price;
-        bool    active;
+        address seller;   // 20 bytes ─┐
+        bool    active;   //  1 byte  ─┘ slot 1
+        uint128 price;    // 16 bytes ── slot 2
     }
 
-    /// @notice On-chain offer data (buyer ETH is held in escrow)
+    /// @notice On-chain offer data — buyer ETH is held in escrow (packed: 2 storage slots)
+    /// Slot 1: buyer (20 bytes) + active (1 byte) + expiresAt (8 bytes) = 29 bytes
+    /// Slot 2: amount (16 bytes, uint128)
     struct Offer {
-        address buyer;
-        uint256 amount;
-        uint256 expiresAt;
-        bool    active;
+        address buyer;      // 20 bytes ─┐
+        bool    active;     //  1 byte   │ slot 1
+        uint64  expiresAt;  //  8 bytes ─┘
+        uint128 amount;     // 16 bytes ── slot 2
     }
 
     /// @notice nftContract => tokenId => Listing
@@ -49,6 +57,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
     /// @notice nftContract => tokenId => list of buyers that have placed offers
     mapping(address => mapping(uint256 => address[])) private _offerBuyers;
+
+    /// @notice Tracks whether a buyer is already in _offerBuyers to prevent duplicates
+    mapping(address => mapping(uint256 => mapping(address => bool))) private _isOfferBuyer;
 
     // ─────────────────────────────────────────────
     // Events
@@ -62,6 +73,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     event OfferCancelled(address indexed nftContract, uint256 indexed tokenId, address indexed buyer);
     event OfferExpiredRefund(address indexed nftContract, uint256 indexed tokenId, address indexed buyer, uint256 amount);
     event MarketplaceFeeUpdated(uint256 oldFee, uint256 newFee);
+    event FeesWithdrawn(address indexed owner, uint256 amount);
 
     // ─────────────────────────────────────────────
     // Constructor
@@ -78,6 +90,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     /// @param tokenId     Token ID to list.
     /// @param price       Asking price in wei (minimum 0.0001 ETH).
     function listItem(address nftContract, uint256 tokenId, uint256 price) external {
+        require(
+            IERC165(nftContract).supportsInterface(type(IERC721).interfaceId),
+            "Contract does not support ERC-721"
+        );
         IERC721 nft = IERC721(nftContract);
 
         require(nft.ownerOf(tokenId) == msg.sender, "Not the NFT owner");
@@ -90,8 +106,8 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
         listings[nftContract][tokenId] = Listing({
             seller: msg.sender,
-            price:  price,
-            active: true
+            active: true,
+            price:  uint128(price)
         });
 
         emit ItemListed(nftContract, tokenId, msg.sender, price);
@@ -113,24 +129,32 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
         delete listings[nftContract][tokenId];
 
-        (, uint256 royaltyFee, uint256 sellerProceeds) =
+        (uint256 marketFee, uint256 royaltyFee, address royaltyReceiver, uint256 sellerProceeds) =
             _calculateFees(nftContract, tokenId, listing.price);
 
-        // Transfer NFT
-        IERC721(nftContract).transferFrom(listing.seller, msg.sender, tokenId);
+        // Track platform fees separately from escrow
+        accumulatedFees += marketFee;
+
+        // Transfer NFT (safe transfer to prevent locking in non-receiver contracts)
+        IERC721(nftContract).safeTransferFrom(listing.seller, msg.sender, tokenId);
 
         // Pay seller
         (bool sellerPaid, ) = payable(listing.seller).call{value: sellerProceeds}("");
         require(sellerPaid, "Seller payment failed");
 
-        // Pay royalties
+        // Pay royalties — if transfer fails, return royalty to seller instead of trapping ETH
         if (royaltyFee > 0) {
-            try IERC2981(nftContract).royaltyInfo(tokenId, listing.price) returns (address receiver, uint256) {
-                if (receiver != address(0)) {
-                    (bool royaltyPaid, ) = payable(receiver).call{value: royaltyFee}("");
-                    require(royaltyPaid, "Royalty payment failed");
+            if (royaltyReceiver != address(0)) {
+                (bool royaltyPaid, ) = payable(royaltyReceiver).call{value: royaltyFee}("");
+                if (!royaltyPaid) {
+                    (bool fallbackPaid, ) = payable(listing.seller).call{value: royaltyFee}("");
+                    require(fallbackPaid, "Royalty fallback to seller failed");
                 }
-            } catch {}
+            } else {
+                // No valid receiver — return royalty portion to seller
+                (bool fallbackPaid, ) = payable(listing.seller).call{value: royaltyFee}("");
+                require(fallbackPaid, "Royalty fallback to seller failed");
+            }
         }
 
         // Refund excess
@@ -172,11 +196,16 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     /// @param nftContract Address of the ERC-721 collection contract.
     /// @param tokenId     Token ID.
     function makeOffer(address nftContract, uint256 tokenId) external payable nonReentrant {
+        require(
+            IERC165(nftContract).supportsInterface(type(IERC721).interfaceId),
+            "Contract does not support ERC-721"
+        );
         IERC721 nft = IERC721(nftContract);
 
-        require(nft.ownerOf(tokenId) != address(0), "Token does not exist");
+        address tokenOwner = nft.ownerOf(tokenId);
+        require(tokenOwner != address(0), "Token does not exist");
         require(msg.value >= 0.0001 ether, "Minimum offer is 0.0001 ETH");
-        require(nft.ownerOf(tokenId) != msg.sender, "Owner cannot offer on own NFT");
+        require(tokenOwner != msg.sender, "Owner cannot offer on own NFT");
 
         // Auto-refund expired offer: if the caller has an active but expired
         // offer, refund it automatically so a new offer can be placed.
@@ -196,12 +225,15 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
         offers[nftContract][tokenId][msg.sender] = Offer({
             buyer:     msg.sender,
-            amount:    msg.value,
-            expiresAt: expiresAt,
-            active:    true
+            active:    true,
+            expiresAt: uint64(expiresAt),
+            amount:    uint128(msg.value)
         });
 
-        _offerBuyers[nftContract][tokenId].push(msg.sender);
+        if (!_isOfferBuyer[nftContract][tokenId][msg.sender]) {
+            _offerBuyers[nftContract][tokenId].push(msg.sender);
+            _isOfferBuyer[nftContract][tokenId][msg.sender] = true;
+        }
 
         emit OfferMade(nftContract, tokenId, msg.sender, msg.value, expiresAt);
     }
@@ -235,23 +267,31 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
             emit ListingCancelled(nftContract, tokenId, msg.sender);
         }
 
-        (, uint256 royaltyFee, uint256 sellerProceeds) =
+        (uint256 marketFee, uint256 royaltyFee, address royaltyReceiver, uint256 sellerProceeds) =
             _calculateFees(nftContract, tokenId, offer.amount);
 
-        nft.transferFrom(msg.sender, buyer, tokenId);
+        // Track platform fees separately from escrow
+        accumulatedFees += marketFee;
+
+        // Transfer NFT (safe transfer to prevent locking in non-receiver contracts)
+        nft.safeTransferFrom(msg.sender, buyer, tokenId);
 
         // Pay seller
         (bool sellerPaid, ) = payable(msg.sender).call{value: sellerProceeds}("");
         require(sellerPaid, "Seller payment failed");
 
-        // Pay royalties
+        // Pay royalties — if transfer fails, return royalty to seller instead of trapping ETH
         if (royaltyFee > 0) {
-            try IERC2981(nftContract).royaltyInfo(tokenId, offer.amount) returns (address receiver, uint256) {
-                if (receiver != address(0)) {
-                    (bool royaltyPaid, ) = payable(receiver).call{value: royaltyFee}("");
-                    require(royaltyPaid, "Royalty payment failed");
+            if (royaltyReceiver != address(0)) {
+                (bool royaltyPaid, ) = payable(royaltyReceiver).call{value: royaltyFee}("");
+                if (!royaltyPaid) {
+                    (bool fallbackPaid, ) = payable(msg.sender).call{value: royaltyFee}("");
+                    require(fallbackPaid, "Royalty fallback to seller failed");
                 }
-            } catch {}
+            } else {
+                (bool fallbackPaid, ) = payable(msg.sender).call{value: royaltyFee}("");
+                require(fallbackPaid, "Royalty fallback to seller failed");
+            }
         }
 
         emit OfferAccepted(nftContract, tokenId, msg.sender, buyer, offer.amount);
@@ -291,7 +331,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         (bool refunded, ) = payable(buyer).call{value: offer.amount}("");
         require(refunded, "Refund failed");
 
-        emit OfferCancelled(nftContract, tokenId, buyer);
+        emit OfferExpiredRefund(nftContract, tokenId, buyer, offer.amount);
     }
 
     // ─────────────────────────────────────────────
@@ -317,23 +357,26 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     // Internal
     // ─────────────────────────────────────────────
 
-    /// @notice Calculates marketplace fees and ERC-2981 royalties.
+    /// @notice Calculates marketplace fees and ERC-2981 royalties in a single call.
     /// @param nftContract Address of the ERC-721 collection.
     /// @param tokenId     Token ID (needed for royaltyInfo call).
     /// @param salePrice   Total sale price in wei.
-    /// @return marketFee      Platform fee portion.
-    /// @return royaltyFee     Creator royalty (0 if ERC-2981 not supported).
-    /// @return sellerProceeds Net amount the seller receives.
+    /// @return marketFee        Platform fee portion.
+    /// @return royaltyFee       Creator royalty (0 if ERC-2981 not supported).
+    /// @return royaltyReceiver  Address to send royalty payment (address(0) if none).
+    /// @return sellerProceeds   Net amount the seller receives.
     function _calculateFees(address nftContract, uint256 tokenId, uint256 salePrice)
         internal
         view
-        returns (uint256 marketFee, uint256 royaltyFee, uint256 sellerProceeds)
+        returns (uint256 marketFee, uint256 royaltyFee, address royaltyReceiver, uint256 sellerProceeds)
     {
         marketFee  = (salePrice * marketplaceFee) / 10000;
         royaltyFee = 0;
+        royaltyReceiver = address(0);
 
-        try IERC2981(nftContract).royaltyInfo(tokenId, salePrice) returns (address, uint256 royaltyAmount) {
+        try IERC2981(nftContract).royaltyInfo(tokenId, salePrice) returns (address receiver, uint256 royaltyAmount) {
             royaltyFee = royaltyAmount;
+            royaltyReceiver = receiver;
         } catch {}
 
         require(marketFee + royaltyFee <= salePrice, "Fees exceed sale price");
@@ -354,12 +397,20 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         emit MarketplaceFeeUpdated(oldFee, newFee);
     }
 
-    /// @notice Withdraws all accumulated platform fees to the owner.
+    /// @notice Withdraws accumulated platform fees to the owner.
+    ///         Only withdraws tracked fees — escrowed offer funds are never touched.
     function withdraw() external onlyOwner {
-        (bool success, ) = payable(owner()).call{value: address(this).balance}("");
+        uint256 amount = accumulatedFees;
+        require(amount > 0, "No fees to withdraw");
+        accumulatedFees = 0;
+        (bool success, ) = payable(owner()).call{value: amount}("");
         require(success, "Withdrawal failed");
+
+        emit FeesWithdrawn(owner(), amount);
     }
 
-    /// @notice Accepts ETH sent directly (accumulated fees via buyItem/acceptOffer).
-    receive() external payable {}
+    /// @notice Returns the total ETH held in escrow for active offers.
+    function totalEscrow() external view returns (uint256) {
+        return address(this).balance - accumulatedFees;
+    }
 }
