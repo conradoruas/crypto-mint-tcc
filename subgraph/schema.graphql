@@ -35,6 +35,7 @@ type Listing @entity {
   price: BigInt!
   active: Boolean!
   nft: NFT
+  collection: Collection
   createdAt: BigInt!
   updatedAt: BigInt!
 }
@@ -51,9 +52,21 @@ type Offer @entity {
   createdAt: BigInt!
 }
 
+enum ActivityType {
+  listing
+  listing_cancelled
+  sale
+  offer
+  offer_accepted
+  offer_cancelled
+  offer_expired_refund
+  mint
+  transfer
+}
+
 type ActivityEvent @entity {
   id: ID!
-  type: String!
+  type: ActivityType!
   nftContract: Bytes!
   tokenId: BigInt!
   from: Bytes!
@@ -84,7 +97,7 @@ type CollectionStat @entity {
   volume24h: BigInt!
   sales24h: BigInt!
   lastUpdated: BigInt!
-  activeListingIds: [String!]!
+  activeListingCount: BigInt!
 }
 
 type DailyCollectionSnapshot @entity {

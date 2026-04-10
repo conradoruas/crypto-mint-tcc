@@ -35,6 +35,7 @@ export function handleItemListed(event: ItemListed): void {
   listing.price = event.params.price;
   listing.active = true;
   listing.nft = id;
+  listing.collection = event.params.nftContract.toHexString();
   listing.createdAt = event.block.timestamp;
   listing.updatedAt = event.block.timestamp;
   listing.save();
@@ -67,10 +68,7 @@ export function handleItemListed(event: ItemListed): void {
     event.params.nftContract.toHexString(),
     event.block.timestamp
   );
-  addActiveListing(colStats, id);
-  if (!colStats.floorPrice || event.params.price.lt(colStats.floorPrice!)) {
-    colStats.floorPrice = event.params.price;
-  }
+  addActiveListing(colStats, event.params.price);
   colStats.save();
 }
 
@@ -178,10 +176,8 @@ export function handleListingCancelled(event: ListingCancelled): void {
     stats.save();
 
     // Remove cancelled listing and recalculate floor from remaining active listings
-    let colStats = getOrCreateCollectionStat(
-      event.params.nftContract.toHexString(),
-      event.block.timestamp
-    );
+    let collectionId = event.params.nftContract.toHexString();
+    let colStats = getOrCreateCollectionStat(collectionId, event.block.timestamp);
     removeActiveListingAndRecalcFloor(colStats, id);
     colStats.save();
   }
