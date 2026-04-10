@@ -1,6 +1,6 @@
 "use client";
 
-import { useReadContract } from "wagmi";
+import { useReadContract, useReadContracts } from "wagmi";
 import { formatEther } from "viem";
 import { useMemo } from "react";
 import { useQuery } from "@apollo/client/react";
@@ -28,6 +28,7 @@ type GqlCollectionData = { collection: GqlCollection | null };
 /**
  * Hook to fetch detailed metadata and on-chain state for a specific NFT collection.
  * Uses subgraph for metadata when available, RPC only for `owner` (not indexed).
+ * When subgraph is disabled, all fields are fetched via a single multicall batch.
  */
 export function useCollectionDetails(collectionAddress: string | undefined) {
   const enabled = !!collectionAddress;
@@ -44,7 +45,7 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
 
   const gqlCol = gqlData?.collection;
 
-  // ── RPC path (full metadata when subgraph disabled, owner always) ──
+  // ── RPC path (batched multicall instead of 8 separate calls) ──
   const rpcEnabled = enabled && !SUBGRAPH_ENABLED;
 
   const base = {
@@ -52,45 +53,33 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
     abi: NFT_COLLECTION_ABI,
   } as const;
 
-  const { data: rpcName } = useReadContract({
-    ...base,
-    functionName: "name",
-    query: { enabled: rpcEnabled },
+  const rpcContracts = useMemo(
+    () =>
+      rpcEnabled
+        ? [
+            { ...base, functionName: "name" as const },
+            { ...base, functionName: "symbol" as const },
+            { ...base, functionName: "collectionDescription" as const },
+            { ...base, functionName: "collectionImage" as const },
+            { ...base, functionName: "mintPrice" as const },
+            { ...base, functionName: "maxSupply" as const },
+            { ...base, functionName: "totalSupply" as const },
+          ]
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rpcEnabled, addr],
+  );
+
+  const { data: rpcResults } = useReadContracts({
+    contracts: rpcContracts,
+    query: { enabled: rpcEnabled && rpcContracts.length > 0 },
   });
-  const { data: rpcSymbol } = useReadContract({
-    ...base,
-    functionName: "symbol",
-    query: { enabled: rpcEnabled },
-  });
+
+  // Owner is always fetched via RPC (not indexed in subgraph)
   const { data: owner } = useReadContract({
     ...base,
     functionName: "owner",
     query: { enabled },
-  });
-  const { data: rpcMintPrice } = useReadContract({
-    ...base,
-    functionName: "mintPrice",
-    query: { enabled: rpcEnabled },
-  });
-  const { data: rpcMaxSupply } = useReadContract({
-    ...base,
-    functionName: "maxSupply",
-    query: { enabled: rpcEnabled },
-  });
-  const { data: rpcTotalSupply } = useReadContract({
-    ...base,
-    functionName: "totalSupply",
-    query: { enabled: rpcEnabled },
-  });
-  const { data: rpcDescription } = useReadContract({
-    ...base,
-    functionName: "collectionDescription",
-    query: { enabled: rpcEnabled },
-  });
-  const { data: rpcImage } = useReadContract({
-    ...base,
-    functionName: "collectionImage",
-    query: { enabled: rpcEnabled },
   });
 
   // ── Unified result ──
@@ -111,29 +100,26 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
       };
     }
 
-    const mintPrice = rpcMintPrice as bigint | undefined;
+    // Extract multicall results (order matches rpcContracts)
+    const rpcName = rpcResults?.[0]?.result as string | undefined;
+    const rpcSymbol = rpcResults?.[1]?.result as string | undefined;
+    const rpcDescription = rpcResults?.[2]?.result as string | undefined;
+    const rpcImage = rpcResults?.[3]?.result as string | undefined;
+    const mintPrice = rpcResults?.[4]?.result as bigint | undefined;
+    const rpcMaxSupply = rpcResults?.[5]?.result as bigint | undefined;
+    const rpcTotalSupply = rpcResults?.[6]?.result as bigint | undefined;
+
     return {
-      name: rpcName as string | undefined,
-      symbol: rpcSymbol as string | undefined,
-      description: rpcDescription as string | undefined,
-      image: rpcImage as string | undefined,
+      name: rpcName,
+      symbol: rpcSymbol,
+      description: rpcDescription,
+      image: rpcImage,
       mintPrice,
       mintPriceEth: mintPrice ? formatEther(mintPrice) : null,
-      maxSupply: rpcMaxSupply as bigint | undefined,
-      totalSupply: rpcTotalSupply as bigint | undefined,
+      maxSupply: rpcMaxSupply,
+      totalSupply: rpcTotalSupply,
       owner: ensureAddress(owner),
       isLoading: false,
     };
-  }, [
-    gqlCol,
-    gqlLoading,
-    owner,
-    rpcName,
-    rpcSymbol,
-    rpcDescription,
-    rpcImage,
-    rpcMintPrice,
-    rpcMaxSupply,
-    rpcTotalSupply,
-  ]);
+  }, [gqlCol, gqlLoading, owner, rpcResults]);
 }
