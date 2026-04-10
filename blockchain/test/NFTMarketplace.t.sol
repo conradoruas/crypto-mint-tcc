@@ -911,8 +911,11 @@ contract NFTMarketplaceTest is Test {
         assertTrue(marketplace.getOffer(address(collection), tokenId, buyer).active);
         assertEq(marketplace.getOffer(address(collection), tokenId, buyer).amount, OFFER_AMOUNT + 0.01 ether);
 
+        // After the deduplication fix, re-offering from the same buyer
+        // should NOT create a duplicate entry in the buyers array.
         address[] memory buyers = marketplace.getOfferBuyers(address(collection), tokenId);
-        assertEq(buyers.length, 2);
+        assertEq(buyers.length, 1);
+        assertEq(buyers[0], buyer);
     }
 
     function test_fullFlow_multipleCollections() public {
@@ -976,4 +979,243 @@ contract NFTMarketplaceTest is Test {
         assertEq(buyerBefore, buyer.balance);
         assertEq(address(marketplace).balance, contractBefore - sellerProceeds);
     }
+
+    // ─────────────────────────────────────────────
+    // Security: withdraw() must not drain offer escrow
+    // ─────────────────────────────────────────────
+
+    function test_withdraw_doesNotDrainEscrow() public {
+        uint256 tokenId = _mintNFT(seller);
+
+        // Buyer places an offer — ETH is escrowed
+        vm.prank(buyer);
+        marketplace.makeOffer{value: OFFER_AMOUNT}(address(collection), tokenId);
+
+        // Seller lists and someone buys — marketplace earns a fee
+        vm.startPrank(seller);
+        collection.setApprovalForAll(address(marketplace), true);
+        marketplace.listItem(address(collection), tokenId, LIST_PRICE);
+        vm.stopPrank();
+
+        vm.prank(buyer2);
+        marketplace.buyItem{value: LIST_PRICE}(address(collection), tokenId);
+
+        // Owner withdraws fees
+        uint256 contractBalanceBefore = address(marketplace).balance;
+        uint256 accFees = marketplace.accumulatedFees();
+        assertTrue(accFees > 0, "Should have accumulated fees");
+        assertTrue(contractBalanceBefore > accFees, "Escrow funds should remain beyond fees");
+
+        vm.prank(owner);
+        marketplace.withdraw();
+
+        // The buyer's escrowed offer should still be in the contract
+        assertEq(marketplace.accumulatedFees(), 0, "Fees should be zeroed");
+        assertEq(address(marketplace).balance, contractBalanceBefore - accFees, "Only fees withdrawn, escrow intact");
+        assertTrue(address(marketplace).balance >= OFFER_AMOUNT, "Buyer escrow must remain");
+    }
+
+    // ─────────────────────────────────────────────
+    // Security: reentrancy on buyItem
+    // ─────────────────────────────────────────────
+
+    function test_buyItem_reentrancyProtected() public {
+        uint256 tokenId = _mintNFT(seller);
+
+        vm.startPrank(seller);
+        collection.setApprovalForAll(address(marketplace), true);
+        marketplace.listItem(address(collection), tokenId, LIST_PRICE);
+        vm.stopPrank();
+
+        // Deploy a malicious buyer contract that attempts reentrancy
+        ReentrancyAttacker attacker = new ReentrancyAttacker(marketplace, address(collection), tokenId);
+        vm.deal(address(attacker), 1 ether);
+
+        // The attacker calls buyItem; if reentrancy succeeds it would drain funds.
+        // With ReentrancyGuard it should revert.
+        vm.prank(address(attacker));
+        vm.expectRevert();
+        attacker.attack{value: LIST_PRICE}();
+    }
+
+    // ─────────────────────────────────────────────
+    // Security: reentrancy on cancelOffer
+    // ─────────────────────────────────────────────
+
+    function test_cancelOffer_reentrancySafe() public {
+        uint256 tokenId = _mintNFT(seller);
+
+        ReentrancyCancelAttacker attacker = new ReentrancyCancelAttacker(marketplace, address(collection), tokenId);
+        vm.deal(address(attacker), 1 ether);
+
+        // Place offer from attacker contract
+        vm.prank(address(attacker));
+        attacker.placeOffer{value: OFFER_AMOUNT}();
+
+        uint256 contractBefore = address(marketplace).balance;
+
+        // Cancel offer — the attacker's receive() tries to re-enter cancelOffer,
+        // but the offer is already deleted so the re-entry reverts harmlessly.
+        vm.prank(address(attacker));
+        attacker.attack();
+
+        // Verify only the correct amount was refunded (no double-spend)
+        assertEq(address(marketplace).balance, contractBefore - OFFER_AMOUNT, "Only one refund should occur");
+        assertFalse(marketplace.getOffer(address(collection), tokenId, address(attacker)).active, "Offer must be inactive");
+    }
+
+    // ─────────────────────────────────────────────
+    // Fuzz: fee calculation invariants
+    // ─────────────────────────────────────────────
+
+    function testFuzz_feeCalculation_invariants(uint256 price) public {
+        // Bound price to valid range: 0.0001 ETH to 1000 ETH
+        price = bound(price, 0.0001 ether, 1000 ether);
+
+        uint256 tokenId = _mintNFT(seller);
+
+        vm.startPrank(seller);
+        collection.setApprovalForAll(address(marketplace), true);
+        marketplace.listItem(address(collection), tokenId, price);
+        vm.stopPrank();
+
+        uint256 sellerBefore = seller.balance;
+        uint256 ownerBefore = owner.balance;
+
+        vm.deal(buyer, price + 1 ether);
+        vm.prank(buyer);
+        marketplace.buyItem{value: price}(address(collection), tokenId);
+
+        uint256 sellerReceived = seller.balance - sellerBefore;
+        uint256 platformFee = marketplace.accumulatedFees();
+
+        // Invariant 1: seller + platform fee + royalty = price
+        // (royalty goes to collection creator = seller in this test setup,
+        //  so sellerReceived includes both proceeds and royalty)
+        uint256 totalDistributed = sellerReceived + platformFee;
+        assertEq(totalDistributed, price, "All funds must be distributed (proceeds + fee + royalty to seller)");
+
+        // Invariant 2: platform fee should be exactly 2.5%
+        uint256 expectedFee = (price * FEE_BPS) / 10000;
+        assertEq(platformFee, expectedFee, "Platform fee must be exact");
+
+        // Invariant 3: no ETH stuck in contract beyond escrow
+        assertEq(address(marketplace).balance, platformFee, "No ETH stuck beyond tracked fees");
+    }
+
+    function testFuzz_offerAmount_roundTrip(uint256 amount) public {
+        // Bound to valid range
+        amount = bound(amount, 0.0001 ether, 100 ether);
+
+        uint256 tokenId = _mintNFT(seller);
+
+        vm.deal(buyer, amount);
+        vm.prank(buyer);
+        marketplace.makeOffer{value: amount}(address(collection), tokenId);
+
+        // Verify full amount is escrowed
+        assertEq(address(marketplace).balance, amount, "Full offer escrowed");
+
+        // Cancel and verify full refund
+        uint256 buyerBefore = buyer.balance;
+        vm.prank(buyer);
+        marketplace.cancelOffer(address(collection), tokenId);
+
+        assertEq(buyer.balance - buyerBefore, amount, "Full amount refunded");
+        assertEq(address(marketplace).balance, 0, "No ETH left in contract");
+    }
+
+    // ─────────────────────────────────────────────
+    // NFTCollection: excess mint refund
+    // ─────────────────────────────────────────────
+
+    function test_collection_mint_refundsExcess() public {
+        uint256 excess = 0.05 ether;
+        uint256 totalSent = MINT_PRICE + excess;
+
+        vm.deal(buyer, totalSent);
+        uint256 buyerBefore = buyer.balance;
+
+        vm.prank(buyer);
+        collection.mint{value: totalSent}(buyer);
+
+        assertEq(buyer.balance, buyerBefore - MINT_PRICE, "Excess ETH must be refunded");
+    }
+
+    // ─────────────────────────────────────────────
+    // ERC-721 interface validation
+    // ─────────────────────────────────────────────
+
+    function test_listItem_revertsIfNotERC721() public {
+        address fakeContract = address(new NotERC721());
+        vm.expectRevert();
+        marketplace.listItem(fakeContract, 0, LIST_PRICE);
+    }
+
+    function test_makeOffer_revertsIfNotERC721() public {
+        address fakeContract = address(new NotERC721());
+        vm.deal(buyer, OFFER_AMOUNT);
+        vm.prank(buyer);
+        vm.expectRevert();
+        marketplace.makeOffer{value: OFFER_AMOUNT}(fakeContract, 0);
+    }
+}
+
+// ─────────────────────────────────────────────
+// Helper contracts for reentrancy tests
+// ─────────────────────────────────────────────
+
+contract ReentrancyAttacker {
+    NFTMarketplace marketplace;
+    address nftContract;
+    uint256 tokenId;
+
+    constructor(NFTMarketplace _mp, address _nft, uint256 _tokenId) {
+        marketplace = _mp;
+        nftContract = _nft;
+        tokenId = _tokenId;
+    }
+
+    function attack() external payable {
+        marketplace.buyItem{value: msg.value}(nftContract, tokenId);
+    }
+
+    receive() external payable {
+        // Attempt reentrancy when receiving seller payment or refund
+        if (address(marketplace).balance > 0) {
+            try marketplace.buyItem{value: 0}(nftContract, tokenId) {} catch {}
+        }
+    }
+}
+
+contract ReentrancyCancelAttacker {
+    NFTMarketplace marketplace;
+    address nftContract;
+    uint256 tokenId;
+
+    constructor(NFTMarketplace _mp, address _nft, uint256 _tokenId) {
+        marketplace = _mp;
+        nftContract = _nft;
+        tokenId = _tokenId;
+    }
+
+    function placeOffer() external payable {
+        marketplace.makeOffer{value: msg.value}(nftContract, tokenId);
+    }
+
+    function attack() external {
+        marketplace.cancelOffer(nftContract, tokenId);
+    }
+
+    receive() external payable {
+        // Attempt reentrancy when receiving refund
+        if (address(marketplace).balance > 0) {
+            try marketplace.cancelOffer(nftContract, tokenId) {} catch {}
+        }
+    }
+}
+
+/// @notice A contract that does NOT implement ERC-721 (no supportsInterface)
+contract NotERC721 {
+    // Empty — no ERC-165 support
 }
