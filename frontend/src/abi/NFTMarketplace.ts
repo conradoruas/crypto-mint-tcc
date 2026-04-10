@@ -89,8 +89,8 @@ export const NFT_MARKETPLACE_ABI = [
       {
         components: [
           { internalType: "address", name: "seller", type: "address" },
-          { internalType: "uint256", name: "price", type: "uint256" },
           { internalType: "bool", name: "active", type: "bool" },
+          { internalType: "uint128", name: "price", type: "uint128" },
         ],
         internalType: "struct NFTMarketplace.Listing",
         name: "",
@@ -111,9 +111,9 @@ export const NFT_MARKETPLACE_ABI = [
       {
         components: [
           { internalType: "address", name: "buyer", type: "address" },
-          { internalType: "uint256", name: "amount", type: "uint256" },
-          { internalType: "uint256", name: "expiresAt", type: "uint256" },
           { internalType: "bool", name: "active", type: "bool" },
+          { internalType: "uint64", name: "expiresAt", type: "uint64" },
+          { internalType: "uint128", name: "amount", type: "uint128" },
         ],
         internalType: "struct NFTMarketplace.Offer",
         name: "",

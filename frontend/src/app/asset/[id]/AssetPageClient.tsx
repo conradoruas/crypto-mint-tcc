@@ -465,17 +465,15 @@ export default function AssetPageClient({
       toast.success("Offer sent! ETH is held in escrow for 7 days.");
       setShowOfferForm(false);
       setOfferAmount("");
-      refetchMyOffer();
-      refetchOffers();
+      refetchAll();
     }
-  }, [isOfferMade, refetchMyOffer, refetchOffers]);
+  }, [isOfferMade, refetchAll]);
   useEffect(() => {
     if (isOfferCancelled) {
       toast.success("Offer cancelled. ETH returned.");
-      refetchMyOffer();
-      refetchOffers();
+      refetchAll();
     }
-  }, [isOfferCancelled, refetchMyOffer, refetchOffers]);
+  }, [isOfferCancelled, refetchAll]);
   const handleList = async () => {
     const errors = getZodErrors(listPriceSchema, {
       price: listPrice,
@@ -487,7 +485,7 @@ export default function AssetPageClient({
       setShowListForm(false);
       setListPrice("");
       toast.success("NFT listed successfully!");
-      refetchListing();
+      refetchAll();
     } catch (e) {
       toast.error(formatTransactionError(e, "Could not list this NFT."));
     }
@@ -506,7 +504,7 @@ export default function AssetPageClient({
     try {
       await cancelListing(nftContract, tokenId);
       toast.success("Listing cancelled.");
-      refetchListing();
+      refetchAll();
     } catch (e) {
       toast.error(formatTransactionError(e, "Could not cancel listing."));
     }

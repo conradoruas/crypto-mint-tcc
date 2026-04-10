@@ -21,6 +21,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     // State
     // ─────────────────────────────────────────────
 
+    /// @notice Human-readable contract name (shown by MetaMask and block explorers)
+    string public constant name = "CryptoMint Marketplace";
+
     /// @notice Platform fee charged on every sale (basis points, e.g. 250 = 2.5%)
     uint256 public marketplaceFee = 250;
 

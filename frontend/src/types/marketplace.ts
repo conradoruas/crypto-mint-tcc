@@ -2,15 +2,15 @@
 
 export interface ListingData {
   seller: `0x${string}`;
-  price: bigint;
   active: boolean;
+  price: bigint;
 }
 
 export interface OfferData {
   buyer: `0x${string}`;
-  amount: bigint;
-  expiresAt: bigint;
   active: boolean;
+  expiresAt: bigint;
+  amount: bigint;
 }
 
 export interface OfferWithBuyer extends OfferData {
