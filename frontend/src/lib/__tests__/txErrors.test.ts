@@ -55,7 +55,7 @@ describe("formatTransactionError", () => {
   it("handles nested error.cause chains", () => {
     const inner = new Error("insufficient funds for gas");
     const outer = new Error("contract call failed");
-    (outer as unknown as { cause: Error }).cause = inner;
+    (outer as { cause: Error }).cause = inner;
     const result = formatTransactionError(outer, "Fallback");
     expect(typeof result).toBe("string");
     expect(result.length).toBeGreaterThan(0);

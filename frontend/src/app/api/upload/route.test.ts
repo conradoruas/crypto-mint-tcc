@@ -24,18 +24,19 @@ vi.mock("@/lib/uploadPayloadSchemas", () => ({
 global.fetch = vi.fn();
 
 function createMockRequest(formData: FormData): NextRequest {
-  return {
-    formData: vi.fn().mockResolvedValue(formData),
-    nextUrl: { pathname: "/api/upload" },
-  } as unknown as NextRequest;
+  const req = new NextRequest("http://localhost/api/upload", {
+    method: "POST",
+  });
+  vi.spyOn(req, "formData").mockResolvedValue(formData);
+  return req;
 }
 
 describe("POST /api/upload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(uploadSecurity.runUploadGate).mockResolvedValue(null);
+    vi.mocked(uploadSecurity.runUploadGate).mockResolvedValue({ address: "0x0000000000000000000000000000000000000000" });
     vi.mocked(uploadSecurity.validateImageFile).mockReturnValue(null);
-    vi.mocked(parseCombinedUploadFields).mockReturnValue({ ok: true, name: "Test NFT", description: "Desc" } as any);
+    vi.mocked(parseCombinedUploadFields).mockReturnValue({ ok: true, name: "Test NFT", description: "Desc" });
   });
 
   it("should return error if upload gate blocks request", async () => {
@@ -60,7 +61,7 @@ describe("POST /api/upload", () => {
   it("should return error if image validation fails", async () => {
     const formData = new FormData();
     formData.append("file", new File(["test"], "test.png", { type: "image/png" }));
-    
+
     const valError = NextResponse.json({ error: "Invalid content type" }, { status: 400 });
     vi.mocked(uploadSecurity.validateImageFile).mockReturnValueOnce(valError);
 
@@ -78,15 +79,13 @@ describe("POST /api/upload", () => {
 
     const fetchMock = vi.mocked(global.fetch);
     // Pinata Image Success
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ IpfsHash: "QmImageHash" }),
-    } as any);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ IpfsHash: "QmImageHash" }), { status: 200 })
+    );
     // Pinata JSON Success
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ IpfsHash: "QmMetadataHash" }),
-    } as any);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ IpfsHash: "QmMetadataHash" }), { status: 200 })
+    );
 
     const req = createMockRequest(formData);
     const res = await POST(req);
@@ -103,11 +102,10 @@ describe("POST /api/upload", () => {
   it("should handle pinata image upload failure", async () => {
     const formData = new FormData();
     formData.append("file", new File(["test image"], "test.png", { type: "image/png" }));
-    
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-    } as any);
+
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "Failed" }), { status: 500 })
+    );
 
     const req = createMockRequest(formData);
     const res = await POST(req);

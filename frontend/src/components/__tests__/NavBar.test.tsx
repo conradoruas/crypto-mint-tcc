@@ -46,7 +46,7 @@ import { usePathname } from "next/navigation";
 describe("Navbar", () => {
   beforeEach(() => {
     vi.mocked(useConnection).mockReturnValue(
-      { isConnected: false, address: undefined } as unknown as ReturnType<typeof useConnection>,
+      { isConnected: false, address: undefined } as ReturnType<typeof useConnection>,
     );
     vi.mocked(usePathname).mockReturnValue("/");
   });

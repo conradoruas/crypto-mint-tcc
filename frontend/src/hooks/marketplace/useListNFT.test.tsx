@@ -1,5 +1,5 @@
 import { renderHook, act } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { useListNFT } from "./useListNFT";
 import * as wagmi from "wagmi";
 import * as viemActions from "viem/actions";
@@ -18,7 +18,7 @@ vi.mock("viem/actions", () => ({
 
 // Mock estimateContractGas with its buffer to avoid complex viem internal mocks
 vi.mock("@/lib/estimateContractGas", () => ({
-  estimateContractGasWithBuffer: vi.fn().mockResolvedValue(100000n),
+  estimateContractGasWithBuffer: vi.fn().mockResolvedValue(BigInt(100000)),
 }));
 
 describe("useListNFT", () => {
@@ -33,15 +33,15 @@ describe("useListNFT", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    vi.mocked(wagmi.useConnection).mockReturnValue({ address: mockAddress } as any);
-    vi.mocked(wagmi.usePublicClient).mockReturnValue({
+    (wagmi.useConnection as Mock).mockReturnValue({ address: mockAddress });
+    (wagmi.usePublicClient as Mock).mockReturnValue({
       readContract: mockReadContract,
-    } as any);
-    vi.mocked(wagmi.useWriteContract).mockReturnValue({
+    });
+    (wagmi.useWriteContract as Mock).mockReturnValue({
       mutateAsync: mockMutateAsync,
-    } as any);
+    });
 
-    vi.mocked(viemActions.waitForTransactionReceipt).mockResolvedValue({} as any);
+    (viemActions.waitForTransactionReceipt as Mock).mockResolvedValue({});
   });
 
   it("should list NFT skipping approval if already approved", async () => {
@@ -98,12 +98,12 @@ describe("useListNFT", () => {
   it("should throw error if already in progress", async () => {
     mockReadContract.mockResolvedValue(true);
     // Make mutateAsync delay so the hook stays in pending state
-    let resolveTx: (val: any) => void;
+    let resolveTx: (val: unknown) => void;
     mockMutateAsync.mockReturnValue(new Promise((r) => { resolveTx = r; }));
 
     const { result } = renderHook(() => useListNFT());
 
-    let promise1;
+    let promise1: Promise<void>;
     act(() => {
       promise1 = result.current.listNFT(mockNftContract, mockTokenId, mockPriceInEth);
     });
@@ -121,7 +121,7 @@ describe("useListNFT", () => {
   });
 
   it("should throw error if no network connection", async () => {
-    vi.mocked(wagmi.useConnection).mockReturnValue({ address: undefined } as any);
+    (wagmi.useConnection as Mock).mockReturnValue({ address: undefined });
 
     const { result } = renderHook(() => useListNFT());
 

@@ -1,5 +1,5 @@
 import { renderHook, act } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { useAcceptOffer } from "./useAcceptOffer";
 import * as wagmi from "wagmi";
 import * as viemActions from "viem/actions";
@@ -16,7 +16,7 @@ vi.mock("viem/actions", () => ({
 }));
 
 vi.mock("@/lib/estimateContractGas", () => ({
-  estimateContractGasWithBuffer: vi.fn().mockResolvedValue(100000n),
+  estimateContractGasWithBuffer: vi.fn().mockResolvedValue(BigInt(100000)),
 }));
 
 describe("useAcceptOffer", () => {
@@ -31,25 +31,25 @@ describe("useAcceptOffer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    vi.mocked(wagmi.useConnection).mockReturnValue({ address: mockAddress } as any);
-    vi.mocked(wagmi.usePublicClient).mockReturnValue({
+    (wagmi.useConnection as Mock).mockReturnValue({ address: mockAddress });
+    (wagmi.usePublicClient as Mock).mockReturnValue({
       readContract: mockReadContract,
-    } as any);
-    vi.mocked(wagmi.useWriteContract).mockReturnValue({
+    });
+    (wagmi.useWriteContract as Mock).mockReturnValue({
       mutateAsync: mockMutateAsync,
-    } as any);
+    });
 
-    vi.mocked(viemActions.waitForTransactionReceipt).mockResolvedValue({} as any);
+    (viemActions.waitForTransactionReceipt as Mock).mockResolvedValue({});
   });
 
   it("should accept offer skipping approval if already approved", async () => {
-    mockReadContract.mockResolvedValueOnce(true); 
+    mockReadContract.mockResolvedValueOnce(true);
     mockMutateAsync.mockResolvedValueOnce("0xAcceptHash");
 
     const { result } = renderHook(() => useAcceptOffer());
 
     await act(async () => {
-      await result.current.acceptOffer(mockNftContract as any, mockTokenId, mockBuyer as any);
+      await result.current.acceptOffer(mockNftContract as `0x${string}`, mockTokenId, mockBuyer as `0x${string}`);
     });
 
     expect(mockReadContract).toHaveBeenCalledTimes(1);
@@ -58,13 +58,13 @@ describe("useAcceptOffer", () => {
       functionName: "acceptOffer",
       args: [mockNftContract, BigInt(mockTokenId), mockBuyer],
     }));
-    
+
     expect(result.current.phase).toBe("idle");
     expect(result.current.isPending).toBe(false);
   });
 
   it("should request approval if not approved, then accept offer", async () => {
-    mockReadContract.mockResolvedValueOnce(false); 
+    mockReadContract.mockResolvedValueOnce(false);
     mockMutateAsync
       .mockResolvedValueOnce("0xApproveHash")
       .mockResolvedValueOnce("0xAcceptHash");
@@ -72,7 +72,7 @@ describe("useAcceptOffer", () => {
     const { result } = renderHook(() => useAcceptOffer());
 
     await act(async () => {
-      await result.current.acceptOffer(mockNftContract as any, mockTokenId, mockBuyer as any);
+      await result.current.acceptOffer(mockNftContract as `0x${string}`, mockTokenId, mockBuyer as `0x${string}`);
     });
 
     expect(mockReadContract).toHaveBeenCalledTimes(1);
@@ -89,18 +89,18 @@ describe("useAcceptOffer", () => {
 
   it("should throw error if already in progress", async () => {
     mockReadContract.mockResolvedValue(true);
-    let resolveTx: (val: any) => void;
+    let resolveTx: (val: unknown) => void;
     mockMutateAsync.mockReturnValue(new Promise((r) => { resolveTx = r; }));
 
     const { result } = renderHook(() => useAcceptOffer());
 
-    let promise;
+    let promise: Promise<void>;
     act(() => {
-      promise = result.current.acceptOffer(mockNftContract as any, mockTokenId, mockBuyer as any);
+      promise = result.current.acceptOffer(mockNftContract as `0x${string}`, mockTokenId, mockBuyer as `0x${string}`);
     });
 
     await act(async () => {
-      await expect(result.current.acceptOffer(mockNftContract as any, mockTokenId, mockBuyer as any)).rejects.toThrow(
+      await expect(result.current.acceptOffer(mockNftContract as `0x${string}`, mockTokenId, mockBuyer as `0x${string}`)).rejects.toThrow(
         "Accept offer already in progress."
       );
     });
@@ -110,10 +110,10 @@ describe("useAcceptOffer", () => {
   });
 
   it("should throw error if no network connection", async () => {
-    vi.mocked(wagmi.useConnection).mockReturnValue({ address: undefined } as any);
+    (wagmi.useConnection as Mock).mockReturnValue({ address: undefined });
     const { result } = renderHook(() => useAcceptOffer());
     await act(async () => {
-      await expect(result.current.acceptOffer(mockNftContract as any, mockTokenId, mockBuyer as any)).rejects.toThrow(
+      await expect(result.current.acceptOffer(mockNftContract as `0x${string}`, mockTokenId, mockBuyer as `0x${string}`)).rejects.toThrow(
         "No network connection."
       );
     });

@@ -1,5 +1,5 @@
 import { renderHook, act } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { useBuyNFT } from "./useBuyNFT";
 import { useContractMutation } from "../useContractMutation";
 import { parseEther } from "viem";
@@ -14,13 +14,14 @@ describe("useBuyNFT", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useContractMutation).mockReturnValue({
+    (useContractMutation as Mock).mockReturnValue({
       mutate: mockMutate,
       isPending: false,
       isConfirming: false,
       isSuccess: true,
-      hash: "0xHash",
-    } as any);
+      hash: "0xHash" as `0x${string}`,
+      reset: vi.fn(),
+    });
   });
 
   it("should call mutate with correct arguments to buy an NFT", async () => {
@@ -31,7 +32,7 @@ describe("useBuyNFT", () => {
     const mockPrice = "0.5";
 
     await act(async () => {
-      await result.current.buyNFT(mockNftContract as any, mockTokenId, mockPrice);
+      await result.current.buyNFT(mockNftContract as `0x${string}`, mockTokenId, mockPrice);
     });
 
     expect(mockMutate).toHaveBeenCalledTimes(1);
