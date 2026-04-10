@@ -4,6 +4,7 @@ import { useReadContract, useReadContracts, useConnection } from "wagmi";
 import { formatEther } from "viem";
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@apollo/client/react";
+import { useNowBucketed } from "../useNowBucketed";
 import {
   MARKETPLACE_ADDRESS,
   NFT_MARKETPLACE_ABI,
@@ -124,9 +125,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   const nftAddr = ensureAddress(nftContract);
   const tokenIdBn = BigInt(tokenId || "0");
 
-  // Round 'now' to 60s buckets to keep the Apollo cache stable
-   
-  const nowBucketed = useMemo(() => Math.floor(Date.now() / 60000) * 60, []);
+  const nowBucketed = useNowBucketed();
 
   // ── Subgraph path ──
   type GqlOffersData = { offers: GqlOfferRow[] };

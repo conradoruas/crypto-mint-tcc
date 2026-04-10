@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
+import { useNowBucketed } from "../useNowBucketed";
 import {
   GET_ALL_NFTS,
   GET_NFTS_FOR_CONTRACT,
@@ -44,13 +45,37 @@ type GqlNFTsData = { nfts: GqlNFT[] };
 
 type IpfsMeta = { name: string; description: string; image: string };
 
-/** In-memory cache keyed by tokenUri — metadata is immutable once pinned. */
+/**
+ * Simple LRU cache keyed by tokenUri — metadata is immutable once pinned.
+ * Capped at 500 entries to prevent unbounded memory growth on long sessions.
+ */
+const LRU_MAX = 500;
 const ipfsMetaCache = new Map<string, IpfsMeta>();
+
+function lruGet(key: string): IpfsMeta | undefined {
+  const val = ipfsMetaCache.get(key);
+  if (val !== undefined) {
+    // Move to end (most recently used)
+    ipfsMetaCache.delete(key);
+    ipfsMetaCache.set(key, val);
+  }
+  return val;
+}
+
+function lruSet(key: string, val: IpfsMeta): void {
+  if (ipfsMetaCache.has(key)) ipfsMetaCache.delete(key);
+  ipfsMetaCache.set(key, val);
+  if (ipfsMetaCache.size > LRU_MAX) {
+    // Delete oldest (first) entry
+    const oldest = ipfsMetaCache.keys().next().value;
+    if (oldest !== undefined) ipfsMetaCache.delete(oldest);
+  }
+}
 
 async function resolveTokenMeta(tokenUri: string): Promise<IpfsMeta | null> {
   if (!tokenUri) return null;
 
-  const cached = ipfsMetaCache.get(tokenUri);
+  const cached = lruGet(tokenUri);
   if (cached) return cached;
 
   try {
@@ -61,7 +86,7 @@ async function resolveTokenMeta(tokenUri: string): Promise<IpfsMeta | null> {
       description: json.description ?? "",
       image: resolveIpfsUrl(json.image ?? ""),
     };
-    ipfsMetaCache.set(tokenUri, meta);
+    lruSet(tokenUri, meta);
     return meta;
   } catch {
     return null;
@@ -121,10 +146,8 @@ export function useExploreNFTs(
 
   const skip = (page - 1) * pageSize;
 
-  // Round 'now' to 60s buckets to keep the Apollo cache stable for 1 minute.
-  // Using a raw Date.now() string as a variable creates a unique cache key every second.
-  // eslint-disable-next-line react-hooks/purity
-  const nowBucketed = useMemo(() => Math.floor(Date.now() / 60000) * 60, []);
+  // Bucketed timestamp that auto-refreshes every 60s so expired offers are filtered out.
+  const nowBucketed = useNowBucketed();
 
   const {
     data: gqlData,
@@ -196,9 +219,7 @@ export function useExploreAllNFTs(
 
   const skip = (page - 1) * pageSize;
 
-  // Round 'now' to 60s buckets to keep the Apollo cache stable for 1 minute.
-  // eslint-disable-next-line react-hooks/purity
-  const nowBucketed = useMemo(() => Math.floor(Date.now() / 60000) * 60, []);
+  const nowBucketed = useNowBucketed();
 
   // Build the GraphQL 'where' filter
   const where: Record<string, unknown> = {};
