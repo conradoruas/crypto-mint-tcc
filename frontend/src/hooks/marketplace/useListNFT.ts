@@ -34,24 +34,34 @@ export function useListNFT() {
 
       inFlightRef.current = true;
       try {
-        setPhase("approve-wallet");
-        const approveGas = await estimateContractGasWithBuffer(publicClient, {
-          account: address,
+        // Skip approval if marketplace is already approved (saves gas + wallet popup)
+        const isApproved = await publicClient.readContract({
           address: nftContract,
           abi: NFT_COLLECTION_ABI,
-          functionName: "setApprovalForAll",
-          args: [MARKETPLACE_ADDRESS, true],
-        });
-        const approveHash = await mutateAsync({
-          address: nftContract,
-          abi: NFT_COLLECTION_ABI,
-          functionName: "setApprovalForAll",
-          args: [MARKETPLACE_ADDRESS, true],
-          gas: approveGas,
+          functionName: "isApprovedForAll",
+          args: [address, MARKETPLACE_ADDRESS],
         });
 
-        setPhase("approve-confirm");
-        await waitForTransactionReceipt(publicClient, { hash: approveHash });
+        if (!isApproved) {
+          setPhase("approve-wallet");
+          const approveGas = await estimateContractGasWithBuffer(publicClient, {
+            account: address,
+            address: nftContract,
+            abi: NFT_COLLECTION_ABI,
+            functionName: "setApprovalForAll",
+            args: [MARKETPLACE_ADDRESS, true],
+          });
+          const approveHash = await mutateAsync({
+            address: nftContract,
+            abi: NFT_COLLECTION_ABI,
+            functionName: "setApprovalForAll",
+            args: [MARKETPLACE_ADDRESS, true],
+            gas: approveGas,
+          });
+
+          setPhase("approve-confirm");
+          await waitForTransactionReceipt(publicClient, { hash: approveHash });
+        }
 
         setPhase("exec-wallet");
         const listGas = await estimateContractGasWithBuffer(publicClient, {
