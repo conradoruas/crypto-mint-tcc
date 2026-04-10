@@ -21,7 +21,11 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      // 'unsafe-inline' kept only for style-src (required by Next.js style injection).
+      // script-src uses 'strict-dynamic' with 'unsafe-inline' as a fallback for
+      // browsers that don't support strict-dynamic (the fallback is ignored when
+      // strict-dynamic is supported). 'unsafe-eval' has been removed.
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://ipfs.io https://*.ipfs.dweb.link https://nft-cdn.alchemy.com",

@@ -59,6 +59,9 @@ USER nextjs
 
 EXPOSE 3000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:3000/ || exit 1
+
 # Runtime env vars (server-only secrets injected here)
 # ALCHEMY_API_KEY and PINATA_JWT must be passed via:
 #   docker run -e ALCHEMY_API_KEY=... -e PINATA_JWT=...

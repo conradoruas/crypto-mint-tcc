@@ -6,6 +6,18 @@ import { CLIENT_UPSTREAM_FAILED, peekErrorBody } from "@/lib/apiUpstream";
 
 const ALCHEMY_BASE = `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}`;
 
+/** Allowed Alchemy NFT API endpoints — requests to unlisted endpoints are rejected. */
+const ALLOWED_ENDPOINTS = new Set([
+  "getNFTMetadata",
+  "getNFTMetadataBatch",
+  "getContractsForOwner",
+  "getContractMetadata",
+  "getNFTsForContract",
+  "getOwnersForNFT",
+  "getOwnersForContract",
+  "getNFTsForOwner",
+]);
+
 /** TTL in seconds per endpoint category */
 function getTTL(endpoint: string): number {
   // NFT metadata is immutable (IPFS) — cache aggressively
@@ -29,6 +41,11 @@ export async function GET(
   try {
     const { path } = await params;
     endpoint = path.join("/");
+
+    if (!ALLOWED_ENDPOINTS.has(endpoint)) {
+      return Response.json({ error: "Endpoint not allowed" }, { status: 403 });
+    }
+
     const search = req.nextUrl.search;
     const upstream = `${ALCHEMY_BASE}/${endpoint}${search}`;
     // Next.js data cache: deduplicates concurrent requests and revalidates by TTL
@@ -85,6 +102,11 @@ export async function POST(
 ) {
   const { path } = await params;
   const endpoint = path.join("/");
+
+  if (!ALLOWED_ENDPOINTS.has(endpoint)) {
+    return Response.json({ error: "Endpoint not allowed" }, { status: 403 });
+  }
+
   const body = await req.json();
 
   try {
