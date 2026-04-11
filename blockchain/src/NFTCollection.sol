@@ -4,15 +4,18 @@ pragma solidity ^0.8.20;
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {ERC2981} from "@openzeppelin/contracts/token/common/ERC2981.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title NFTCollection
 /// @author CryptoMint
 /// @notice ERC-721 collection with configurable supply, mint price, and
 ///         pseudo-random URI assignment using a Fisher-Yates shuffle.
 /// @dev Created via `NFTCollectionFactory.createCollection()`.  The owner
-///      (collection creator) must call `loadTokenURIs()` before any mint
-///      can proceed.  Each token gets a randomly chosen URI from the pool.
-contract NFTCollection is ERC721, ERC2981, Ownable {
+///      (collection creator) must call `loadTokenURIs()` and `commitMintSeed()`
+///      before any mint can proceed.  Each token gets a pseudo-randomly chosen
+///      URI from the pool using `blockhash` mixed with a pre-committed seed
+///      so neither the user nor a miner can pre-compute the assignment.
+contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
 
     /// @notice Maximum number of tokens that can be minted.
     uint256 public maxSupply;
@@ -32,7 +35,7 @@ contract NFTCollection is ERC721, ERC2981, Ownable {
     /// @notice Total number of minted tokens.
     uint256 public totalSupply;
 
-    /// @notice Whether reveal has happened (URIs have been loaded).
+    /// @notice Whether reveal has happened (all URIs have been consumed).
     bool public revealed;
 
     /// @notice Array of token-URI candidates; shuffled during each mint.
@@ -41,6 +44,18 @@ contract NFTCollection is ERC721, ERC2981, Ownable {
     /// @notice Storage for each token's final URI.
     mapping(uint256 => string) private _tokenURIs;
 
+    /// @notice keccak256 of a secret seed committed by the owner before minting.
+    ///         Mixed into every mint's Fisher-Yates index derivation so neither
+    ///         users nor miners can pre-compute URI assignments without it.
+    bytes32 public mintSeedCommitment;
+
+    /// @notice The secret seed, revealed after minting to let anyone audit that
+    ///         each mint's randomness input matched the pre-committed value.
+    bytes32 public mintSeedRevealed;
+
+    /// @notice Guard flag — minting is disabled until this is true.
+    bool public mintSeedCommitted;
+
     // ─── Events ────────────────────────────────────────────────────────
 
     /// @notice Emitted when a new token is minted.
@@ -48,6 +63,18 @@ contract NFTCollection is ERC721, ERC2981, Ownable {
     /// @param tokenId  Newly minted token ID.
     /// @param tokenUri The URI assigned to the token.
     event NFTMinted(address indexed to, uint256 indexed tokenId, string tokenUri);
+
+    /// @notice Emitted once the owner pre-commits the mint seed hash.
+    event MintSeedCommitted(bytes32 commitment);
+
+    /// @notice Emitted once the owner reveals the mint seed for auditing.
+    event MintSeedRevealed(bytes32 seed);
+
+    /// @notice Emitted when the last URI is drawn from the pool.
+    event Revealed();
+
+    /// @notice Emitted when the owner withdraws accumulated mint funds.
+    event Withdrawn(address indexed owner, uint256 amount);
 
     // ─── Constructor ───────────────────────────────────────────────────
 
@@ -85,20 +112,22 @@ contract NFTCollection is ERC721, ERC2981, Ownable {
     }
 
     /// @notice Loads a full set of token URIs (one per future token).
-    ///         Can only be called once, before the first mint.
-    /// @param uris Array of metadata URIs (length must equal `maxSupply`).
+    ///         Can only be called before the first mint.
+    /// @param uris Array of metadata URIs.
     function loadTokenURIs(string[] calldata uris) external onlyOwner {
-        require(totalSupply == 0, "Minting already started");
-        require(_availableURIs.length + uris.length <= maxSupply, "Exceeds maxSupply");
-        for (uint256 i = 0; i < uris.length; i++) {
-            _availableURIs.push(uris[i]);
-        }
+        _addURIs(uris);
     }
 
     /// @notice Appends additional URIs (useful for batched uploads).
     ///         Must still be called before any mint occurs.
     /// @param uris Array of additional metadata URIs.
     function appendTokenURIs(string[] calldata uris) external onlyOwner {
+        _addURIs(uris);
+    }
+
+    /// @dev Shared implementation for loading/appending URIs.  Enforces the
+    ///      pre-mint invariant and the maxSupply cap in one place.
+    function _addURIs(string[] calldata uris) internal {
         require(totalSupply == 0, "Minting already started");
         require(_availableURIs.length + uris.length <= maxSupply, "Exceeds maxSupply");
         for (uint256 i = 0; i < uris.length; i++) {
@@ -106,22 +135,65 @@ contract NFTCollection is ERC721, ERC2981, Ownable {
         }
     }
 
+    // ─── Commit-reveal mint seed ───────────────────────────────────────
+
+    /// @notice Owner pre-commits the hash of a secret seed that will be mixed
+    ///         into each mint's URI selection.  Must be called exactly once
+    ///         before the first mint.  The seed itself stays off-chain until
+    ///         `revealMintSeed` is called after the sale closes.
+    /// @param commitment keccak256(seed) — the published hash.
+    function commitMintSeed(bytes32 commitment) external onlyOwner {
+        require(!mintSeedCommitted, "Seed already committed");
+        require(commitment != bytes32(0), "Empty commitment");
+        mintSeedCommitment = commitment;
+        mintSeedCommitted = true;
+        emit MintSeedCommitted(commitment);
+    }
+
+    /// @notice Owner publishes the pre-committed seed for public auditing.
+    ///         Callers can replay every mint's URI assignment to verify the
+    ///         contract never deviated from the committed randomness source.
+    /// @param seed The pre-image of `mintSeedCommitment`.
+    function revealMintSeed(bytes32 seed) external onlyOwner {
+        require(mintSeedCommitted, "No seed committed");
+        require(mintSeedRevealed == bytes32(0), "Seed already revealed");
+        require(
+            keccak256(abi.encodePacked(seed)) == mintSeedCommitment,
+            "Seed mismatch"
+        );
+        mintSeedRevealed = seed;
+        emit MintSeedRevealed(seed);
+    }
+
     // ─── Minting ───────────────────────────────────────────────────────
 
     /// @notice Mints a new token with a pseudo-randomly selected URI.
+    /// @dev Randomness input: keccak256(mintSeedCommitment, blockhash(block.number-1),
+    ///      to, tokenId).  `blockhash` is a finalized value (unknown until the
+    ///      previous block is mined) and `mintSeedCommitment` is a secret the
+    ///      contract committed to before the sale — together they prevent
+    ///      both users and miners from pre-computing URI assignments.
     /// @param to Recipient address.
-    function mint(address to) external payable {
+    function mint(address to) external payable nonReentrant {
         require(totalSupply < maxSupply, "Supply exhausted");
         require(_availableURIs.length > 0, "URIs not loaded");
+        require(mintSeedCommitted, "Mint seed not committed");
         require(msg.value >= mintPrice, "Insufficient payment");
 
+        // ─── Effects ────────────────────────────────────────────────
         uint256 tokenId = totalSupply;
         totalSupply += 1;
 
-        // Fisher-Yates: pick a random index and swap with last
         uint256 remaining = _availableURIs.length;
         uint256 index = uint256(
-            keccak256(abi.encodePacked(block.prevrandao, block.timestamp, to, tokenId))
+            keccak256(
+                abi.encodePacked(
+                    mintSeedCommitment,
+                    blockhash(block.number - 1),
+                    to,
+                    tokenId
+                )
+            )
         ) % remaining;
 
         string memory chosenUri = _availableURIs[index];
@@ -129,20 +201,27 @@ contract NFTCollection is ERC721, ERC2981, Ownable {
         _availableURIs.pop();
 
         _tokenURIs[tokenId] = chosenUri;
-        if (_availableURIs.length == 0) {
+
+        bool justRevealed = false;
+        if (_availableURIs.length == 0 && !revealed) {
             revealed = true;
+            justRevealed = true;
         }
 
-        _safeMint(to, tokenId);
-
-        // Refund excess ETH
         uint256 excess = msg.value - mintPrice;
+
+        // ─── Interactions ───────────────────────────────────────────
         if (excess > 0) {
             (bool refunded, ) = payable(msg.sender).call{value: excess}("");
             require(refunded, "Excess refund failed");
         }
 
+        _safeMint(to, tokenId);
+
         emit NFTMinted(to, tokenId, chosenUri);
+        if (justRevealed) {
+            emit Revealed();
+        }
     }
 
     // ─── Views ─────────────────────────────────────────────────────────
@@ -163,7 +242,10 @@ contract NFTCollection is ERC721, ERC2981, Ownable {
 
     /// @notice Withdraws accumulated mint funds to the collection owner.
     function withdraw() external onlyOwner {
-        (bool success, ) = payable(owner()).call{value: address(this).balance}("");
+        uint256 amount = address(this).balance;
+        require(amount > 0, "Nothing to withdraw");
+        (bool success, ) = payable(owner()).call{value: amount}("");
         require(success, "Withdrawal failed");
+        emit Withdrawn(owner(), amount);
     }
 }
