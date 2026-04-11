@@ -241,7 +241,7 @@ contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
     // ─── Owner utilities ───────────────────────────────────────────────
 
     /// @notice Withdraws accumulated mint funds to the collection owner.
-    function withdraw() external onlyOwner {
+    function withdraw() external onlyOwner nonReentrant {
         uint256 amount = address(this).balance;
         require(amount > 0, "Nothing to withdraw");
         (bool success, ) = payable(owner()).call{value: amount}("");
