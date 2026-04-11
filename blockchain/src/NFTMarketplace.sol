@@ -380,12 +380,19 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
                 uint256 bounty = (uint256(offer.amount) * RECLAIM_BOUNTY_BPS) / 10000;
                 uint256 refund = offer.amount - bounty;
 
-                // Interactions — buyer refund, fall back to pull-payment on failure
-                // so one rejecting buyer can't brick the whole batch.
+                // Effect: optimistically credit the buyer's pull-payment ledger
+                // before any external call.  CEI-safe even if the guard on this
+                // function is ever removed.
+                pendingWithdrawals[buyer] += refund;
+                totalPendingWithdrawals += refund;
+
+                // Interaction: try push refund; on success, undo the credit.
+                // A rejecting buyer keeps the credit and can `withdrawPending`
+                // themselves — one bad buyer can't brick the whole batch.
                 (bool r, ) = payable(buyer).call{value: refund}("");
-                if (!r) {
-                    pendingWithdrawals[buyer] += refund;
-                    totalPendingWithdrawals += refund;
+                if (r) {
+                    pendingWithdrawals[buyer] -= refund;
+                    totalPendingWithdrawals -= refund;
                 }
 
                 if (bounty > 0) {
@@ -513,15 +520,26 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     ///         the receiver rejects.  Never returns royalty to the seller —
     ///         that would let malicious sellers evade royalties by deploying
     ///         rejecting receiver contracts.
+    /// @dev CEI-safe: the pull-payment ledger is credited *before* the push
+    ///      attempt, then debited back on success.  This way the receiver
+    ///      is never in a state where the contract owes them without the
+    ///      accounting reflecting it, and the state-write-after-call on
+    ///      the success path can't be exploited via reentrancy because the
+    ///      receiver already has a pending balance when `call` returns.
     function _payRoyalty(address receiver, uint256 amount) internal {
         if (amount == 0 || receiver == address(0)) return;
 
+        // Effect: optimistically credit the pull-payment ledger.
+        pendingWithdrawals[receiver] += amount;
+        totalPendingWithdrawals += amount;
+
+        // Interaction: try push; on success, undo the credit.
         (bool paid, ) = payable(receiver).call{value: amount}("");
         if (paid) {
+            pendingWithdrawals[receiver] -= amount;
+            totalPendingWithdrawals -= amount;
             emit RoyaltyPaid(receiver, amount);
         } else {
-            pendingWithdrawals[receiver] += amount;
-            totalPendingWithdrawals += amount;
             emit RoyaltyPending(receiver, amount);
         }
     }
@@ -562,7 +580,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
     /// @notice Withdraws accumulated platform fees to the owner.
     ///         Only withdraws tracked fees — escrowed offer funds are never touched.
-    function withdraw() external onlyOwner {
+    function withdraw() external onlyOwner nonReentrant {
         uint256 amount = accumulatedFees;
         require(amount > 0, "No fees to withdraw");
         accumulatedFees = 0;
