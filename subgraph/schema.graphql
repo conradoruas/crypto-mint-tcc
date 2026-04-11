@@ -108,3 +108,55 @@ type DailyCollectionSnapshot @entity {
   volume: BigInt!
   sales: BigInt!
 }
+
+# ─── Admin / royalty audit trail ──────────────────────────────────────
+# Immutable event logs for governance and payment auditing.  The entities
+# below are indexed per-event (id = txHash-logIndex) so the dApp can
+# reconstruct the full admin history without replaying contract logs.
+
+type FeeUpdate @entity(immutable: true) {
+  id: ID!
+  oldFee: BigInt!
+  newFee: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+type AdminWithdrawal @entity(immutable: true) {
+  id: ID!
+  owner: Bytes!
+  amount: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+type RoyaltyPayment @entity(immutable: true) {
+  id: ID!
+  receiver: Bytes!
+  amount: BigInt!
+  # true = ETH pushed directly, false = credited to pull-payment ledger
+  pushed: Boolean!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+type PendingWithdrawalEvent @entity(immutable: true) {
+  id: ID!
+  receiver: Bytes!
+  amount: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+# Current balance in the marketplace pull-payment ledger, keyed by receiver.
+# Updated on RoyaltyPending (credit) and PendingWithdrawn (debit).
+type PendingBalance @entity {
+  id: ID!          # receiver address (hex)
+  receiver: Bytes!
+  balance: BigInt!
+  lastUpdated: BigInt!
+}

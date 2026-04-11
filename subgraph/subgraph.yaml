@@ -42,6 +42,11 @@ dataSources:
         - MarketplaceStats
         - CollectionStat
         - DailyCollectionSnapshot
+        - FeeUpdate
+        - AdminWithdrawal
+        - RoyaltyPayment
+        - PendingWithdrawalEvent
+        - PendingBalance
       abis:
         - name: NFTMarketplace
           file: ./abis/NFTMarketplace.json
@@ -60,6 +65,16 @@ dataSources:
           handler: handleOfferCancelled
         - event: OfferExpiredRefund(indexed address,indexed uint256,indexed address,uint256)
           handler: handleOfferExpiredRefund
+        - event: MarketplaceFeeUpdated(uint256,uint256)
+          handler: handleMarketplaceFeeUpdated
+        - event: FeesWithdrawn(indexed address,uint256)
+          handler: handleFeesWithdrawn
+        - event: RoyaltyPaid(indexed address,uint256)
+          handler: handleRoyaltyPaid
+        - event: RoyaltyPending(indexed address,uint256)
+          handler: handleRoyaltyPending
+        - event: PendingWithdrawn(indexed address,uint256)
+          handler: handlePendingWithdrawn
       file: ./src/marketplace.ts
 
 templates:

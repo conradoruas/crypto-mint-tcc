@@ -6,12 +6,22 @@ import {
   OfferAccepted,
   OfferCancelled,
   OfferExpiredRefund,
+  MarketplaceFeeUpdated,
+  FeesWithdrawn,
+  RoyaltyPaid,
+  RoyaltyPending,
+  PendingWithdrawn,
 } from "../generated/NFTMarketplace/NFTMarketplace";
 import {
   NFT,
   Listing,
   Offer,
   ActivityEvent,
+  FeeUpdate,
+  AdminWithdrawal,
+  RoyaltyPayment,
+  PendingWithdrawalEvent,
+  PendingBalance,
 } from "../generated/schema";
 import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 import {
@@ -353,4 +363,92 @@ export function handleOfferExpiredRefund(event: OfferExpiredRefund): void {
   act.blockNumber = event.block.number;
   act.txHash = event.transaction.hash;
   act.save();
+}
+
+// ─── Admin / royalty audit trail ────────────────────────────────────────────
+
+function eventId(txHash: Bytes, logIndex: BigInt): string {
+  return txHash.toHexString() + "-" + logIndex.toString();
+}
+
+export function handleMarketplaceFeeUpdated(event: MarketplaceFeeUpdated): void {
+  let rec = new FeeUpdate(eventId(event.transaction.hash, event.logIndex));
+  rec.oldFee = event.params.oldFee;
+  rec.newFee = event.params.newFee;
+  rec.timestamp = event.block.timestamp;
+  rec.blockNumber = event.block.number;
+  rec.txHash = event.transaction.hash;
+  rec.save();
+}
+
+export function handleFeesWithdrawn(event: FeesWithdrawn): void {
+  let rec = new AdminWithdrawal(eventId(event.transaction.hash, event.logIndex));
+  rec.owner = event.params.owner;
+  rec.amount = event.params.amount;
+  rec.timestamp = event.block.timestamp;
+  rec.blockNumber = event.block.number;
+  rec.txHash = event.transaction.hash;
+  rec.save();
+}
+
+export function handleRoyaltyPaid(event: RoyaltyPaid): void {
+  let rec = new RoyaltyPayment(eventId(event.transaction.hash, event.logIndex));
+  rec.receiver = event.params.receiver;
+  rec.amount = event.params.amount;
+  rec.pushed = true;
+  rec.timestamp = event.block.timestamp;
+  rec.blockNumber = event.block.number;
+  rec.txHash = event.transaction.hash;
+  rec.save();
+}
+
+export function handleRoyaltyPending(event: RoyaltyPending): void {
+  // Audit log entry
+  let rec = new RoyaltyPayment(eventId(event.transaction.hash, event.logIndex));
+  rec.receiver = event.params.receiver;
+  rec.amount = event.params.amount;
+  rec.pushed = false;
+  rec.timestamp = event.block.timestamp;
+  rec.blockNumber = event.block.number;
+  rec.txHash = event.transaction.hash;
+  rec.save();
+
+  // Mutable balance — credit
+  let balanceId = event.params.receiver.toHexString();
+  let bal = PendingBalance.load(balanceId);
+  if (bal == null) {
+    bal = new PendingBalance(balanceId);
+    bal.receiver = event.params.receiver;
+    bal.balance = BigInt.zero();
+  }
+  bal.balance = bal.balance.plus(event.params.amount);
+  bal.lastUpdated = event.block.timestamp;
+  bal.save();
+}
+
+export function handlePendingWithdrawn(event: PendingWithdrawn): void {
+  // Audit log entry
+  let rec = new PendingWithdrawalEvent(
+    eventId(event.transaction.hash, event.logIndex)
+  );
+  rec.receiver = event.params.receiver;
+  rec.amount = event.params.amount;
+  rec.timestamp = event.block.timestamp;
+  rec.blockNumber = event.block.number;
+  rec.txHash = event.transaction.hash;
+  rec.save();
+
+  // Mutable balance — debit (clamp to zero for defensive safety)
+  let balanceId = event.params.receiver.toHexString();
+  let bal = PendingBalance.load(balanceId);
+  if (bal != null) {
+    let next = bal.balance.minus(event.params.amount);
+    if (next.lt(BigInt.zero())) {
+      bal.balance = BigInt.zero();
+    } else {
+      bal.balance = next;
+    }
+    bal.lastUpdated = event.block.timestamp;
+    bal.save();
+  }
 }
