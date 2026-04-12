@@ -13,6 +13,9 @@ export function handleCollectionCreated(event: CollectionCreated): void {
   collection.collectionId = event.params.collectionId;
   collection.createdAt = event.block.timestamp;
   collection.totalSupply = BigInt.fromI32(0);
+  collection.mintSeedCommitted = false;
+  collection.mintSeedRevealed = false;
+  collection.revealed = false;
 
   // Fetch full metadata from the factory contract
   let factory = NFTCollectionFactory.bind(event.address);

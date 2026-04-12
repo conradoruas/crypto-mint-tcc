@@ -1,5 +1,6 @@
 import {
   ItemListed,
+  ListingPriceUpdated,
   ItemSold,
   ListingCancelled,
   OfferMade,
@@ -80,6 +81,45 @@ export function handleItemListed(event: ItemListed): void {
   );
   addActiveListing(colStats, event.params.price);
   colStats.save();
+}
+
+export function handleListingPriceUpdated(event: ListingPriceUpdated): void {
+  let id =
+    event.params.nftContract.toHexString() +
+    "-" +
+    event.params.tokenId.toString();
+
+  let listing = Listing.load(id);
+  if (listing) {
+    listing.price = event.params.newPrice;
+    listing.updatedAt = event.block.timestamp;
+    listing.save();
+  }
+
+  // Update floor price if the new price is lower, or recalc if old price was the floor
+  let collectionId = event.params.nftContract.toHexString();
+  let colStats = getOrCreateCollectionStat(collectionId, event.block.timestamp);
+  if (!colStats.floorPrice || event.params.newPrice.lt(colStats.floorPrice!)) {
+    colStats.floorPrice = event.params.newPrice;
+  } else if (event.params.oldPrice.le(colStats.floorPrice!)) {
+    // Old price was the floor — we can't easily recalc, so null it out.
+    // Next listing/update event will restore it.
+    colStats.floorPrice = null;
+  }
+  colStats.save();
+
+  let actId =
+    event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+  let act = new ActivityEvent(actId);
+  act.type = "listing_updated";
+  act.nftContract = event.params.nftContract;
+  act.tokenId = event.params.tokenId;
+  act.from = event.params.seller;
+  act.price = event.params.newPrice;
+  act.timestamp = event.block.timestamp;
+  act.blockNumber = event.block.number;
+  act.txHash = event.transaction.hash;
+  act.save();
 }
 
 function deactivateOfferForBuyer(nftId: string, buyer: Bytes): void {
@@ -200,17 +240,34 @@ export function handleListingCancelled(event: ListingCancelled): void {
 }
 
 export function handleOfferMade(event: OfferMade): void {
-  let id =
+  let nftId =
+    event.params.nftContract.toHexString() +
+    "-" +
+    event.params.tokenId.toString();
+
+  // Deactivate any previous offer by this buyer on this NFT to avoid
+  // ghost active offers after replacement.
+  let canonicalId =
     event.params.nftContract.toHexString() +
     "-" +
     event.params.tokenId.toString() +
     "-" +
     event.params.buyer.toHexString();
+  let prev = Offer.load(canonicalId);
+  if (prev && prev.active) {
+    prev.active = false;
+    prev.save();
+  }
 
-  let nftId =
+  // Use tx-unique ID so replaced offers are never overwritten.
+  let id =
     event.params.nftContract.toHexString() +
     "-" +
-    event.params.tokenId.toString();
+    event.params.tokenId.toString() +
+    "-" +
+    event.params.buyer.toHexString() +
+    "-" +
+    event.transaction.hash.toHexString();
 
   let offer = new Offer(id);
   offer.nftContract = event.params.nftContract;
@@ -222,6 +279,19 @@ export function handleOfferMade(event: OfferMade): void {
   offer.nft = nftId;
   offer.createdAt = event.block.timestamp;
   offer.save();
+
+  // Keep canonical pointer so other handlers can find the latest offer
+  // by this buyer on this NFT (used by deactivateOfferForBuyer).
+  let pointer = new Offer(canonicalId);
+  pointer.nftContract = event.params.nftContract;
+  pointer.tokenId = event.params.tokenId;
+  pointer.buyer = event.params.buyer;
+  pointer.amount = event.params.amount;
+  pointer.expiresAt = event.params.expiresAt;
+  pointer.active = true;
+  pointer.nft = nftId;
+  pointer.createdAt = event.block.timestamp;
+  pointer.save();
 
   let actId =
     event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
@@ -311,14 +381,15 @@ export function handleOfferAccepted(event: OfferAccepted): void {
 }
 
 export function handleOfferCancelled(event: OfferCancelled): void {
-  let id =
+  // Deactivate the canonical pointer
+  let canonicalId =
     event.params.nftContract.toHexString() +
     "-" +
     event.params.tokenId.toString() +
     "-" +
     event.params.buyer.toHexString();
 
-  let offer = Offer.load(id);
+  let offer = Offer.load(canonicalId);
   if (offer) {
     offer.active = false;
     offer.save();

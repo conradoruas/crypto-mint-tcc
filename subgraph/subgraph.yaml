@@ -53,6 +53,8 @@ dataSources:
       eventHandlers:
         - event: ItemListed(indexed address,indexed uint256,indexed address,uint256)
           handler: handleItemListed
+        - event: ListingPriceUpdated(indexed address,indexed uint256,indexed address,uint256,uint256)
+          handler: handleListingPriceUpdated
         - event: ItemSold(indexed address,indexed uint256,address,address,uint256)
           handler: handleItemSold
         - event: ListingCancelled(indexed address,indexed uint256,indexed address)
@@ -100,4 +102,12 @@ templates:
           handler: handleNFTMinted
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer
+        - event: MintSeedCommitted(bytes32)
+          handler: handleMintSeedCommitted
+        - event: MintSeedRevealed(bytes32)
+          handler: handleMintSeedRevealed
+        - event: Revealed()
+          handler: handleRevealed
+        - event: Withdrawn(indexed address,uint256)
+          handler: handleCollectionWithdrawn
       file: ./src/collection.ts

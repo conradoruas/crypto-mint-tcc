@@ -11,9 +11,22 @@ type Collection @entity {
   totalSupply: BigInt!
   createdAt: BigInt!
   collectionId: BigInt!
+  mintSeedCommitted: Boolean!
+  mintSeedRevealed: Boolean!
+  revealed: Boolean!
   nfts: [NFT!]! @derivedFrom(field: "collection")
   stats: CollectionStat
   dailySnapshots: [DailyCollectionSnapshot!]! @derivedFrom(field: "collection")
+}
+
+type CollectionWithdrawal @entity(immutable: true) {
+  id: ID!
+  collection: Bytes!
+  owner: Bytes!
+  amount: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
 }
 
 type NFT @entity {
@@ -54,6 +67,7 @@ type Offer @entity {
 
 enum ActivityType {
   listing
+  listing_updated
   listing_cancelled
   sale
   offer
