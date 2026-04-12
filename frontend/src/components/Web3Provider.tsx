@@ -13,6 +13,7 @@ const config = createConfig(
       process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "",
     chains: [sepolia],
     appName: "CryptoMint NFT Marketplace",
+    enableAaveAccount: false,
     // Roteia todas as leituras RPC pelo proxy Alchemy server-side.
     // Garante useBalance, useReadContract e useNFTListing confiáveis.
     transports: {
