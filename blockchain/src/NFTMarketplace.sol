@@ -17,6 +17,34 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 ///      on every sale.
 contract NFTMarketplace is Ownable, ReentrancyGuard {
 
+    // ─── Custom errors ──────────────────────────────
+    error NotERC721();
+    error NotNFTOwner();
+    error PriceTooLow();
+    error PriceExceedsUint128();
+    error MarketplaceNotApproved();
+    error AlreadyListed();
+    error NotForSale();
+    error IncorrectPayment();
+    error SellerCannotBuyOwn();
+    error GhostOfferRefundFailed();
+    error NotListed();
+    error NotAuthorizedToCancel();
+    error TokenDoesNotExist();
+    error OfferTooLow();
+    error OfferExceedsUint128();
+    error OwnerCannotOffer();
+    error ActiveOfferExists();
+    error OfferNotActive();
+    error OfferExpired();
+    error OfferNotExpired();
+    error BountyPaymentFailed();
+    error NothingToWithdraw();
+    error WithdrawalFailed();
+    error FeesExceedSalePrice();
+    error MaxFeeExceeded();
+    error NoFeesToWithdraw();
+
     // ─────────────────────────────────────────────
     // State
     // ─────────────────────────────────────────────
@@ -87,6 +115,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     // ─────────────────────────────────────────────
 
     event ItemListed(address indexed nftContract, uint256 indexed tokenId, address indexed seller, uint256 price);
+    event ListingPriceUpdated(address indexed nftContract, uint256 indexed tokenId, address indexed seller, uint256 oldPrice, uint256 newPrice);
     event ItemSold(address indexed nftContract, uint256 indexed tokenId, address seller, address buyer, uint256 price);
     event ListingCancelled(address indexed nftContract, uint256 indexed tokenId, address indexed seller);
     event OfferMade(address indexed nftContract, uint256 indexed tokenId, address indexed buyer, uint256 amount, uint256 expiresAt);
@@ -113,20 +142,16 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
     /// @notice Lists an ERC-721 NFT for sale at a fixed price.
     function listItem(address nftContract, uint256 tokenId, uint256 price) external {
-        require(
-            IERC165(nftContract).supportsInterface(type(IERC721).interfaceId),
-            "Contract does not support ERC-721"
-        );
+        if (!IERC165(nftContract).supportsInterface(type(IERC721).interfaceId)) revert NotERC721();
         IERC721 nft = IERC721(nftContract);
 
-        require(nft.ownerOf(tokenId) == msg.sender, "Not the NFT owner");
-        require(price >= 0.0001 ether, "Minimum price is 0.0001 ETH");
-        require(price <= type(uint128).max, "Price exceeds uint128");
-        require(
-            nft.getApproved(tokenId) == address(this) || nft.isApprovedForAll(msg.sender, address(this)),
-            "Marketplace not approved to transfer this NFT"
-        );
-        require(!listings[nftContract][tokenId].active, "NFT is already listed");
+        if (nft.ownerOf(tokenId) != msg.sender) revert NotNFTOwner();
+        if (price < 0.0001 ether) revert PriceTooLow();
+        if (price > type(uint128).max) revert PriceExceedsUint128();
+        if (
+            nft.getApproved(tokenId) != address(this) && !nft.isApprovedForAll(msg.sender, address(this))
+        ) revert MarketplaceNotApproved();
+        if (listings[nftContract][tokenId].active) revert AlreadyListed();
 
         listings[nftContract][tokenId] = Listing({
             seller: msg.sender,
@@ -135,6 +160,21 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         });
 
         emit ItemListed(nftContract, tokenId, msg.sender, price);
+    }
+
+    /// @notice Updates the price of an active listing without cancelling it.
+    ///         Avoids the cancel-then-relist gap that could be front-run.
+    function updateListingPrice(address nftContract, uint256 tokenId, uint256 newPrice) external {
+        Listing storage listing = listings[nftContract][tokenId];
+        if (!listing.active) revert NotListed();
+        if (listing.seller != msg.sender) revert NotNFTOwner();
+        if (newPrice < 0.0001 ether) revert PriceTooLow();
+        if (newPrice > type(uint128).max) revert PriceExceedsUint128();
+
+        uint256 oldPrice = listing.price;
+        listing.price = uint128(newPrice);
+
+        emit ListingPriceUpdated(nftContract, tokenId, msg.sender, oldPrice, newPrice);
     }
 
     // ─────────────────────────────────────────────
@@ -147,9 +187,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     function buyItem(address nftContract, uint256 tokenId) external payable nonReentrant {
         Listing memory listing = listings[nftContract][tokenId];
 
-        require(listing.active, "NFT is not for sale");
-        require(msg.value == listing.price, "Incorrect payment amount");
-        require(msg.sender != listing.seller, "Seller cannot buy own NFT");
+        if (!listing.active) revert NotForSale();
+        if (msg.value != listing.price) revert IncorrectPayment();
+        if (msg.sender == listing.seller) revert SellerCannotBuyOwn();
 
         delete listings[nftContract][tokenId];
 
@@ -169,9 +209,8 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
         unchecked { accumulatedFees += marketFee; }
 
-        // 1) Pay seller (doc step 4)
-        (bool sellerPaid, ) = payable(listing.seller).call{value: sellerProceeds}("");
-        require(sellerPaid, "Seller payment failed");
+        // 1) Pay seller — pull-payment fallback if receiver rejects ETH
+        _paySeller(listing.seller, sellerProceeds);
 
         // 2) Pay royalty (pull-fallback if receiver cannot accept push)
         _payRoyalty(royaltyReceiver, royaltyFee);
@@ -179,7 +218,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         // 3) Refund ghost offer (if any) — state already cleared above
         if (ghostRefund > 0) {
             (bool refunded, ) = payable(msg.sender).call{value: ghostRefund}("");
-            require(refunded, "Ghost offer refund failed");
+            if (!refunded) revert GhostOfferRefundFailed();
             emit OfferCancelled(nftContract, tokenId, msg.sender);
         }
 
@@ -198,8 +237,8 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     function cancelListing(address nftContract, uint256 tokenId) external {
         Listing memory listing = listings[nftContract][tokenId];
 
-        require(listing.active, "NFT is not listed");
-        require(listing.seller == msg.sender || msg.sender == owner(), "Not authorized to cancel");
+        if (!listing.active) revert NotListed();
+        if (listing.seller != msg.sender && msg.sender != owner()) revert NotAuthorizedToCancel();
 
         delete listings[nftContract][tokenId];
 
@@ -214,22 +253,19 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     ///         If the caller already has an *expired* offer, it is refunded
     ///         automatically before the new offer is accepted.
     function makeOffer(address nftContract, uint256 tokenId) external payable nonReentrant {
-        require(
-            IERC165(nftContract).supportsInterface(type(IERC721).interfaceId),
-            "Contract does not support ERC-721"
-        );
+        if (!IERC165(nftContract).supportsInterface(type(IERC721).interfaceId)) revert NotERC721();
         IERC721 nft = IERC721(nftContract);
 
         address tokenOwner = nft.ownerOf(tokenId);
-        require(tokenOwner != address(0), "Token does not exist");
-        require(msg.value >= 0.0001 ether, "Minimum offer is 0.0001 ETH");
-        require(msg.value <= type(uint128).max, "Offer exceeds uint128");
-        require(tokenOwner != msg.sender, "Owner cannot offer on own NFT");
+        if (tokenOwner == address(0)) revert TokenDoesNotExist();
+        if (msg.value < 0.0001 ether) revert OfferTooLow();
+        if (msg.value > type(uint128).max) revert OfferExceedsUint128();
+        if (tokenOwner == msg.sender) revert OwnerCannotOffer();
 
         Offer memory existing = offers[nftContract][tokenId][msg.sender];
         uint256 expiredRefund = 0;
         if (existing.active) {
-            require(block.timestamp > existing.expiresAt, "You already have an active offer on this NFT");
+            if (block.timestamp <= existing.expiresAt) revert ActiveOfferExists();
             expiredRefund = existing.amount;
         }
 
@@ -245,9 +281,17 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         _addOfferBuyer(nftContract, tokenId, msg.sender);
 
         // Interactions — CEI-compliant: state already written above.
+        // Pull-payment fallback so a contract buyer that rejects ETH
+        // can still replace expired offers.
         if (expiredRefund > 0) {
+            pendingWithdrawals[msg.sender] += expiredRefund;
+            totalPendingWithdrawals += expiredRefund;
+
             (bool refunded, ) = payable(msg.sender).call{value: expiredRefund}("");
-            require(refunded, "Expired offer refund failed");
+            if (refunded) {
+                pendingWithdrawals[msg.sender] -= expiredRefund;
+                totalPendingWithdrawals -= expiredRefund;
+            }
             emit OfferExpiredRefund(nftContract, tokenId, msg.sender, expiredRefund);
         }
 
@@ -263,15 +307,14 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     function acceptOffer(address nftContract, uint256 tokenId, address buyer) external nonReentrant {
         IERC721 nft = IERC721(nftContract);
 
-        require(nft.ownerOf(tokenId) == msg.sender, "Not the NFT owner");
-        require(
-            nft.getApproved(tokenId) == address(this) || nft.isApprovedForAll(msg.sender, address(this)),
-            "Marketplace not approved to transfer this NFT"
-        );
+        if (nft.ownerOf(tokenId) != msg.sender) revert NotNFTOwner();
+        if (
+            nft.getApproved(tokenId) != address(this) && !nft.isApprovedForAll(msg.sender, address(this))
+        ) revert MarketplaceNotApproved();
 
         Offer memory offer = offers[nftContract][tokenId][buyer];
-        require(offer.active, "Offer is not active");
-        require(block.timestamp <= offer.expiresAt, "Offer has expired");
+        if (!offer.active) revert OfferNotActive();
+        if (block.timestamp > offer.expiresAt) revert OfferExpired();
 
         // Effects
         delete offers[nftContract][tokenId][buyer];
@@ -288,8 +331,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         unchecked { accumulatedFees += marketFee; }
 
         // Interactions: pay seller, pay royalty, transfer NFT last.
-        (bool sellerPaid, ) = payable(msg.sender).call{value: sellerProceeds}("");
-        require(sellerPaid, "Seller payment failed");
+        _paySeller(msg.sender, sellerProceeds);
 
         _payRoyalty(royaltyReceiver, royaltyFee);
 
@@ -305,13 +347,21 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     /// @notice Cancels the caller's active offer and refunds escrowed ETH.
     function cancelOffer(address nftContract, uint256 tokenId) external nonReentrant {
         Offer memory offer = offers[nftContract][tokenId][msg.sender];
-        require(offer.active, "You have no active offer on this NFT");
+        if (!offer.active) revert OfferNotActive();
 
         delete offers[nftContract][tokenId][msg.sender];
         _removeOfferBuyer(nftContract, tokenId, msg.sender);
 
+        // Pull-payment fallback — prevents a contract-based buyer that
+        // rejects ETH from being permanently unable to cancel.
+        pendingWithdrawals[msg.sender] += offer.amount;
+        totalPendingWithdrawals += offer.amount;
+
         (bool refunded, ) = payable(msg.sender).call{value: offer.amount}("");
-        require(refunded, "Refund failed");
+        if (refunded) {
+            pendingWithdrawals[msg.sender] -= offer.amount;
+            totalPendingWithdrawals -= offer.amount;
+        }
 
         emit OfferCancelled(nftContract, tokenId, msg.sender);
     }
@@ -322,8 +372,8 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     ///         permissionless cleanup.
     function reclaimExpiredOffer(address nftContract, uint256 tokenId, address buyer) external nonReentrant {
         Offer memory offer = offers[nftContract][tokenId][buyer];
-        require(offer.active, "Offer is not active");
-        require(block.timestamp > offer.expiresAt, "Offer has not expired yet");
+        if (!offer.active) revert OfferNotActive();
+        if (block.timestamp <= offer.expiresAt) revert OfferNotExpired();
 
         delete offers[nftContract][tokenId][buyer];
         _removeOfferBuyer(nftContract, tokenId, buyer);
@@ -335,12 +385,19 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
             refund = offer.amount - bounty;
         }
 
+        // Pull-payment fallback for the buyer refund
+        pendingWithdrawals[buyer] += refund;
+        totalPendingWithdrawals += refund;
+
         (bool refunded, ) = payable(buyer).call{value: refund}("");
-        require(refunded, "Refund failed");
+        if (refunded) {
+            pendingWithdrawals[buyer] -= refund;
+            totalPendingWithdrawals -= refund;
+        }
 
         if (bounty > 0) {
             (bool bountyPaid, ) = payable(msg.sender).call{value: bounty}("");
-            require(bountyPaid, "Bounty payment failed");
+            if (!bountyPaid) revert BountyPaymentFailed();
             emit ReclaimBountyPaid(msg.sender, buyer, bounty);
         }
 
@@ -397,7 +454,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
                 if (bounty > 0) {
                     (bool b, ) = payable(msg.sender).call{value: bounty}("");
-                    require(b, "Bounty payment failed");
+                    if (!b) revert BountyPaymentFailed();
                     emit ReclaimBountyPaid(msg.sender, buyer, bounty);
                 }
 
@@ -422,13 +479,13 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     ///         ledger (e.g. royalty receivers that rejected a push).
     function withdrawPending() external nonReentrant {
         uint256 amount = pendingWithdrawals[msg.sender];
-        require(amount > 0, "Nothing to withdraw");
+        if (amount == 0) revert NothingToWithdraw();
 
         pendingWithdrawals[msg.sender] = 0;
         totalPendingWithdrawals -= amount;
 
         (bool ok, ) = payable(msg.sender).call{value: amount}("");
-        require(ok, "Withdrawal failed");
+        if (!ok) revert WithdrawalFailed();
 
         emit PendingWithdrawn(msg.sender, amount);
     }
@@ -512,8 +569,24 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
             }
         }
 
-        require(marketFee + royaltyFee <= salePrice, "Fees exceed sale price");
+        if (marketFee + royaltyFee > salePrice) revert FeesExceedSalePrice();
         sellerProceeds = salePrice - marketFee - royaltyFee;
+    }
+
+    /// @notice Pays seller via push; falls back to pull-payment ledger if
+    ///         the seller rejects ETH.  Prevents a rejecting seller from
+    ///         bricking purchases on their listings.
+    function _paySeller(address seller, uint256 amount) internal {
+        if (amount == 0) return;
+
+        pendingWithdrawals[seller] += amount;
+        totalPendingWithdrawals += amount;
+
+        (bool paid, ) = payable(seller).call{value: amount}("");
+        if (paid) {
+            pendingWithdrawals[seller] -= amount;
+            totalPendingWithdrawals -= amount;
+        }
     }
 
     /// @notice Pays royalty via push; falls back to pull-payment ledger if
@@ -572,7 +645,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
     /// @notice Updates the marketplace fee (max 10% = 1000 basis points).
     function setMarketplaceFee(uint256 newFee) external onlyOwner {
-        require(newFee <= 1000, "Maximum fee is 10%");
+        if (newFee > 1000) revert MaxFeeExceeded();
         uint256 oldFee = marketplaceFee;
         marketplaceFee = newFee;
         emit MarketplaceFeeUpdated(oldFee, newFee);
@@ -582,10 +655,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     ///         Only withdraws tracked fees — escrowed offer funds are never touched.
     function withdraw() external onlyOwner nonReentrant {
         uint256 amount = accumulatedFees;
-        require(amount > 0, "No fees to withdraw");
+        if (amount == 0) revert NoFeesToWithdraw();
         accumulatedFees = 0;
         (bool success, ) = payable(owner()).call{value: amount}("");
-        require(success, "Withdrawal failed");
+        if (!success) revert WithdrawalFailed();
 
         emit FeesWithdrawn(owner(), amount);
     }
