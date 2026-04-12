@@ -6,9 +6,9 @@ dataSources:
     name: NFTCollectionFactory
     network: sepolia
     source:
-      address: "0x6840a22e29e3ca1dee6c44dbdee25b459dc561a2"
+      address: "0xf17F507081ebe07F5E2Bb7BAaE36188B4751E6c3"
       abi: NFTCollectionFactory
-      startBlock: 10510120
+      startBlock: 10647287
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -28,9 +28,9 @@ dataSources:
     name: NFTMarketplace
     network: sepolia
     source:
-      address: "0xFE11071876B7121b8Fa6006E4a90b60292Df5046"
+      address: "0x32286F56e816ba139Cd52efdB6680aA0b0641C74"
       abi: NFTMarketplace
-      startBlock: 10627751
+      startBlock: 10647296
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
