@@ -11,6 +11,10 @@ import {NFTCollection} from "./NFTCollection.sol";
 ///      collection owner and royalty receiver.
 contract NFTCollectionFactory {
 
+    // ─── Custom errors ──────────────────────────────
+    error NameRequired();
+    error SupplyMustBePositive();
+
     // ─────────────────────────────────────────────
     // State
     // ─────────────────────────────────────────────
@@ -70,8 +74,8 @@ contract NFTCollectionFactory {
         uint256 maxSupply,
         uint256 mintPrice
     ) external returns (address collectionAddress) {
-        require(bytes(name).length > 0, "Name is required");
-        require(maxSupply > 0, "Supply must be greater than 0");
+        if (bytes(name).length == 0) revert NameRequired();
+        if (maxSupply == 0) revert SupplyMustBePositive();
 
         NFTCollection collection = new NFTCollection(
             name,

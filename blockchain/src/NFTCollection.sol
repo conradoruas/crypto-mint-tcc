@@ -17,6 +17,24 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 ///      so neither the user nor a miner can pre-compute the assignment.
 contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
 
+    // ─── Custom errors ────────────────────────────────────────────────
+    error MintingAlreadyStarted();
+    error ExceedsMaxSupply();
+    error SeedAlreadyCommitted();
+    error EmptyCommitment();
+    error URIsNotFullyLoaded();
+    error NoSeedCommitted();
+    error SeedAlreadyRevealed();
+    error SeedMismatch();
+    error SupplyExhausted();
+    error URIsNotLoaded();
+    error MintSeedNotCommitted();
+    error InsufficientPayment();
+    error BlockhashUnavailable();
+    error ExcessRefundFailed();
+    error NothingToWithdraw();
+    error WithdrawalFailed();
+
     /// @notice Maximum number of tokens that can be minted.
     uint256 public maxSupply;
 
@@ -128,8 +146,8 @@ contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
     /// @dev Shared implementation for loading/appending URIs.  Enforces the
     ///      pre-mint invariant and the maxSupply cap in one place.
     function _addURIs(string[] calldata uris) internal {
-        require(totalSupply == 0, "Minting already started");
-        require(_availableURIs.length + uris.length <= maxSupply, "Exceeds maxSupply");
+        if (totalSupply != 0) revert MintingAlreadyStarted();
+        if (_availableURIs.length + uris.length > maxSupply) revert ExceedsMaxSupply();
         for (uint256 i = 0; i < uris.length; i++) {
             _availableURIs.push(uris[i]);
         }
@@ -143,8 +161,9 @@ contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
     ///         `revealMintSeed` is called after the sale closes.
     /// @param commitment keccak256(seed) — the published hash.
     function commitMintSeed(bytes32 commitment) external onlyOwner {
-        require(!mintSeedCommitted, "Seed already committed");
-        require(commitment != bytes32(0), "Empty commitment");
+        if (mintSeedCommitted) revert SeedAlreadyCommitted();
+        if (commitment == bytes32(0)) revert EmptyCommitment();
+        if (_availableURIs.length != maxSupply) revert URIsNotFullyLoaded();
         mintSeedCommitment = commitment;
         mintSeedCommitted = true;
         emit MintSeedCommitted(commitment);
@@ -155,12 +174,9 @@ contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
     ///         contract never deviated from the committed randomness source.
     /// @param seed The pre-image of `mintSeedCommitment`.
     function revealMintSeed(bytes32 seed) external onlyOwner {
-        require(mintSeedCommitted, "No seed committed");
-        require(mintSeedRevealed == bytes32(0), "Seed already revealed");
-        require(
-            keccak256(abi.encodePacked(seed)) == mintSeedCommitment,
-            "Seed mismatch"
-        );
+        if (!mintSeedCommitted) revert NoSeedCommitted();
+        if (mintSeedRevealed != bytes32(0)) revert SeedAlreadyRevealed();
+        if (keccak256(abi.encodePacked(seed)) != mintSeedCommitment) revert SeedMismatch();
         mintSeedRevealed = seed;
         emit MintSeedRevealed(seed);
     }
@@ -175,21 +191,24 @@ contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
     ///      both users and miners from pre-computing URI assignments.
     /// @param to Recipient address.
     function mint(address to) external payable nonReentrant {
-        require(totalSupply < maxSupply, "Supply exhausted");
-        require(_availableURIs.length > 0, "URIs not loaded");
-        require(mintSeedCommitted, "Mint seed not committed");
-        require(msg.value >= mintPrice, "Insufficient payment");
+        if (totalSupply >= maxSupply) revert SupplyExhausted();
+        if (_availableURIs.length == 0) revert URIsNotLoaded();
+        if (!mintSeedCommitted) revert MintSeedNotCommitted();
+        if (msg.value < mintPrice) revert InsufficientPayment();
 
         // ─── Effects ────────────────────────────────────────────────
         uint256 tokenId = totalSupply;
         totalSupply += 1;
 
         uint256 remaining = _availableURIs.length;
+        bytes32 bhash = blockhash(block.number - 1);
+        if (bhash == bytes32(0)) revert BlockhashUnavailable();
+
         uint256 index = uint256(
             keccak256(
                 abi.encodePacked(
                     mintSeedCommitment,
-                    blockhash(block.number - 1),
+                    bhash,
                     to,
                     tokenId
                 )
@@ -211,12 +230,14 @@ contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
         uint256 excess = msg.value - mintPrice;
 
         // ─── Interactions ───────────────────────────────────────────
+        // Mint first, refund excess last — prevents the refund callback
+        // from executing before the token exists.
+        _safeMint(to, tokenId);
+
         if (excess > 0) {
             (bool refunded, ) = payable(msg.sender).call{value: excess}("");
-            require(refunded, "Excess refund failed");
+            if (!refunded) revert ExcessRefundFailed();
         }
-
-        _safeMint(to, tokenId);
 
         emit NFTMinted(to, tokenId, chosenUri);
         if (justRevealed) {
@@ -243,9 +264,9 @@ contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
     /// @notice Withdraws accumulated mint funds to the collection owner.
     function withdraw() external onlyOwner nonReentrant {
         uint256 amount = address(this).balance;
-        require(amount > 0, "Nothing to withdraw");
+        if (amount == 0) revert NothingToWithdraw();
         (bool success, ) = payable(owner()).call{value: amount}("");
-        require(success, "Withdrawal failed");
+        if (!success) revert WithdrawalFailed();
         emit Withdrawn(owner(), amount);
     }
 }
