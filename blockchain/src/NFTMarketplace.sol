@@ -280,17 +280,12 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         });
         _addOfferBuyer(nftContract, tokenId, msg.sender);
 
-        // Interactions — CEI-compliant: state already written above.
-        // Pull-payment fallback so a contract buyer that rejects ETH
-        // can still replace expired offers.
+        // Push expired-offer refund; fall back to pull-payment if receiver rejects.
         if (expiredRefund > 0) {
-            pendingWithdrawals[msg.sender] += expiredRefund;
-            totalPendingWithdrawals += expiredRefund;
-
             (bool refunded, ) = payable(msg.sender).call{value: expiredRefund}("");
-            if (refunded) {
-                pendingWithdrawals[msg.sender] -= expiredRefund;
-                totalPendingWithdrawals -= expiredRefund;
+            if (!refunded) {
+                pendingWithdrawals[msg.sender] += expiredRefund;
+                totalPendingWithdrawals += expiredRefund;
             }
             emit OfferExpiredRefund(nftContract, tokenId, msg.sender, expiredRefund);
         }
@@ -352,15 +347,11 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         delete offers[nftContract][tokenId][msg.sender];
         _removeOfferBuyer(nftContract, tokenId, msg.sender);
 
-        // Pull-payment fallback — prevents a contract-based buyer that
-        // rejects ETH from being permanently unable to cancel.
-        pendingWithdrawals[msg.sender] += offer.amount;
-        totalPendingWithdrawals += offer.amount;
-
+        // Push refund; fall back to pull-payment if receiver rejects ETH.
         (bool refunded, ) = payable(msg.sender).call{value: offer.amount}("");
-        if (refunded) {
-            pendingWithdrawals[msg.sender] -= offer.amount;
-            totalPendingWithdrawals -= offer.amount;
+        if (!refunded) {
+            pendingWithdrawals[msg.sender] += offer.amount;
+            totalPendingWithdrawals += offer.amount;
         }
 
         emit OfferCancelled(nftContract, tokenId, msg.sender);
@@ -385,14 +376,11 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
             refund = offer.amount - bounty;
         }
 
-        // Pull-payment fallback for the buyer refund
-        pendingWithdrawals[buyer] += refund;
-        totalPendingWithdrawals += refund;
-
+        // Push refund; fall back to pull-payment if buyer rejects ETH.
         (bool refunded, ) = payable(buyer).call{value: refund}("");
-        if (refunded) {
-            pendingWithdrawals[buyer] -= refund;
-            totalPendingWithdrawals -= refund;
+        if (!refunded) {
+            pendingWithdrawals[buyer] += refund;
+            totalPendingWithdrawals += refund;
         }
 
         if (bounty > 0) {
@@ -437,19 +425,13 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
                 uint256 bounty = (uint256(offer.amount) * RECLAIM_BOUNTY_BPS) / 10000;
                 uint256 refund = offer.amount - bounty;
 
-                // Effect: optimistically credit the buyer's pull-payment ledger
-                // before any external call.  CEI-safe even if the guard on this
-                // function is ever removed.
-                pendingWithdrawals[buyer] += refund;
-                totalPendingWithdrawals += refund;
-
-                // Interaction: try push refund; on success, undo the credit.
-                // A rejecting buyer keeps the credit and can `withdrawPending`
+                // Push refund; fall back to pull-payment if buyer rejects ETH.
+                // A rejecting buyer gets credited and can `withdrawPending`
                 // themselves — one bad buyer can't brick the whole batch.
                 (bool r, ) = payable(buyer).call{value: refund}("");
-                if (r) {
-                    pendingWithdrawals[buyer] -= refund;
-                    totalPendingWithdrawals -= refund;
+                if (!r) {
+                    pendingWithdrawals[buyer] += refund;
+                    totalPendingWithdrawals += refund;
                 }
 
                 if (bounty > 0) {
@@ -579,13 +561,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     function _paySeller(address seller, uint256 amount) internal {
         if (amount == 0) return;
 
-        pendingWithdrawals[seller] += amount;
-        totalPendingWithdrawals += amount;
-
         (bool paid, ) = payable(seller).call{value: amount}("");
-        if (paid) {
-            pendingWithdrawals[seller] -= amount;
-            totalPendingWithdrawals -= amount;
+        if (!paid) {
+            pendingWithdrawals[seller] += amount;
+            totalPendingWithdrawals += amount;
         }
     }
 
@@ -602,17 +581,12 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     function _payRoyalty(address receiver, uint256 amount) internal {
         if (amount == 0 || receiver == address(0)) return;
 
-        // Effect: optimistically credit the pull-payment ledger.
-        pendingWithdrawals[receiver] += amount;
-        totalPendingWithdrawals += amount;
-
-        // Interaction: try push; on success, undo the credit.
         (bool paid, ) = payable(receiver).call{value: amount}("");
         if (paid) {
-            pendingWithdrawals[receiver] -= amount;
-            totalPendingWithdrawals -= amount;
             emit RoyaltyPaid(receiver, amount);
         } else {
+            pendingWithdrawals[receiver] += amount;
+            totalPendingWithdrawals += amount;
             emit RoyaltyPending(receiver, amount);
         }
     }
