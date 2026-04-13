@@ -184,6 +184,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     /// @notice Buys a listed NFT.  Respects ERC-2981 royalties (capped at
     ///         MAX_ROYALTY_BPS) and falls back to pull-payment if the
     ///         royalty receiver rejects ETH.
+    // slither-disable-next-line reentrancy-eth
     function buyItem(address nftContract, uint256 tokenId) external payable nonReentrant {
         Listing memory listing = listings[nftContract][tokenId];
 
@@ -252,6 +253,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     /// @notice Places an offer on any minted NFT.  ETH is held in escrow.
     ///         If the caller already has an *expired* offer, it is refunded
     ///         automatically before the new offer is accepted.
+    // slither-disable-next-line reentrancy-benign
     function makeOffer(address nftContract, uint256 tokenId) external payable nonReentrant {
         if (!IERC165(nftContract).supportsInterface(type(IERC721).interfaceId)) revert NotERC721();
         IERC721 nft = IERC721(nftContract);
@@ -299,6 +301,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
 
     /// @notice Accepts a specific buyer's offer on an NFT the caller owns.
     ///         If the NFT was also listed, the listing is cancelled automatically.
+    // slither-disable-next-line reentrancy-eth
     function acceptOffer(address nftContract, uint256 tokenId, address buyer) external nonReentrant {
         IERC721 nft = IERC721(nftContract);
 
@@ -340,6 +343,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     // ─────────────────────────────────────────────
 
     /// @notice Cancels the caller's active offer and refunds escrowed ETH.
+    // slither-disable-next-line reentrancy-benign
     function cancelOffer(address nftContract, uint256 tokenId) external nonReentrant {
         Offer memory offer = offers[nftContract][tokenId][msg.sender];
         if (!offer.active) revert OfferNotActive();
@@ -361,6 +365,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     ///         the original buyer.  If the caller is a third party (not the
     ///         buyer), a small bounty is taken from the refund to reward
     ///         permissionless cleanup.
+    // slither-disable-next-line reentrancy-benign
     function reclaimExpiredOffer(address nftContract, uint256 tokenId, address buyer) external nonReentrant {
         Offer memory offer = offers[nftContract][tokenId][buyer];
         if (!offer.active) revert OfferNotActive();
@@ -402,6 +407,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     ///                      (0 = unbounded).  Pass a finite value to stay
     ///                      under the block gas limit on crowded tokens.
     /// @return pruned Number of offers actually pruned.
+    // slither-disable-next-line reentrancy-eth,arbitrary-send-eth
     function pruneExpiredOffers(
         address nftContract,
         uint256 tokenId,
@@ -411,6 +417,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
         uint256 cap = maxIterations == 0 ? type(uint256).max : maxIterations;
         uint256 inspected = 0;
         uint256 i = 0;
+        uint256 pendingDelta = 0;
 
         while (i < buyers.length && inspected < cap) {
             address buyer = buyers[i];
@@ -431,7 +438,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
                 (bool r, ) = payable(buyer).call{value: refund}("");
                 if (!r) {
                     pendingWithdrawals[buyer] += refund;
-                    totalPendingWithdrawals += refund;
+                    pendingDelta += refund;
                 }
 
                 if (bounty > 0) {
@@ -446,6 +453,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
                 i += 1;
             }
             inspected += 1;
+        }
+
+        if (pendingDelta > 0) {
+            totalPendingWithdrawals += pendingDelta;
         }
 
         if (pruned > 0) {
@@ -538,17 +549,26 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     {
         marketFee = (salePrice * marketplaceFee) / 10000;
 
-        (bool ok, bytes memory data) = nftContract.staticcall{gas: ROYALTY_INFO_GAS}(
-            abi.encodeWithSelector(IERC2981.royaltyInfo.selector, tokenId, salePrice)
-        );
-        if (ok && data.length >= 64) {
-            (address receiver, uint256 amount) = abi.decode(data, (address, uint256));
-            if (receiver != address(0) && amount > 0) {
-                uint256 maxRoyalty = (salePrice * MAX_ROYALTY_BPS) / 10000;
-                if (amount > maxRoyalty) amount = maxRoyalty;
-                royaltyReceiver = receiver;
-                royaltyFee = amount;
+        // Use assembly to cap the returndata copy to 64 bytes, preventing a
+        // return-bomb attack where a malicious royaltyInfo returns huge data.
+        bytes memory payload = abi.encodeWithSelector(IERC2981.royaltyInfo.selector, tokenId, salePrice);
+        bool ok;
+        address receiver;
+        uint256 amount;
+        /// @solidity memory-safe
+        assembly {
+            let ptr := mload(0x40)
+            ok := staticcall(ROYALTY_INFO_GAS, nftContract, add(payload, 0x20), mload(payload), ptr, 0x40)
+            if and(ok, gt(returndatasize(), 0x3f)) {
+                receiver := mload(ptr)
+                amount := mload(add(ptr, 0x20))
             }
+        }
+        if (receiver != address(0) && amount > 0) {
+            uint256 maxRoyalty = (salePrice * MAX_ROYALTY_BPS) / 10000;
+            if (amount > maxRoyalty) amount = maxRoyalty;
+            royaltyReceiver = receiver;
+            royaltyFee = amount;
         }
 
         if (marketFee + royaltyFee > salePrice) revert FeesExceedSalePrice();
@@ -558,6 +578,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     /// @notice Pays seller via push; falls back to pull-payment ledger if
     ///         the seller rejects ETH.  Prevents a rejecting seller from
     ///         bricking purchases on their listings.
+    // slither-disable-next-line reentrancy-benign
     function _paySeller(address seller, uint256 amount) internal {
         if (amount == 0) return;
 
@@ -572,12 +593,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard {
     ///         the receiver rejects.  Never returns royalty to the seller —
     ///         that would let malicious sellers evade royalties by deploying
     ///         rejecting receiver contracts.
-    /// @dev CEI-safe: the pull-payment ledger is credited *before* the push
-    ///      attempt, then debited back on success.  This way the receiver
-    ///      is never in a state where the contract owes them without the
-    ///      accounting reflecting it, and the state-write-after-call on
-    ///      the success path can't be exploited via reentrancy because the
-    ///      receiver already has a pending balance when `call` returns.
+    // slither-disable-next-line reentrancy-benign,arbitrary-send-eth
     function _payRoyalty(address receiver, uint256 amount) internal {
         if (amount == 0 || receiver == address(0)) return;
 

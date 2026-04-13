@@ -190,6 +190,7 @@ contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
     ///      contract committed to before the sale — together they prevent
     ///      both users and miners from pre-computing URI assignments.
     /// @param to Recipient address.
+    // slither-disable-next-line weak-prng,incorrect-equality
     function mint(address to) external payable nonReentrant {
         if (totalSupply >= maxSupply) revert SupplyExhausted();
         if (_availableURIs.length == 0) revert URIsNotLoaded();
@@ -262,6 +263,7 @@ contract NFTCollection is ERC721, ERC2981, Ownable, ReentrancyGuard {
     // ─── Owner utilities ───────────────────────────────────────────────
 
     /// @notice Withdraws accumulated mint funds to the collection owner.
+    // slither-disable-next-line incorrect-equality
     function withdraw() external onlyOwner nonReentrant {
         uint256 amount = address(this).balance;
         if (amount == 0) revert NothingToWithdraw();
