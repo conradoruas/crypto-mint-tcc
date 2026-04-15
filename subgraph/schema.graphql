@@ -108,6 +108,7 @@ type CollectionStat @entity {
   totalVolume: BigInt!
   totalSales: BigInt!
   floorPrice: BigInt
+  floorPriceDayStart: BigInt
   volume24h: BigInt!
   sales24h: BigInt!
   lastUpdated: BigInt!
@@ -121,6 +122,7 @@ type DailyCollectionSnapshot @entity {
   date: BigInt!
   volume: BigInt!
   sales: BigInt!
+  floor: BigInt
 }
 
 # ─── Admin / royalty audit trail ──────────────────────────────────────

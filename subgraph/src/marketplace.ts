@@ -31,6 +31,7 @@ import {
   getOrCreateDailySnapshot,
   addActiveListing,
   removeActiveListingAndRecalcFloor,
+  syncDailySnapshotFloor,
 } from "./helpers";
 
 export function handleItemListed(event: ItemListed): void {
@@ -81,6 +82,11 @@ export function handleItemListed(event: ItemListed): void {
   );
   addActiveListing(colStats, event.params.price);
   colStats.save();
+  syncDailySnapshotFloor(
+    event.params.nftContract.toHexString(),
+    event.block.timestamp,
+    colStats.floorPrice,
+  );
 }
 
 export function handleListingPriceUpdated(event: ListingPriceUpdated): void {
@@ -107,6 +113,7 @@ export function handleListingPriceUpdated(event: ListingPriceUpdated): void {
     colStats.floorPrice = null;
   }
   colStats.save();
+  syncDailySnapshotFloor(collectionId, event.block.timestamp, colStats.floorPrice);
 
   let actId =
     event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
@@ -137,8 +144,10 @@ export function handleItemSold(event: ItemSold): void {
     "-" +
     event.params.tokenId.toString();
 
+  let wasActive = false;
   let listing = Listing.load(id);
   if (listing) {
+    wasActive = listing.active;
     listing.active = false;
     listing.updatedAt = event.block.timestamp;
     listing.save();
@@ -173,7 +182,12 @@ export function handleItemSold(event: ItemSold): void {
   // Global stats
   let stats = getOrCreateStats();
   stats.totalSales = stats.totalSales.plus(BigInt.fromI32(1));
-  stats.totalListed = stats.totalListed.minus(BigInt.fromI32(1));
+  if (wasActive) {
+    stats.totalListed = stats.totalListed.minus(BigInt.fromI32(1));
+    if (stats.totalListed.lt(BigInt.zero())) {
+      stats.totalListed = BigInt.zero();
+    }
+  }
   stats.totalVolume = stats.totalVolume.plus(event.params.price);
   stats.save();
 
@@ -189,6 +203,7 @@ export function handleItemSold(event: ItemSold): void {
   removeActiveListingAndRecalcFloor(colStats, id);
 
   colStats.save();
+  syncDailySnapshotFloor(collectionId, event.block.timestamp, colStats.floorPrice);
 
   // Daily snapshot — bucketed aggregate for accurate historical queries
   let snapshot = getOrCreateDailySnapshot(collectionId, event.block.timestamp);
@@ -205,6 +220,7 @@ export function handleListingCancelled(event: ListingCancelled): void {
 
   let listing = Listing.load(id);
   if (listing) {
+    let wasActive = listing.active;
     listing.active = false;
     listing.updatedAt = event.block.timestamp;
     listing.save();
@@ -221,15 +237,21 @@ export function handleListingCancelled(event: ListingCancelled): void {
     act.txHash = event.transaction.hash;
     act.save();
 
-    let stats = getOrCreateStats();
-    stats.totalListed = stats.totalListed.minus(BigInt.fromI32(1));
-    stats.save();
+    if (wasActive) {
+      let stats = getOrCreateStats();
+      stats.totalListed = stats.totalListed.minus(BigInt.fromI32(1));
+      if (stats.totalListed.lt(BigInt.zero())) {
+        stats.totalListed = BigInt.zero();
+      }
+      stats.save();
+    }
 
     // Remove cancelled listing and recalculate floor from remaining active listings
     let collectionId = event.params.nftContract.toHexString();
     let colStats = getOrCreateCollectionStat(collectionId, event.block.timestamp);
     removeActiveListingAndRecalcFloor(colStats, id);
     colStats.save();
+    syncDailySnapshotFloor(collectionId, event.block.timestamp, colStats.floorPrice);
   }
 
   let nft = NFT.load(id);
@@ -355,6 +377,9 @@ export function handleOfferAccepted(event: OfferAccepted): void {
   stats.totalVolume = stats.totalVolume.plus(event.params.amount);
   if (hadActiveListing) {
     stats.totalListed = stats.totalListed.minus(BigInt.fromI32(1));
+    if (stats.totalListed.lt(BigInt.zero())) {
+      stats.totalListed = BigInt.zero();
+    }
   }
   stats.save();
 
@@ -372,6 +397,9 @@ export function handleOfferAccepted(event: OfferAccepted): void {
   }
 
   colStats.save();
+  if (hadActiveListing) {
+    syncDailySnapshotFloor(collectionId, event.block.timestamp, colStats.floorPrice);
+  }
 
   // Daily snapshot — bucketed aggregate for accurate historical queries
   let snapshot = getOrCreateDailySnapshot(collectionId, event.block.timestamp);

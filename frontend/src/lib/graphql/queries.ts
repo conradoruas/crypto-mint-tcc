@@ -304,6 +304,7 @@ export const GET_COLLECTION_STATS_RANKED = gql`
       totalVolume
       totalSales
       floorPrice
+      floorPriceDayStart
       volume24h
       sales24h
       collection {
@@ -312,6 +313,10 @@ export const GET_COLLECTION_STATS_RANKED = gql`
         name
         symbol
         image
+        dailySnapshots(first: 14, orderBy: dayId, orderDirection: desc) {
+          dayId
+          floor
+        }
       }
     }
   }

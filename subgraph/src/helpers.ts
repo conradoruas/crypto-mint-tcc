@@ -36,6 +36,7 @@ export function getOrCreateCollectionStat(
     stats.sales24h = BigInt.fromI32(0);
     stats.lastUpdated = timestamp;
     stats.floorPrice = null;
+    stats.floorPriceDayStart = null;
     stats.activeListingCount = BigInt.fromI32(0);
 
     // Link Collection.stats so queries from the Collection side also work
@@ -53,6 +54,9 @@ export function getOrCreateCollectionStat(
     if (currentDay.gt(lastDay)) {
       stats.volume24h = BigInt.fromI32(0);
       stats.sales24h = BigInt.fromI32(0);
+      // Capture current floor as the baseline for the new day so
+      // `floorChange24h` has a reference point for intra-day movement.
+      stats.floorPriceDayStart = stats.floorPrice;
       stats.lastUpdated = timestamp;
     }
   }
@@ -67,6 +71,11 @@ export function addActiveListing(colStats: CollectionStat, listingPrice: BigInt)
   colStats.activeListingCount = colStats.activeListingCount.plus(BigInt.fromI32(1));
   if (!colStats.floorPrice || listingPrice.lt(colStats.floorPrice!)) {
     colStats.floorPrice = listingPrice;
+  }
+  // Bootstrap the 24h baseline on the very first listing we ever observe
+  // so the day's first `floorChange24h` isn't stuck at null until the day rolls.
+  if (!colStats.floorPriceDayStart) {
+    colStats.floorPriceDayStart = colStats.floorPrice;
   }
 }
 
@@ -125,6 +134,18 @@ export function getOrCreateDailySnapshot(
     snapshot.date = dayId.times(BigInt.fromI32(SECONDS_PER_DAY));
     snapshot.volume = BigInt.fromI32(0);
     snapshot.sales = BigInt.fromI32(0);
+    snapshot.floor = null;
   }
   return snapshot;
+}
+
+/** Writes the latest floor observed for the given day into the snapshot. */
+export function syncDailySnapshotFloor(
+  collectionId: string,
+  timestamp: BigInt,
+  floor: BigInt | null,
+): void {
+  let snapshot = getOrCreateDailySnapshot(collectionId, timestamp);
+  snapshot.floor = floor;
+  snapshot.save();
 }

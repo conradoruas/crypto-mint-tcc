@@ -28,7 +28,7 @@ export function useMarketplaceStats(): MarketplaceStats {
   return {
     totalCollections: Number(s?.totalCollections ?? 0),
     totalNFTs: Number(s?.totalNFTs ?? 0),
-    totalListed: Number(s?.totalListed ?? 0),
+    totalListed: Math.max(0, Number(s?.totalListed ?? 0)),
     volumeETH: s?.totalVolume
       ? parseFloat(formatEther(BigInt(s.totalVolume))).toFixed(4)
       : "0",

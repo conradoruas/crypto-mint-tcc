@@ -18,6 +18,7 @@ type GqlCollectionStats = {
   totalVolume: string;
   totalSales: string;
   floorPrice: string | null;
+  floorPriceDayStart: string | null;
   volume24h: string;
   sales24h: string;
   collection: {
@@ -26,6 +27,7 @@ type GqlCollectionStats = {
     name: string;
     symbol: string;
     image: string;
+    dailySnapshots: { dayId: string; floor: string | null }[];
   };
 };
 
@@ -93,6 +95,16 @@ export function useTrendingCollections(limit = 10) {
       const mapped: TrendingCollection[] = stats.map((s) => {
         const vol24hWei = BigInt(s.volume24h ?? "0");
         const floorWei = s.floorPrice ? BigInt(s.floorPrice) : null;
+        const floorStartWei = s.floorPriceDayStart
+          ? BigInt(s.floorPriceDayStart)
+          : null;
+
+        let floorChange24h: number | null = null;
+        if (floorWei !== null && floorStartWei !== null && floorStartWei > BigInt(0)) {
+          const curr = parseFloat(formatEther(floorWei));
+          const start = parseFloat(formatEther(floorStartWei));
+          if (start > 0) floorChange24h = ((curr - start) / start) * 100;
+        }
 
         return {
           contractAddress: s.collection.contractAddress,
@@ -102,13 +114,19 @@ export function useTrendingCollections(limit = 10) {
           floorPrice: floorWei
             ? parseFloat(formatEther(floorWei)).toFixed(4)
             : null,
-          floorChange24h: null,
+          floorChange24h,
           topOffer: null,
           sales24h: Number(s.sales24h ?? 0),
           owners: 0,
           listedPct: null,
           volume24h: parseFloat(formatEther(vol24hWei)).toFixed(4),
-          floorHistory: [],
+          floorHistory: (s.collection.dailySnapshots ?? [])
+            .slice()
+            .reverse()
+            .map((d) =>
+              d.floor ? parseFloat(formatEther(BigInt(d.floor))) : 0,
+            )
+            .filter((v) => v > 0),
         } as TrendingCollection;
       });
 
