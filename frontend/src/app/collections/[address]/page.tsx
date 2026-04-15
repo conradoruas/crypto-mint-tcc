@@ -41,6 +41,7 @@ import { formatTransactionError } from "@/lib/txErrors";
 import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
 import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
 import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
+import { generateAndStoreMintSeed } from "@/lib/mintSeed";
 
 // ─── Load NFTs panel (owner only, shown when urisLoaded === false) ────────────
 
@@ -517,6 +518,61 @@ export default function CollectionPage() {
   });
   const urisLoaded = (urisLoadedData as boolean | undefined) || loadSuccess;
 
+  const { data: mintSeedCommittedData, refetch: refetchMintSeedCommitted } =
+    useReadContract({
+      address: collectionAddress as `0x${string}`,
+      abi: NFT_COLLECTION_ABI,
+      functionName: "mintSeedCommitted",
+      query: { enabled: !!collectionAddress },
+    });
+  const mintSeedCommitted = Boolean(mintSeedCommittedData);
+
+  const {
+    mutateAsync: commitSeedWrite,
+    isPending: isCommitSeedPending,
+  } = useWriteContract();
+  const [commitSeedHash, setCommitSeedHash] = useState<
+    `0x${string}` | undefined
+  >();
+  const [commitSeedError, setCommitSeedError] = useState<string | null>(null);
+  const {
+    isLoading: isCommitSeedConfirming,
+    isSuccess: isCommitSeedConfirmed,
+  } = useWaitForTransactionReceipt({ hash: commitSeedHash });
+
+  useEffect(() => {
+    if (isCommitSeedConfirmed) refetchMintSeedCommitted();
+  }, [isCommitSeedConfirmed, refetchMintSeedCommitted]);
+
+  const handleCommitMintSeed = async () => {
+    setCommitSeedError(null);
+    try {
+      if (!userAddress || !publicClientMain) {
+        throw new Error("Connect your wallet.");
+      }
+      const { commitment } = generateAndStoreMintSeed(collectionAddress);
+      const gas = await estimateContractGasWithBuffer(publicClientMain, {
+        account: userAddress,
+        address: collectionAddress as `0x${string}`,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "commitMintSeed",
+        args: [commitment],
+      });
+      const tx = await commitSeedWrite({
+        address: collectionAddress as `0x${string}`,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "commitMintSeed",
+        args: [commitment],
+        gas,
+      });
+      setCommitSeedHash(tx);
+    } catch (e) {
+      setCommitSeedError(
+        formatTransactionError(e, "Could not enable minting. Try again."),
+      );
+    }
+  };
+
   const { data: contractBalance, refetch: refetchBalance } = useBalance({
     address: collectionAddress as `0x${string}`,
     query: { enabled: !!collectionAddress },
@@ -669,15 +725,18 @@ export default function CollectionPage() {
                         ETH
                       </button>
                     )}
-                  {isConnected && !isSoldOut && urisLoaded && (
-                    <button
-                      onClick={() => setShowMintModal(true)}
-                      className="flex items-center gap-2 font-bold px-6 py-3 bg-primary text-on-primary hover:bg-primary-dim transition-colors whitespace-nowrap neon-glow-primary"
-                    >
-                      <Plus size={16} /> Mintar NFT &mdash;{" "}
-                      {details.mintPriceEth} ETH
-                    </button>
-                  )}
+                  {isConnected &&
+                    !isSoldOut &&
+                    urisLoaded &&
+                    mintSeedCommitted && (
+                      <button
+                        onClick={() => setShowMintModal(true)}
+                        className="flex items-center gap-2 font-bold px-6 py-3 bg-primary text-on-primary hover:bg-primary-dim transition-colors whitespace-nowrap neon-glow-primary"
+                      >
+                        <Plus size={16} /> Mintar NFT &mdash;{" "}
+                        {details.mintPriceEth} ETH
+                      </button>
+                    )}
                   {isSoldOut && (
                     <div className="px-6 py-3 text-sm font-bold bg-surface-container border border-outline-variant/20 text-on-surface-variant/40">
                       Supply Esgotado
@@ -754,6 +813,48 @@ export default function CollectionPage() {
           maxSupply={Number(details.maxSupply)}
           onSuccess={handleLoadSuccess}
         />
+      )}
+
+      {/* Commit mint seed panel — owner only, once URIs are loaded but seed not committed */}
+      {isOwner && urisLoaded && !mintSeedCommitted && (
+        <div className="max-w-7xl mx-auto px-4 mb-10">
+          <div className="bg-surface-container-low border border-secondary/30 p-8 shadow-sm">
+            <div className="flex items-start gap-4 mb-4">
+              <AlertTriangle size={20} className="text-secondary shrink-0 mt-1" />
+              <div>
+                <h3 className="font-headline font-bold text-lg text-on-surface uppercase tracking-tight">
+                  Habilitar Minting
+                </h3>
+                <p className="text-sm text-on-surface-variant mt-1">
+                  Commite o mint seed para ativar o minting desta coleção. O
+                  seed é gerado localmente, salvo no seu navegador e commitado
+                  como hash on-chain. Guarde este navegador para fazer o
+                  reveal depois que a coleção esgotar.
+                </p>
+              </div>
+            </div>
+            {commitSeedError && (
+              <p className="text-xs text-error mb-3">{commitSeedError}</p>
+            )}
+            <button
+              onClick={handleCommitMintSeed}
+              disabled={isCommitSeedPending || isCommitSeedConfirming}
+              className="flex items-center gap-2 font-bold px-6 py-3 bg-primary text-on-primary hover:bg-primary-dim transition-colors disabled:opacity-50"
+            >
+              {isCommitSeedPending || isCommitSeedConfirming ? (
+                <>
+                  <Loader2 className="animate-spin" size={16} />
+                  {isCommitSeedPending ? "Aguardando..." : "Confirmando..."}
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={16} />
+                  Commitar mint seed
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* NFT Grid */}
