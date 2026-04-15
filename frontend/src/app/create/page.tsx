@@ -94,7 +94,11 @@ type MintedNft = { name: string; image: string; tokenId: string };
 
 export default function MintPage() {
   const { address, isConnected } = useConnection();
-  const { collections, isLoading: isLoadingCollections } = useCollections();
+  const {
+    collections,
+    isLoading: isLoadingCollections,
+    refetch: refetchCollections,
+  } = useCollections();
   const [selectedCollection, setSelectedCollection] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [mintedNft, setMintedNft] = useState<MintedNft | null>(null);
@@ -103,6 +107,12 @@ export default function MintPage() {
   const [soldOutAddresses, setSoldOutAddresses] = useState<Set<string>>(
     new Set(),
   );
+  // Optimistic per-collection mint counters — subgraph indexing lags behind
+  // the receipt, so we bump locally to keep the UI accurate between mints.
+  const [localMintedDelta, setLocalMintedDelta] = useState<
+    Record<string, bigint>
+  >({});
+  const processedReceipts = useRef<Set<string>>(new Set());
   const mintingCollectionRef = useRef<{
     contractAddress: string;
     totalSupply?: bigint;
@@ -121,7 +131,17 @@ export default function MintPage() {
     query: { enabled: collections.length > 0 },
   });
 
-  const mintableCollections = collections.filter((c, i) => {
+  // Apply optimistic per-collection mint deltas so the count updates
+  // immediately after each mint, before the subgraph catches up.
+  const effectiveCollections = collections.map((c) => {
+    const delta = localMintedDelta[c.contractAddress.toLowerCase()] ?? BigInt(0);
+    return {
+      ...c,
+      totalSupply: (c.totalSupply ?? BigInt(0)) + delta,
+    };
+  });
+
+  const mintableCollections = effectiveCollections.filter((c, i) => {
     const urisLoaded = urisLoadedData?.[i]?.result as boolean | undefined;
     const isSoldOut =
       c.totalSupply !== undefined && c.totalSupply >= c.maxSupply;
@@ -140,9 +160,22 @@ export default function MintPage() {
 
   useEffect(() => {
     if (!receipt || !selectedCollection) return;
+    if (processedReceipts.current.has(receipt.transactionHash)) return;
+    processedReceipts.current.add(receipt.transactionHash);
 
     let cancelled = false;
     const mintedCollection = mintingCollectionRef.current;
+
+    // Bump the optimistic counter so SELECT COLLECTION reflects the new
+    // totalSupply before the subgraph reindexes.
+    if (mintedCollection) {
+      const key = mintedCollection.contractAddress.toLowerCase();
+      setLocalMintedDelta((prev) => ({
+        ...prev,
+        [key]: (prev[key] ?? BigInt(0)) + BigInt(1),
+      }));
+    }
+    refetchCollections();
 
     const run = async () => {
       setIsFetchingNft(true);
@@ -191,7 +224,7 @@ export default function MintPage() {
     return () => {
       cancelled = true;
     };
-  }, [receipt, selectedCollection]);
+  }, [receipt, selectedCollection, refetchCollections]);
 
   const chosen = mintableCollections.find(
     (c) => c.contractAddress === selectedCollection,

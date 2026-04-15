@@ -3,8 +3,12 @@
 import { useEffect, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
-import { GET_COLLECTION_STATS_RANKED } from "@/lib/graphql/queries";
+import {
+  GET_COLLECTION_STATS_RANKED,
+  GET_TOP_OFFERS_BY_COLLECTION,
+} from "@/lib/graphql/queries";
 import { POLL_TRENDING_MS } from "@/constants/polling";
+import { useNowBucketed } from "../useNowBucketed";
 import type { TrendingCollection } from "@/types/collection";
 
 export type { TrendingCollection };
@@ -50,6 +54,7 @@ type GqlCollectionStatsData = {
 export function useTrendingCollections(limit = 10) {
   const [trending, setTrending] = useState<TrendingCollection[]>([]);
   const [isLoading, setIsLoading] = useState(SUBGRAPH_ENABLED);
+  const nowBucketed = useNowBucketed();
 
   const {
     data,
@@ -62,6 +67,18 @@ export function useTrendingCollections(limit = 10) {
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
   });
+
+  type GqlTopOffer = { nftContract: string; amount: string };
+  const { data: offersData } = useQuery<{ offers: GqlTopOffer[] }>(
+    GET_TOP_OFFERS_BY_COLLECTION,
+    {
+      skip: !SUBGRAPH_ENABLED,
+      variables: { now: nowBucketed },
+      pollInterval: POLL_TRENDING_MS,
+      fetchPolicy: "cache-and-network",
+      nextFetchPolicy: "cache-first",
+    },
+  );
 
   useEffect(() => {
     // If subgraph is skipped or error occurs, we don't need to do anything here.
@@ -78,6 +95,16 @@ export function useTrendingCollections(limit = 10) {
 
     const build = async () => {
       const stats = data.collectionStats ?? [];
+
+      // Results are sorted desc by amount, so the first occurrence per
+      // contract is the top active offer for that collection.
+      const topOfferByContract = new Map<string, bigint>();
+      for (const o of offersData?.offers ?? []) {
+        const key = o.nftContract.toLowerCase();
+        if (!topOfferByContract.has(key)) {
+          topOfferByContract.set(key, BigInt(o.amount));
+        }
+      }
 
 
 
@@ -115,7 +142,14 @@ export function useTrendingCollections(limit = 10) {
             ? parseFloat(formatEther(floorWei)).toFixed(4)
             : null,
           floorChange24h,
-          topOffer: null,
+          topOffer: (() => {
+            const wei = topOfferByContract.get(
+              s.collection.contractAddress.toLowerCase(),
+            );
+            return wei
+              ? parseFloat(formatEther(wei)).toFixed(4)
+              : null;
+          })(),
           sales24h: Number(s.sales24h ?? 0),
           owners: 0,
           listedPct: null,
@@ -159,7 +193,7 @@ export function useTrendingCollections(limit = 10) {
     return () => {
       cancelled = true;
     };
-  }, [data, gqlLoading, error]);
+  }, [data, offersData, gqlLoading, error]);
 
   return { trending, isLoading: gqlLoading || isLoading };
 }

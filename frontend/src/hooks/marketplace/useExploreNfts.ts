@@ -257,6 +257,14 @@ export function useExploreAllNFTs(
       orderBy = "listing__active";
       orderDirection = "desc";
       break;
+    case "offer_desc":
+      // Restrict to NFTs that have at least one currently-active offer.
+      // The Graph cannot order parents by a child-aggregate, so we
+      // post-sort by topOffer per page in the effect below.
+      where.offers_ = { active: true, expiresAt_gt: nowBucketed };
+      orderBy = "tokenId";
+      orderDirection = "asc";
+      break;
     default:
       orderBy = "tokenId";
       orderDirection = "asc";
@@ -304,8 +312,18 @@ export function useExploreAllNFTs(
         setHasMore(hasNextPage);
       }
       const items = await resolveNFTsMetadata(raw, collectionAddress);
+      const sorted =
+        sort === "offer_desc"
+          ? items
+              .filter((i) => i.topOffer !== null)
+              .sort(
+                (a, b) =>
+                  parseFloat(b.topOffer ?? "0") -
+                  parseFloat(a.topOffer ?? "0"),
+              )
+          : items;
       if (!cancelled) {
-        setNfts(items);
+        setNfts(sorted);
         setIsLoading(false);
       }
     };
@@ -313,7 +331,7 @@ export function useExploreAllNFTs(
     return () => {
       cancelled = true;
     };
-  }, [gqlData, gqlLoading, collectionAddress, pageSize]);
+  }, [gqlData, gqlLoading, collectionAddress, pageSize, sort]);
 
   const refetch = useCallback(async () => {
     await refetchNfts();

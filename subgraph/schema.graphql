@@ -63,6 +63,7 @@ type Offer @entity {
   active: Boolean!
   nft: NFT
   createdAt: BigInt!
+  latestOfferId: String
 }
 
 enum ActivityType {
@@ -171,7 +172,7 @@ type PendingWithdrawalEvent @entity(immutable: true) {
 # Current balance in the marketplace pull-payment ledger, keyed by receiver.
 # Updated on RoyaltyPending (credit) and PendingWithdrawn (debit).
 type PendingBalance @entity {
-  id: ID!          # receiver address (hex)
+  id: ID! # receiver address (hex)
   receiver: Bytes!
   balance: BigInt!
   lastUpdated: BigInt!

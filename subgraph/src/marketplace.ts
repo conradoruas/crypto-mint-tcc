@@ -134,6 +134,13 @@ function deactivateOfferForBuyer(nftId: string, buyer: Bytes): void {
   let offer = Offer.load(offerId);
   if (offer && offer.active) {
     offer.active = false;
+    if (offer.latestOfferId) {
+      let txUnique = Offer.load(offer.latestOfferId!);
+      if (txUnique && txUnique.active) {
+        txUnique.active = false;
+        txUnique.save();
+      }
+    }
     offer.save();
   }
 }
@@ -313,6 +320,7 @@ export function handleOfferMade(event: OfferMade): void {
   pointer.active = true;
   pointer.nft = nftId;
   pointer.createdAt = event.block.timestamp;
+  pointer.latestOfferId = id;
   pointer.save();
 
   let actId =
@@ -420,6 +428,13 @@ export function handleOfferCancelled(event: OfferCancelled): void {
   let offer = Offer.load(canonicalId);
   if (offer) {
     offer.active = false;
+    if (offer.latestOfferId) {
+      let txUnique = Offer.load(offer.latestOfferId!);
+      if (txUnique && txUnique.active) {
+        txUnique.active = false;
+        txUnique.save();
+      }
+    }
     offer.save();
   }
 
@@ -447,6 +462,13 @@ export function handleOfferExpiredRefund(event: OfferExpiredRefund): void {
   let offer = Offer.load(id);
   if (offer) {
     offer.active = false;
+    if (offer.latestOfferId) {
+      let txUnique = Offer.load(offer.latestOfferId!);
+      if (txUnique && txUnique.active) {
+        txUnique.active = false;
+        txUnique.save();
+      }
+    }
     offer.save();
   }
 

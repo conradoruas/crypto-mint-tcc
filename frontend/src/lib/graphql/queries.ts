@@ -297,6 +297,20 @@ export const GET_COLLECTION_WITH_NFTS = gql`
   }
 `;
 
+export const GET_TOP_OFFERS_BY_COLLECTION = gql`
+  query GetTopOffersByCollection($now: BigInt!) {
+    offers(
+      first: 500
+      where: { active: true, expiresAt_gt: $now }
+      orderBy: amount
+      orderDirection: desc
+    ) {
+      nftContract
+      amount
+    }
+  }
+`;
+
 export const GET_COLLECTION_STATS_RANKED = gql`
   query GetCollectionStatRanked($first: Int!) {
     collectionStats(first: $first, orderBy: volume24h, orderDirection: desc) {
