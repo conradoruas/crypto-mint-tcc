@@ -6,6 +6,9 @@ import {
   HandCoins,
   CheckCircle,
   Sparkles,
+  Pencil,
+  ArrowLeftRight,
+  Undo2,
 } from "lucide-react";
 import type { ActivityType } from "@/types/marketplace";
 
@@ -53,6 +56,21 @@ export function getEventConfig(
       label: "Offer Cancelled",
       icon: <X size={iconSize} />,
       colorClass: "text-error",
+    },
+    offer_expired_refund: {
+      label: "Offer Refund",
+      icon: <Undo2 size={iconSize} />,
+      colorClass: "text-on-surface-variant",
+    },
+    listing_updated: {
+      label: "Listing Updated",
+      icon: <Pencil size={iconSize} />,
+      colorClass: "text-secondary",
+    },
+    transfer: {
+      label: "Transfer",
+      icon: <ArrowLeftRight size={iconSize} />,
+      colorClass: "text-on-surface-variant",
     },
     mint: {
       label: "Minted",

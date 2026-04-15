@@ -32,6 +32,7 @@ function EventRow({
   meta?: NFTMeta;
 }) {
   const cfg = EVENT_CONFIG[event.type];
+  if (!cfg) return null;
 
   return (
     <tr className="group hover:bg-surface-container-low transition-colors">

@@ -131,6 +131,7 @@ export function BellDropdown({ address }: { address: string }) {
             <div className="divide-y divide-outline-variant/5 max-h-72 overflow-y-auto">
               {userEvents.map((event: ActivityEvent) => {
                 const cfg = EVENT_CONFIG[event.type];
+                if (!cfg) return null;
                 const isFrom =
                   event.from.toLowerCase() === address.toLowerCase();
                 const metaKey = `${event.nftContract.toLowerCase()}-${event.tokenId}`;

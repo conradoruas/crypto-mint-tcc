@@ -36,6 +36,9 @@ export type ActivityType =
   | "offer"
   | "offer_accepted"
   | "offer_cancelled"
+  | "offer_expired_refund"
+  | "listing_updated"
+  | "transfer"
   | "mint";
 
 export interface ActivityEvent {
