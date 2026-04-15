@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 const securityHeaders = [
   {
     key: "X-Frame-Options",
@@ -25,7 +27,9 @@ const securityHeaders = [
       // script-src uses 'strict-dynamic' with 'unsafe-inline' as a fallback for
       // browsers that don't support strict-dynamic (the fallback is ignored when
       // strict-dynamic is supported). 'unsafe-eval' has been removed.
-      "script-src 'self' 'unsafe-inline'",
+      // React dev mode uses eval() for stack-trace reconstruction; only
+      // enable 'unsafe-eval' in development.
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://ipfs.io https://*.ipfs.dweb.link https://nft-cdn.alchemy.com",

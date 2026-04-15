@@ -16,9 +16,11 @@ import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
 export function useMintToCollection() {
   const publicClient = usePublicClient();
   const { data: hash, mutateAsync, isPending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
+  const {
+    isLoading: isConfirming,
+    isSuccess,
+    data: receipt,
+  } = useWaitForTransactionReceipt({ hash });
   const { address } = useConnection();
 
   const mint = async (
@@ -49,5 +51,5 @@ export function useMintToCollection() {
     });
   };
 
-  return { mint, isPending, isConfirming, isSuccess, hash };
+  return { mint, isPending, isConfirming, isSuccess, hash, receipt };
 }

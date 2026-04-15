@@ -1,11 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import {
-  useConnection,
-  useReadContracts,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useConnection, useReadContracts } from "wagmi";
 import { parseEventLogs, formatEther } from "viem";
 import { Navbar } from "@/components/navbar";
 import { WalletGuard } from "@/components/WalletGuard";
@@ -94,88 +90,100 @@ type MintedNft = { name: string; image: string; tokenId: string };
 
 export default function MintPage() {
   const { address, isConnected } = useConnection();
-  const {
-    collections,
-    isLoading: isLoadingCollections,
-    refetch: refetchCollections,
-  } = useCollections();
+  const { collections, isLoading: isLoadingCollections } = useCollections();
   const [selectedCollection, setSelectedCollection] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [mintedNft, setMintedNft] = useState<MintedNft | null>(null);
   const [isFetchingNft, setIsFetchingNft] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [soldOutAddresses, setSoldOutAddresses] = useState<Set<string>>(
-    new Set(),
+  // Tracked as a ref — storing it in state would re-render and re-run the
+  // receipt effect, whose cleanup cancels the in-flight metadata fetch.
+  const processedReceiptRef = useRef<string | null>(null);
+  const refetchLiveRef = useRef<typeof refetchLive | null>(null);
+
+  const { mint, isPending, isConfirming, hash, receipt } =
+    useMintToCollection();
+
+  // Single source of truth for mintable status: read live supply straight
+  // from the chain. Avoids the subgraph-indexing lag that caused the count
+  // to oscillate between an optimistic delta and a stale refetch.
+  const {
+    data: liveData,
+    isLoading: isLoadingLive,
+    refetch: refetchLive,
+  } = useReadContracts({
+    contracts: collections.flatMap((c) => [
+      {
+        address: c.contractAddress as `0x${string}`,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "urisLoaded",
+      },
+      {
+        address: c.contractAddress as `0x${string}`,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "totalSupply",
+      },
+      {
+        address: c.contractAddress as `0x${string}`,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "maxSupply",
+      },
+    ]),
+    query: {
+      enabled: collections.length > 0,
+      // Poll while a tx is mid-flight so the numbers self-heal even if the
+      // receipt effect is skipped (e.g. tab backgrounded during confirmation).
+      refetchInterval: isConfirming ? 2_000 : false,
+    },
+  });
+
+  const liveCollections = collections.map((c, i) => {
+    const urisLoaded = liveData?.[i * 3]?.result as boolean | undefined;
+    const totalSupply = liveData?.[i * 3 + 1]?.result as bigint | undefined;
+    const maxSupply =
+      (liveData?.[i * 3 + 2]?.result as bigint | undefined) ?? c.maxSupply;
+    return { ...c, urisLoaded, totalSupply, maxSupply };
+  });
+
+  const mintableCollections = liveCollections.filter(
+    (c) =>
+      c.urisLoaded === true &&
+      c.totalSupply !== undefined &&
+      c.totalSupply < c.maxSupply,
   );
-  // Optimistic per-collection mint counters — subgraph indexing lags behind
-  // the receipt, so we bump locally to keep the UI accurate between mints.
-  const [localMintedDelta, setLocalMintedDelta] = useState<
-    Record<string, bigint>
-  >({});
-  const processedReceipts = useRef<Set<string>>(new Set());
-  const mintingCollectionRef = useRef<{
-    contractAddress: string;
-    totalSupply?: bigint;
-    maxSupply: bigint;
-  } | null>(null);
 
-  const { mint, isPending, isConfirming, hash } = useMintToCollection();
+  const chosen = mintableCollections.find(
+    (c) => c.contractAddress === selectedCollection,
+  );
 
-  // Batch-read urisLoaded for all collections to filter mintable ones
-  const { data: urisLoadedData, isLoading: isLoadingUris } = useReadContracts({
-    contracts: collections.map((c) => ({
-      address: c.contractAddress as `0x${string}`,
-      abi: NFT_COLLECTION_ABI,
-      functionName: "urisLoaded",
-    })),
-    query: { enabled: collections.length > 0 },
-  });
-
-  // Apply optimistic per-collection mint deltas so the count updates
-  // immediately after each mint, before the subgraph catches up.
-  const effectiveCollections = collections.map((c) => {
-    const delta = localMintedDelta[c.contractAddress.toLowerCase()] ?? BigInt(0);
-    return {
-      ...c,
-      totalSupply: (c.totalSupply ?? BigInt(0)) + delta,
-    };
-  });
-
-  const mintableCollections = effectiveCollections.filter((c, i) => {
-    const urisLoaded = urisLoadedData?.[i]?.result as boolean | undefined;
-    const isSoldOut =
-      c.totalSupply !== undefined && c.totalSupply >= c.maxSupply;
-    return (
-      urisLoaded === true &&
-      !isSoldOut &&
-      !soldOutAddresses.has(c.contractAddress)
+  // Auto-clear the selection the moment the chosen collection reports sold out.
+  useEffect(() => {
+    if (!selectedCollection) return;
+    const live = liveCollections.find(
+      (c) => c.contractAddress === selectedCollection,
     );
-  });
+    if (
+      live &&
+      live.totalSupply !== undefined &&
+      live.totalSupply >= live.maxSupply
+    ) {
+      setSelectedCollection("");
+    }
+  }, [liveCollections, selectedCollection]);
 
-  // Get receipt to parse the minted tokenId from NFTMinted event
-  const { data: receipt } = useWaitForTransactionReceipt({
-    hash,
-    query: { enabled: !!hash },
-  });
+  useEffect(() => {
+    refetchLiveRef.current = refetchLive;
+  }, [refetchLive]);
 
   useEffect(() => {
     if (!receipt || !selectedCollection) return;
-    if (processedReceipts.current.has(receipt.transactionHash)) return;
-    processedReceipts.current.add(receipt.transactionHash);
+    if (processedReceiptRef.current === receipt.transactionHash) return;
+    processedReceiptRef.current = receipt.transactionHash;
 
     let cancelled = false;
-    const mintedCollection = mintingCollectionRef.current;
-
-    // Bump the optimistic counter so SELECT COLLECTION reflects the new
-    // totalSupply before the subgraph reindexes.
-    if (mintedCollection) {
-      const key = mintedCollection.contractAddress.toLowerCase();
-      setLocalMintedDelta((prev) => ({
-        ...prev,
-        [key]: (prev[key] ?? BigInt(0)) + BigInt(1),
-      }));
-    }
-    refetchCollections();
+    // Pull fresh on-chain supply immediately so the card updates within one
+    // RPC roundtrip of the receipt.
+    void refetchLiveRef.current?.();
 
     const run = async () => {
       setIsFetchingNft(true);
@@ -201,18 +209,6 @@ export default function MintPage() {
           data.image?.cachedUrl ?? data.image?.originalUrl ?? "",
         );
         setMintedNft({ name: data.name ?? `NFT #${tokenId}`, image, tokenId });
-
-        // Optimistically remove from list if this mint exhausted the supply
-        if (mintedCollection) {
-          const newSupply =
-            (mintedCollection.totalSupply ?? BigInt(0)) + BigInt(1);
-          if (newSupply >= mintedCollection.maxSupply) {
-            setSoldOutAddresses(
-              (prev) => new Set([...prev, mintedCollection.contractAddress]),
-            );
-            setSelectedCollection("");
-          }
-        }
       } catch {
         // silently ignore
       } finally {
@@ -224,11 +220,7 @@ export default function MintPage() {
     return () => {
       cancelled = true;
     };
-  }, [receipt, selectedCollection, refetchCollections]);
-
-  const chosen = mintableCollections.find(
-    (c) => c.contractAddress === selectedCollection,
-  );
+  }, [receipt, selectedCollection]);
 
   const handleMint = async () => {
     setError(null);
@@ -238,7 +230,15 @@ export default function MintPage() {
       setError("Select a collection and connect your wallet.");
       return;
     }
-    mintingCollectionRef.current = chosen;
+    // Defensive barrier: the button disables on sold-out but an in-flight
+    // click could still fire; never send a mint for an exhausted collection.
+    if (
+      chosen.totalSupply === undefined ||
+      chosen.totalSupply >= chosen.maxSupply
+    ) {
+      setError("This collection has no NFTs left to mint.");
+      return;
+    }
     try {
       await mint(
         selectedCollection as `0x${string}`,
@@ -250,7 +250,7 @@ export default function MintPage() {
     }
   };
 
-  const isLoadingList = isLoadingCollections || isLoadingUris;
+  const isLoadingList = isLoadingCollections || isLoadingLive;
   const busy = isPending || isConfirming || isFetchingNft;
 
   return (
