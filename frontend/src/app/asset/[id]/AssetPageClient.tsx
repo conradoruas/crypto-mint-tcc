@@ -37,7 +37,7 @@ import {
   listPriceSchema,
   offerAmountSchema,
   getZodErrors,
-  ensureAddressOrZero,
+  parseAddress,
   addressSchema,
 } from "@/lib/schemas";
 import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
@@ -46,6 +46,7 @@ import { shortAddr } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { formatTransactionError } from "@/lib/txErrors";
 import { toast } from "sonner";
+import { EthAmountInput, IconButton } from "@/components/ui";
 
 // ─── Price History Chart ──────────────────────────────────────────────────────
 
@@ -280,8 +281,7 @@ function PriceHistory({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const inputClass =
-  "w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40";
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -311,7 +311,7 @@ export default function AssetPageClient({
   const { id } = useParams();
   const searchParams = useSearchParams();
   const tokenId = (Array.isArray(id) ? id[0] : id) ?? "";
-  const nftContract = ensureAddressOrZero(searchParams.get("contract"));
+  const nftContract = parseAddress(searchParams.get("contract"));
 
   const { address } = useConnection();
   const [nft, setNft] = useState<NFTItem | null>(initialNft);
@@ -482,6 +482,7 @@ export default function AssetPageClient({
     }
   }, [isOfferCancelled, refetchAll]);
   const handleList = async () => {
+    if (!nftContract) return;
     const errors = getZodErrors(listPriceSchema, {
       price: listPrice,
     }) as ListPriceErrors;
@@ -499,7 +500,7 @@ export default function AssetPageClient({
   };
 
   const handleBuy = async () => {
-    if (!price) return;
+    if (!nftContract || !price) return;
     try {
       await buyNFT(nftContract, tokenId, price);
     } catch (e) {
@@ -508,6 +509,7 @@ export default function AssetPageClient({
   };
 
   const handleCancelListing = async () => {
+    if (!nftContract) return;
     try {
       await cancelListing(nftContract, tokenId);
       toast.success("Listing cancelled.");
@@ -518,6 +520,7 @@ export default function AssetPageClient({
   };
 
   const handleMakeOffer = async () => {
+    if (!nftContract) return;
     const errors = getZodErrors(offerAmountSchema, {
       amount: offerAmount,
     }) as OfferAmountErrors;
@@ -531,6 +534,7 @@ export default function AssetPageClient({
   };
 
   const handleAcceptOffer = async (buyerAddress: string) => {
+    if (!nftContract) return;
     const result = addressSchema.safeParse(buyerAddress);
 
     if (!result.success) {
@@ -554,6 +558,7 @@ export default function AssetPageClient({
   };
 
   const handleCancelOffer = async () => {
+    if (!nftContract) return;
     try {
       await cancelOffer(nftContract, tokenId);
     } catch (e) {
@@ -740,28 +745,13 @@ export default function AssetPageClient({
                 {isOwner &&
                   (showListForm ? (
                     <div className="space-y-3">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        pattern="[0-9]*[.]?[0-9]*"
+                      <EthAmountInput
+                        value={listPrice}
+                        onChange={(v) => { setListPrice(v); setListErrors({}); }}
                         placeholder="Price in ETH (e.g. 0.05)"
                         aria-label="Listing price in ETH"
-                        value={listPrice}
-                        onChange={(e) => {
-                          setListPrice(e.target.value);
-                          setListErrors({});
-                        }}
-                        className={
-                          listErrors.price
-                            ? `${inputClass} !border-error/40`
-                            : inputClass
-                        }
+                        error={listErrors.price}
                       />
-                      {listErrors.price && (
-                        <p className="text-xs text-error mt-1.5">
-                          {listErrors.price}
-                        </p>
-                      )}
                       <div className="flex gap-3">
                         <button
                           onClick={handleList}
@@ -778,13 +768,13 @@ export default function AssetPageClient({
                           )}
                           {isListing ? listFlowLabel : "Confirm Listing"}
                         </button>
-                        <button
+                        <IconButton
                           onClick={() => setShowListForm(false)}
                           aria-label="Close"
-                          className="px-4 py-3 rounded-sm bg-surface-container border border-outline-variant/15 text-on-surface-variant hover:text-on-surface transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                          variant="outlined"
                         >
                           <X size={16} />
-                        </button>
+                        </IconButton>
                       </div>
                     </div>
                   ) : (
@@ -843,28 +833,13 @@ export default function AssetPageClient({
                 </div>
               ) : showOfferForm ? (
                 <div className="space-y-3">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    pattern="[0-9]*[.]?[0-9]*"
+                  <EthAmountInput
+                    value={offerAmount}
+                    onChange={(v) => { setOfferAmount(v); setOfferErrors({}); }}
                     placeholder="Amount in ETH (e.g. 0.08)"
                     aria-label="Offer amount in ETH"
-                    value={offerAmount}
-                    onChange={(e) => {
-                      setOfferAmount(e.target.value);
-                      setOfferErrors({});
-                    }}
-                    className={
-                      offerErrors.amount
-                        ? `${inputClass} !border-error/40`
-                        : inputClass
-                    }
+                    error={offerErrors.amount}
                   />
-                  {offerErrors.amount && (
-                    <p className="text-xs text-error mt-1.5">
-                      {offerErrors.amount}
-                    </p>
-                  )}
                   <p className="text-xs text-on-surface-variant/50 uppercase tracking-widest">
                     ETH will be held in escrow for 7 days.
                   </p>
@@ -888,13 +863,13 @@ export default function AssetPageClient({
                           ? "Confirming..."
                           : "Send Offer"}
                     </button>
-                    <button
+                    <IconButton
                       onClick={() => setShowOfferForm(false)}
                       aria-label="Close"
-                      className="px-4 py-3 rounded-sm bg-surface-container border border-outline-variant/15 text-on-surface-variant hover:text-on-surface transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      variant="outlined"
                     >
                       <X size={16} />
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
               ) : (

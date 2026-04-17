@@ -5,7 +5,7 @@ import { formatEther } from "viem";
 import { useMemo } from "react";
 import { useQuery } from "@apollo/client/react";
 import { NFT_COLLECTION_ABI } from "@/constants/contracts";
-import { ensureAddressOrZero } from "@/lib/schemas";
+import { parseAddress } from "@/lib/schemas";
 import { GET_COLLECTION } from "@/lib/graphql/queries";
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
@@ -31,8 +31,8 @@ type GqlCollectionData = { collection: GqlCollection | null };
  * When subgraph is disabled, all fields are fetched via a single multicall batch.
  */
 export function useCollectionDetails(collectionAddress: string | undefined) {
-  const enabled = !!collectionAddress;
-  const addr = ensureAddressOrZero(collectionAddress);
+  const addr = parseAddress(collectionAddress);
+  const enabled = !!addr;
 
   // ── Subgraph path (metadata) ──
   const { data: gqlData, loading: gqlLoading } = useQuery<GqlCollectionData>(
@@ -49,7 +49,7 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
   const rpcEnabled = enabled && !SUBGRAPH_ENABLED;
 
   const base = {
-    address: addr,
+    address: addr!,
     abi: NFT_COLLECTION_ABI,
   } as const;
 
@@ -95,7 +95,7 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
         mintPriceEth: formatEther(mintPriceBig),
         maxSupply: BigInt(gqlCol.maxSupply ?? 0),
         totalSupply: BigInt(gqlCol.totalSupply ?? 0),
-        owner: ensureAddressOrZero(owner),
+        owner: parseAddress(owner as string | undefined),
         isLoading: gqlLoading,
       };
     }
@@ -118,7 +118,7 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
       mintPriceEth: mintPrice ? formatEther(mintPrice) : null,
       maxSupply: rpcMaxSupply,
       totalSupply: rpcTotalSupply,
-      owner: ensureAddressOrZero(owner),
+      owner: parseAddress(owner as string | undefined),
       isLoading: false,
     };
   }, [gqlCol, gqlLoading, owner, rpcResults]);

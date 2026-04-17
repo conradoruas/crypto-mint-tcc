@@ -9,26 +9,26 @@ import {
   NFT_COLLECTION_ABI,
 } from "@/constants/contracts";
 import type { ListingData } from "@/types/marketplace";
-import { ensureAddressOrZero } from "@/lib/schemas";
+import { parseAddress } from "@/lib/schemas";
 
 /**
  * Hook to fetch listing and owner information for a specific NFT.
  */
 export function useNFTListing(nftContract: string, tokenId: string) {
-  const enabled = !!nftContract && !!tokenId;
-  const nftAddr = ensureAddressOrZero(nftContract);
+  const nftAddr = parseAddress(nftContract);
+  const enabled = !!nftAddr && !!tokenId;
 
   const { data: listing, refetch: refetchListing } = useReadContract({
     address: MARKETPLACE_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getListing",
-    args: [nftAddr, BigInt(tokenId || "0")],
+    args: [nftAddr!, BigInt(tokenId || "0")],
     query: { enabled },
   });
 
   // ownerOf comes from the COLLECTION contract, not the marketplace
   const { data: owner, refetch: refetchOwner } = useReadContract({
-    address: nftAddr,
+    address: nftAddr!,
     abi: NFT_COLLECTION_ABI,
     functionName: "ownerOf",
     args: [BigInt(tokenId || "0")],

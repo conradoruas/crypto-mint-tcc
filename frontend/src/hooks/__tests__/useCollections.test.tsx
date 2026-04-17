@@ -44,30 +44,21 @@ vi.mock("wagmi", () => ({
 }));
 
 import { useConnection } from "wagmi";
-import { ensureAddressOrZero } from "@/lib/schemas";
 
 const makeWrapper = (mocks: MockedResponse[]) => makeApolloWrapper(mocks);
 
 // ─── valid test addresses (must be 42-char hex to pass isAddress()) ───────────
 
-const ADDR_COL1 = ensureAddressOrZero("0x1000000000000000000000000000000000000001");
-const ADDR_COL2 = ensureAddressOrZero("0x1000000000000000000000000000000000000002");
-const ADDR_CREATOR = ensureAddressOrZero(
-  "0xabcd000000000000000000000000000000000001",
-);
+const ADDR_COL1 = "0x1000000000000000000000000000000000000001" as `0x${string}`;
+const ADDR_COL2 = "0x1000000000000000000000000000000000000002" as `0x${string}`;
+const ADDR_CREATOR = "0xabcd000000000000000000000000000000000001" as `0x${string}`;
 // getAddress computes the proper EIP-55 checksum — same address, uppercase variant for case-insensitivity test
 const ADDR_CREATOR_UPPER = getAddress(ADDR_CREATOR);
-const ADDR_FOREIGN = ensureAddressOrZero(
-  "0x3000000000000000000000000000000000000001",
-);
-const ADDR_OTHER = ensureAddressOrZero("0x4000000000000000000000000000000000000001");
-const ADDR_MINIMAL = ensureAddressOrZero(
-  "0x5000000000000000000000000000000000000001",
-);
-const ADDR_OWNER = ensureAddressOrZero("0x6000000000000000000000000000000000000001");
-const ADDR_CONTRACT = ensureAddressOrZero(
-  "0x7000000000000000000000000000000000000001",
-);
+const ADDR_FOREIGN = "0x3000000000000000000000000000000000000001" as `0x${string}`;
+const ADDR_OTHER = "0x4000000000000000000000000000000000000001" as `0x${string}`;
+const ADDR_MINIMAL = "0x5000000000000000000000000000000000000001" as `0x${string}`;
+const ADDR_OWNER = "0x6000000000000000000000000000000000000001" as `0x${string}`;
+const ADDR_CONTRACT = "0x7000000000000000000000000000000000000001" as `0x${string}`;
 
 // ─── shared fixtures ─────────────────────────────────────────────────────────
 
