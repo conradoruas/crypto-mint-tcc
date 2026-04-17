@@ -34,7 +34,12 @@ import { shortAddr, formatTimeAgo } from "@/lib/utils";
 
 const EVENT_CONFIG = getEventConfig(14);
 
-type ProfileSortOption = "default" | "id_asc" | "id_desc" | "name_asc" | "name_desc";
+type ProfileSortOption =
+  | "default"
+  | "id_asc"
+  | "id_desc"
+  | "name_asc"
+  | "name_desc";
 
 const SORT_LABELS: Record<ProfileSortOption, string> = {
   default: "Default",
@@ -82,11 +87,11 @@ function ProfileAvatar({
 }) {
   const initials = name
     ? name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase()
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
     : "?";
 
   if (imageUri) {
@@ -166,8 +171,6 @@ export default function ProfilePage() {
     collectedPag.reset();
   };
 
-
-
   const { items: paginatedCollected, totalPages: collectedTotalPages } =
     collectedPag.paginate(displayedNFTs);
   const { items: paginatedCreated, totalPages: createdTotalPages } =
@@ -218,9 +221,9 @@ export default function ProfilePage() {
         </section>
 
         {/* Profile content */}
-        <div className="max-w-[1400px] mx-auto px-8 relative -mt-24 pb-12">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-8 relative -mt-24 pb-12">
           {/* Profile header */}
-          <div className="flex flex-col md:flex-row items-end gap-8 mb-12">
+          <div className="flex flex-col md:flex-row items-start gap-8 mb-12">
             <div className="relative">
               {profile === undefined ? (
                 <div className="w-40 h-40 animate-pulse bg-surface-container-high border-4 border-background" />
@@ -309,15 +312,16 @@ export default function ProfilePage() {
           </div>
 
           {/* Tabs */}
-          <div className="flex items-center border-b border-outline-variant/15 mb-10 overflow-x-auto no-scrollbar">
+          <div className="flex items-center border-b border-outline-variant/15 mb-10">
             {["Collected", "Favorites", "Created", "Activity"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest border-b-2 whitespace-nowrap transition-all ${activeTab === tab
-                  ? "text-primary border-primary"
-                  : "text-on-surface-variant border-transparent hover:text-on-surface"
-                  }`}
+                className={`flex-1 px-2 sm:px-8 py-3 sm:py-4 font-headline text-[10px] sm:text-sm font-bold uppercase tracking-widest border-b-2 transition-all ${
+                  activeTab === tab
+                    ? "text-primary border-primary"
+                    : "text-on-surface-variant border-transparent hover:text-on-surface"
+                }`}
               >
                 {tab}
               </button>
@@ -335,11 +339,15 @@ export default function ProfilePage() {
                       return (
                         <button
                           key={c.contractAddress}
-                          onClick={() => { setSelectedCollection(c.contractAddress); collectedPag.reset(); }}
-                          className={`px-4 py-2 rounded-full text-xs font-headline font-bold uppercase tracking-widest border transition-all ${isActive
-                            ? "bg-primary/10 text-primary border-primary/30"
-                            : "text-on-surface-variant border-outline-variant/15 hover:border-outline"
-                            }`}
+                          onClick={() => {
+                            setSelectedCollection(c.contractAddress);
+                            collectedPag.reset();
+                          }}
+                          className={`px-4 py-2 rounded-full text-xs font-headline font-bold uppercase tracking-widest border transition-all ${
+                            isActive
+                              ? "bg-primary/10 text-primary border-primary/30"
+                              : "text-on-surface-variant border-outline-variant/15 hover:border-outline"
+                          }`}
                         >
                           {c.name}
                         </button>
@@ -359,13 +367,19 @@ export default function ProfilePage() {
                     <input
                       type="text"
                       value={search}
-                      onChange={(e) => { setSearch(e.target.value); collectedPag.reset(); }}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        collectedPag.reset();
+                      }}
                       placeholder="Search..."
                       className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-primary transition-all text-on-surface placeholder:text-on-surface-variant/50 w-48"
                     />
                     {search && (
                       <button
-                        onClick={() => { setSearch(""); collectedPag.reset(); }}
+                        onClick={() => {
+                          setSearch("");
+                          collectedPag.reset();
+                        }}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface"
                       >
                         <X size={12} />
@@ -375,14 +389,19 @@ export default function ProfilePage() {
                   <div className="relative">
                     <select
                       value={sort}
-                      onChange={(e) => { setSort(e.target.value as ProfileSortOption); collectedPag.reset(); }}
+                      onChange={(e) => {
+                        setSort(e.target.value as ProfileSortOption);
+                        collectedPag.reset();
+                      }}
                       className="appearance-none bg-surface-container border border-outline-variant/15 rounded-sm px-4 py-2 pr-8 text-sm focus:outline-none focus:border-primary cursor-pointer text-on-surface"
                     >
-                      {(Object.keys(SORT_LABELS) as ProfileSortOption[]).map((key) => (
-                        <option key={key} value={key}>
-                          {SORT_LABELS[key]}
-                        </option>
-                      ))}
+                      {(Object.keys(SORT_LABELS) as ProfileSortOption[]).map(
+                        (key) => (
+                          <option key={key} value={key}>
+                            {SORT_LABELS[key]}
+                          </option>
+                        ),
+                      )}
                     </select>
                   </div>
                   {hasActiveFilters && (
@@ -408,16 +427,17 @@ export default function ProfilePage() {
                       (h, i) => (
                         <th
                           key={h}
-                          className={`pb-4 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold ${i === 2
-                            ? "text-right px-4"
-                            : i === 3 || i === 4
-                              ? "text-center px-4"
-                              : i === 5
-                                ? "text-right pl-4"
-                                : i === 1
-                                  ? "px-4"
-                                  : "pr-4"
-                            }`}
+                          className={`pb-4 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold ${
+                            i === 2
+                              ? "text-right px-4"
+                              : i === 3 || i === 4
+                                ? "text-center px-4"
+                                : i === 5
+                                  ? "text-right pl-4"
+                                  : i === 1
+                                    ? "px-4"
+                                    : "pr-4"
+                          }`}
                         >
                           {h}
                         </th>
@@ -527,22 +547,26 @@ export default function ProfilePage() {
                           {/* From */}
                           <td className="py-5 px-4 text-center">
                             <span
-                              className={`font-mono text-xs ${isUser(event.from)
-                                ? "text-primary font-bold"
-                                : "text-on-surface-variant"
-                                }`}
+                              className={`font-mono text-xs ${
+                                isUser(event.from)
+                                  ? "text-primary font-bold"
+                                  : "text-on-surface-variant"
+                              }`}
                             >
-                              {isUser(event.from) ? "You" : shortAddr(event.from)}
+                              {isUser(event.from)
+                                ? "You"
+                                : shortAddr(event.from)}
                             </span>
                           </td>
                           {/* To */}
                           <td className="py-5 px-4 text-center">
                             {event.to ? (
                               <span
-                                className={`font-mono text-xs ${isUser(event.to)
-                                  ? "text-secondary font-bold"
-                                  : "text-on-surface-variant"
-                                  }`}
+                                className={`font-mono text-xs ${
+                                  isUser(event.to)
+                                    ? "text-secondary font-bold"
+                                    : "text-on-surface-variant"
+                                }`}
                               >
                                 {isUser(event.to) ? "You" : shortAddr(event.to)}
                               </span>
@@ -848,7 +872,10 @@ export default function ProfilePage() {
                       >
                         Prev
                       </button>
-                      {Array.from({ length: createdTotalPages }, (_, i) => i + 1)
+                      {Array.from(
+                        { length: createdTotalPages },
+                        (_, i) => i + 1,
+                      )
                         .filter(
                           (p) =>
                             p === 1 ||
