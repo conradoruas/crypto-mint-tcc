@@ -6,13 +6,15 @@ import { Clock, TrendingUp, Loader2, CheckCircle } from "lucide-react";
 import type { OfferWithBuyer } from "@/types/marketplace";
 import { shortAddr } from "@/lib/utils";
 
-export function ExpiresIn({ expiresAt }: { expiresAt: Date }) {
-  const [now, setNow] = useState(() => Date.now());
+export function ExpiresIn({ expiresAt, now: nowProp }: { expiresAt: Date; now?: number }) {
+  const [localNow, setLocalNow] = useState(() => Date.now());
+  const now = nowProp ?? localNow;
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    if (nowProp !== undefined) return;
+    const id = setInterval(() => setLocalNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [nowProp]);
 
   const secondsLeft = Math.floor((expiresAt.getTime() - now) / 1000);
 
@@ -127,7 +129,7 @@ export function OffersTable({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <ExpiresIn expiresAt={expiresDate} />
+              <ExpiresIn expiresAt={expiresDate} now={now} />
               {isOwner && (
                 <button
                   onClick={() => onAccept(offer.buyerAddress)}

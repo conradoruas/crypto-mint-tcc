@@ -25,6 +25,7 @@ export function GlobalSearch({ className }: { className?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [hasFocused, setHasFocused] = useState(false);
   const [metaMap, setMetaMap] = useState<Map<string, NFTMeta>>(new Map());
   const ref = useRef<HTMLDivElement>(null);
 
@@ -32,7 +33,7 @@ export function GlobalSearch({ className }: { className?: string }) {
 
   const { data: nftData } = useQuery<GqlAllNFTsData>(GET_ALL_NFTS, {
     variables: { first: 1000 },
-    skip: !SUBGRAPH_ENABLED,
+    skip: !SUBGRAPH_ENABLED || !hasFocused,
   });
 
   // Pre-load all NFT metadata as soon as subgraph data arrives
@@ -54,8 +55,7 @@ export function GlobalSearch({ className }: { className?: string }) {
 
   // 2. Pré-carregamento de metadados
   useEffect(() => {
-    // Evitamos a execução se não houver tokens para buscar
-    if (!tokensToFetch.length) return;
+    if (!hasFocused || !tokensToFetch.length) return;
 
     const fetchAll = async () => {
       const merged = new Map<string, NFTMeta>();
@@ -72,7 +72,7 @@ export function GlobalSearch({ className }: { className?: string }) {
     };
 
     fetchAll();
-  }, [tokensToFetch]); // Agora utilizamos a dependência estável
+  }, [tokensToFetch, hasFocused]);
 
   const trimmed = query.trim().toLowerCase();
 
@@ -150,7 +150,7 @@ export function GlobalSearch({ className }: { className?: string }) {
           setQuery(e.target.value);
           setOpen(true);
         }}
-        onFocus={() => trimmed && setOpen(true)}
+        onFocus={() => { setHasFocused(true); if (trimmed) setOpen(true); }}
         onKeyDown={handleKeyDown}
         placeholder="Search collections, NFTs..."
         aria-label="Search collections and NFTs"
