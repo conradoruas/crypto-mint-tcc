@@ -32,8 +32,8 @@ const securityHeaders = [
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://ipfs.io https://*.ipfs.dweb.link https://nft-cdn.alchemy.com",
-      "connect-src 'self' https://*.alchemy.com wss://*.walletconnect.com https://api.pinata.cloud https://ipfs.io https://*.ipfs.dweb.link https://relay.walletconnect.com https://explorer-api.walletconnect.com https://api.studio.thegraph.com",
+      "img-src 'self' data: blob: https://ipfs.io https://*.ipfs.dweb.link https://nft-cdn.alchemy.com https://cloudflare-ipfs.com https://nftstorage.link",
+      "connect-src 'self' https://*.alchemy.com wss://*.walletconnect.com https://api.pinata.cloud https://ipfs.io https://*.ipfs.dweb.link https://cloudflare-ipfs.com https://nftstorage.link https://relay.walletconnect.com https://explorer-api.walletconnect.com https://api.studio.thegraph.com",
       "frame-src 'none'",
       "object-src 'none'",
       "base-uri 'self'",
@@ -59,6 +59,14 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "nft-cdn.alchemy.com",
+      },
+      {
+        protocol: "https",
+        hostname: "cloudflare-ipfs.com",
+      },
+      {
+        protocol: "https",
+        hostname: "nftstorage.link",
       },
     ],
   },
