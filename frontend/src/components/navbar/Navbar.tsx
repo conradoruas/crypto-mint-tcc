@@ -105,7 +105,7 @@ function NavbarContent() {
         </div>
       )}
       <div className="flex items-center justify-between px-4 sm:px-8 py-4 w-full max-w-[1920px] mx-auto">
-        <div className="flex items-center gap-4 md:gap-12">
+        <div className="flex items-center gap-2 md:gap-12">
           {/* Mobile Hamburger */}
           <button
             className="md:hidden text-on-surface hover:text-primary transition-colors"
@@ -146,7 +146,7 @@ function NavbarContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 sm:gap-6">
+        <div className="flex items-center gap-2 sm:gap-4 lg:gap-6">
           <div className="hidden lg:block w-72">
             <GlobalSearch />
           </div>
@@ -155,10 +155,12 @@ function NavbarContent() {
           {isConnected && address ? (
             <div className="flex items-center gap-1 text-on-surface-variant">
               <BellDropdown address={address} />
-              <WalletDropdown address={address} />
+              <div className="hidden sm:block">
+                <WalletDropdown address={address} />
+              </div>
             </div>
           ) : (
-            <div className="flex items-center gap-1 text-on-surface-variant">
+            <div className="hidden sm:flex items-center gap-1 text-on-surface-variant">
               <button
                 aria-label="Activity notifications"
                 className="p-2 text-on-surface-variant/30 cursor-not-allowed"
