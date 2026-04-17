@@ -50,8 +50,8 @@ import { toast } from "sonner";
 // ─── Price History Chart ──────────────────────────────────────────────────────
 
 const W = 500;
-const H = 130;
-const PAD = { top: 8, right: 16, bottom: 28, left: 44 };
+const H = 150;
+const PAD = { top: 10, right: 16, bottom: 36, left: 56 };
 const PLOT_W = W - PAD.left - PAD.right;
 const PLOT_H = H - PAD.top - PAD.bottom;
 
@@ -95,13 +95,13 @@ function PriceHistory({
 
   if (isSkeleton) {
     return (
-      <div className="h-[130px] animate-pulse bg-surface-container-high rounded-sm" />
+      <div className="h-[150px] animate-pulse bg-surface-container-high rounded-sm" />
     );
   }
 
   if (sales.length < 2) {
     return (
-      <div className="h-[130px] flex items-center justify-center text-xs text-on-surface-variant/40 uppercase tracking-widest border border-dashed border-outline-variant/15 rounded-sm">
+      <div className="h-[150px] flex items-center justify-center text-xs text-on-surface-variant/40 uppercase tracking-widest border border-dashed border-outline-variant/15 rounded-sm">
         No sales recorded yet
       </div>
     );
@@ -184,12 +184,12 @@ function PriceHistory({
                 strokeWidth="1"
               />
               <text
-                x={PAD.left - 6}
-                y={y + 3.5}
+                x={PAD.left - 12}
+                y={y + 4.5}
                 textAnchor="end"
-                fontSize="9"
+                fontSize="14"
                 fill="currentColor"
-                fillOpacity="0.4"
+                fillOpacity="0.6"
               >
                 {tick.toFixed(3)}
               </text>
@@ -200,20 +200,20 @@ function PriceHistory({
         {/* X axis labels */}
         <text
           x={PAD.left}
-          y={H - 4}
-          fontSize="9"
+          y={H - 6}
+          fontSize="14"
           fill="currentColor"
-          fillOpacity="0.4"
+          fillOpacity="0.6"
         >
           {fmtDate(minTs)}
         </text>
         <text
           x={W - PAD.right}
-          y={H - 4}
-          fontSize="9"
+          y={H - 6}
+          fontSize="14"
           textAnchor="end"
           fill="currentColor"
-          fillOpacity="0.4"
+          fillOpacity="0.6"
         >
           {fmtDate(maxTs)}
         </text>
@@ -289,7 +289,7 @@ function LoadingSkeleton() {
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
-      <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-8 grid grid-cols-1 md:grid-cols-2 gap-12">
+      <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-4 sm:px-8 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
         <div className="aspect-square animate-pulse bg-surface-container-high rounded-sm" />
         <div className="flex flex-col justify-center space-y-4 pt-4">
           <div className="h-3 rounded-sm animate-pulse w-1/4 bg-surface-container-high" />
@@ -581,9 +581,9 @@ export default function AssetPageClient({
   }
 
   return (
-    <main className="min-h-screen bg-background text-on-surface">
+    <main className="min-h-screen bg-background text-on-surface overflow-x-hidden">
       <Navbar />
-      <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-8 grid grid-cols-1 md:grid-cols-2 gap-12">
+      <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-4 sm:px-8 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
         {/* Image */}
         <div className="relative overflow-hidden aspect-square bg-surface-container-high border border-outline-variant/10 rounded-sm">
           {nft.image ? (
@@ -618,7 +618,7 @@ export default function AssetPageClient({
           </div>
 
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {owner && (
                 <div className="flex items-center gap-2 text-sm bg-surface-container px-3 py-1.5 rounded-sm border border-outline-variant/15">
                   <ShieldCheck size={13} className="text-primary" />

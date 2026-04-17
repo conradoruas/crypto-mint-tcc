@@ -126,6 +126,91 @@ function EventRow({
   );
 }
 
+function EventCard({
+  event,
+  collectionName,
+  meta,
+}: {
+  event: ActivityEvent;
+  collectionName?: string;
+  meta?: NFTMeta;
+}) {
+  const cfg = EVENT_CONFIG[event.type];
+  if (!cfg) return null;
+
+  return (
+    <div className="flex gap-3 px-4 py-4 border-b border-outline-variant/5 last:border-0 hover:bg-surface-container-low transition-colors">
+      {/* NFT thumbnail */}
+      <div className="w-12 h-12 rounded-sm overflow-hidden bg-surface-container-high shrink-0 relative">
+        {meta?.image && (
+          <Image
+            src={meta.image}
+            alt={meta.name || "NFT Image"}
+            fill
+            className="object-cover"
+            sizes="48px"
+            loading="eager"
+          />
+        )}
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className={`flex items-center gap-1.5 text-xs font-headline font-bold uppercase tracking-widest ${cfg.colorClass}`}>
+            <span className="shrink-0">{cfg.icon}</span>
+            {cfg.label}
+          </div>
+          <div className="flex items-center gap-1.5 text-on-surface-variant text-xs shrink-0">
+            <span>{formatTimeAgo(event.timestamp)}</span>
+            <a
+              href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary transition-colors"
+            >
+              <ExternalLink size={11} />
+            </a>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href={`/asset/${event.tokenId}?contract=${event.nftContract}`}
+            className="font-headline font-bold text-sm text-on-surface truncate hover:text-primary transition-colors"
+          >
+            {meta?.name ?? `#${event.tokenId.padStart(3, "0")}`}
+          </Link>
+          {event.priceETH && (
+            <span className="font-headline font-bold text-sm text-on-surface shrink-0">
+              {parseFloat(event.priceETH).toFixed(4)} ETH
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 text-xs">
+          {collectionName && (
+            <span className="text-on-surface-variant uppercase tracking-wider truncate">
+              {collectionName}
+            </span>
+          )}
+          {(event.from || event.to) && (
+            <span className="text-on-surface-variant/50 shrink-0">
+              <span className="text-primary font-mono">{shortAddr(event.from)}</span>
+              {event.to && (
+                <>
+                  {" → "}
+                  <span className="text-secondary font-mono">{shortAddr(event.to)}</span>
+                </>
+              )}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SkeletonRow() {
   return (
     <tr>
@@ -333,8 +418,38 @@ export default function ActivityPage() {
           </p>
         )}
 
-        {/* Ledger table */}
-        <div className="relative z-0">
+        {/* Mobile card list */}
+        <div className="md:hidden bg-surface-container-low border border-outline-variant/10">
+          {isLoading && events.length === 0 ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex gap-3 px-4 py-4 border-b border-outline-variant/5">
+                <div className="w-12 h-12 animate-pulse bg-surface-container-high rounded-sm shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-20 animate-pulse bg-surface-container-high rounded-sm" />
+                  <div className="h-4 w-32 animate-pulse bg-surface-container-high rounded-sm" />
+                  <div className="h-3 w-24 animate-pulse bg-surface-container-high rounded-sm" />
+                </div>
+              </div>
+            ))
+          ) : displayedEvents.length === 0 ? (
+            <div className="py-16 text-center">
+              <Activity size={32} className="mx-auto mb-3 text-on-surface-variant/30" />
+              <p className="text-sm text-on-surface-variant">No activity found</p>
+            </div>
+          ) : (
+            paginatedEvents.map((event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                collectionName={collectionName(event.nftContract)}
+                meta={nftMeta(event.nftContract, event.tokenId)}
+              />
+            ))
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="relative z-0 hidden md:block">
           <div className="absolute -top-10 right-0 w-64 h-64 bg-primary/5 blur-[100px] pointer-events-none" />
           <table className="w-full text-left border-collapse table-fixed">
             <colgroup>
@@ -347,22 +462,22 @@ export default function ActivityPage() {
             </colgroup>
             <thead>
               <tr className="border-b border-outline-variant/10">
-                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
+                <th className="pb-5 pt-2 font-headline text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
                   Event
                 </th>
-                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
+                <th className="pb-5 pt-2 font-headline text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
                   Item
                 </th>
-                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-right">
+                <th className="pb-5 pt-2 font-headline text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-right">
                   Price
                 </th>
-                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-center">
+                <th className="pb-5 pt-2 font-headline text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-center">
                   From
                 </th>
-                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-center">
+                <th className="pb-5 pt-2 font-headline text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-center">
                   To
                 </th>
-                <th className="pb-5 pt-2 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-right">
+                <th className="pb-5 pt-2 font-headline text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold text-right">
                   Time
                 </th>
               </tr>

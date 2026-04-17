@@ -1,4 +1,7 @@
-import React from "react";
+"use client";
+
+import React, { useEffect } from "react";
+import { X } from "lucide-react";
 import type { CollectionInfo } from "@/types/collection";
 
 export type SortOption =
@@ -34,9 +37,11 @@ interface FilterSidebarProps {
   collections: CollectionInfo[];
   selectedCollection: string;
   setSelectedCollection: React.Dispatch<React.SetStateAction<string>>;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
-export function FilterSidebar({
+function FilterContent({
   hasActiveFilters,
   clearFilters,
   onlyListed,
@@ -50,14 +55,15 @@ export function FilterSidebar({
   collections,
   selectedCollection,
   setSelectedCollection,
-}: FilterSidebarProps) {
+  onMobileClose,
+}: Omit<FilterSidebarProps, "mobileOpen">) {
   return (
-    <aside className="w-72 fixed h-[calc(100vh-6rem)] overflow-y-auto px-8 hidden xl:block no-scrollbar top-24">
-      <div className="space-y-10 pt-4">
-        <header className="flex items-center justify-between">
-          <h2 className="font-headline text-lg font-bold tracking-tight uppercase">
-            Filters
-          </h2>
+    <div className="space-y-10 pt-4">
+      <header className="flex items-center justify-between">
+        <h2 className="font-headline text-lg font-bold tracking-tight uppercase">
+          Filters
+        </h2>
+        <div className="flex items-center gap-3">
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
@@ -66,117 +72,163 @@ export function FilterSidebar({
               Reset
             </button>
           )}
-        </header>
+          {onMobileClose && (
+            <button
+              onClick={onMobileClose}
+              aria-label="Close filters"
+              className="touch-target xl:hidden text-on-surface-variant hover:text-on-surface transition-colors"
+            >
+              <X size={20} />
+            </button>
+          )}
+        </div>
+      </header>
 
-        {/* Status filter */}
+      {/* Status filter */}
+      <section className="space-y-4">
+        <h3 className="font-headline text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+          Status
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => {
+              setOnlyListed(false);
+              setOnlyFavorites(false);
+              setPage(1);
+            }}
+            className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+              !onlyListed && !onlyFavorites
+                ? "bg-secondary-container text-on-secondary-container border-secondary/20"
+                : "bg-surface-container text-on-surface-variant border-outline-variant/15 hover:border-outline"
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => {
+              setOnlyListed(true);
+              setOnlyFavorites(false);
+              setPage(1);
+            }}
+            className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+              onlyListed
+                ? "bg-secondary-container text-on-secondary-container border-secondary/20"
+                : "bg-surface-container text-on-surface-variant border-outline-variant/15 hover:border-outline"
+            }`}
+          >
+            Buy Now
+          </button>
+          <button
+            onClick={() => {
+              setOnlyFavorites((v) => !v);
+              setOnlyListed(false);
+              setPage(1);
+            }}
+            className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+              onlyFavorites
+                ? "bg-secondary-container text-on-secondary-container border-secondary/20"
+                : "bg-surface-container text-on-surface-variant border-outline-variant/15 hover:border-outline"
+            }`}
+          >
+            Favorites
+          </button>
+        </div>
+      </section>
+
+      {/* Sort */}
+      <section className="space-y-4">
+        <h3 className="font-headline text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+          Sort By
+        </h3>
+        <div className="space-y-2">
+          {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
+            <button
+              key={key}
+              onClick={() => {
+                setSort(key);
+                setPage(1);
+              }}
+              className={`w-full text-left px-3 py-2 rounded-sm text-sm transition-all ${
+                sort === key
+                  ? "bg-primary/10 text-primary border border-primary/20"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
+              }`}
+            >
+              {SORT_LABELS[key]}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* Collections */}
+      {!isLoadingCollections && collections.length > 0 && (
         <section className="space-y-4">
           <h3 className="font-headline text-xs font-bold text-on-surface-variant uppercase tracking-widest">
-            Status
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => {
-                setOnlyListed(false);
-                setOnlyFavorites(false);
-                setPage(1);
-              }}
-              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                !onlyListed && !onlyFavorites
-                  ? "bg-secondary-container text-on-secondary-container border-secondary/20"
-                  : "bg-surface-container text-on-surface-variant border-outline-variant/15 hover:border-outline"
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => {
-                setOnlyListed(true);
-                setOnlyFavorites(false);
-                setPage(1);
-              }}
-              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                onlyListed
-                  ? "bg-secondary-container text-on-secondary-container border-secondary/20"
-                  : "bg-surface-container text-on-surface-variant border-outline-variant/15 hover:border-outline"
-              }`}
-            >
-              Buy Now
-            </button>
-            <button
-              onClick={() => {
-                setOnlyFavorites((v) => !v);
-                setOnlyListed(false);
-                setPage(1);
-              }}
-              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                onlyFavorites
-                  ? "bg-secondary-container text-on-secondary-container border-secondary/20"
-                  : "bg-surface-container text-on-surface-variant border-outline-variant/15 hover:border-outline"
-              }`}
-            >
-              Favorites
-            </button>
-          </div>
-        </section>
-
-        {/* Sort */}
-        <section className="space-y-4">
-          <h3 className="font-headline text-xs font-bold text-on-surface-variant uppercase tracking-widest">
-            Sort By
+            Collections
           </h3>
           <div className="space-y-2">
-            {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
-              <button
-                key={key}
-                onClick={() => {
-                  setSort(key);
-                  setPage(1);
-                }}
-                className={`w-full text-left px-3 py-2 rounded-sm text-sm transition-all ${
-                  sort === key
-                    ? "bg-primary/10 text-primary border border-primary/20"
-                    : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
-                }`}
+            {[{ contractAddress: "", name: "All" }, ...collections].map((c) => (
+              <label
+                key={c.contractAddress}
+                className="flex items-center space-x-3 cursor-pointer group"
               >
-                {SORT_LABELS[key]}
-              </button>
+                <input
+                  type="radio"
+                  name="collection"
+                  checked={selectedCollection === c.contractAddress}
+                  onChange={() => {
+                    setSelectedCollection(c.contractAddress);
+                    setPage(1);
+                  }}
+                  className="accent-primary"
+                />
+                <span className="text-sm text-on-surface-variant group-hover:text-on-surface transition-colors">
+                  {c.name}
+                </span>
+              </label>
             ))}
           </div>
         </section>
+      )}
+    </div>
+  );
+}
 
-        {/* Collections */}
-        {!isLoadingCollections && collections.length > 0 && (
-          <section className="space-y-4">
-            <h3 className="font-headline text-xs font-bold text-on-surface-variant uppercase tracking-widest">
-              Collections
-            </h3>
-            <div className="space-y-2">
-              {[{ contractAddress: "", name: "All" }, ...collections].map(
-                (c) => (
-                  <label
-                    key={c.contractAddress}
-                    className="flex items-center space-x-3 cursor-pointer group"
-                  >
-                    <input
-                      type="radio"
-                      name="collection"
-                      checked={selectedCollection === c.contractAddress}
-                      onChange={() => {
-                        setSelectedCollection(c.contractAddress);
-                        setPage(1);
-                      }}
-                      className="accent-primary"
-                    />
-                    <span className="text-sm text-on-surface-variant group-hover:text-on-surface transition-colors">
-                      {c.name}
-                    </span>
-                  </label>
-                ),
-              )}
-            </div>
-          </section>
-        )}
-      </div>
-    </aside>
+export function FilterSidebar(props: FilterSidebarProps) {
+  const { mobileOpen, onMobileClose } = props;
+
+  // Prevent body scroll when mobile drawer is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [mobileOpen]);
+
+  return (
+    <>
+      {/* Desktop sidebar — xl+ only */}
+      <aside className="w-72 fixed h-[calc(100vh-6rem)] overflow-y-auto px-8 hidden xl:block no-scrollbar top-24">
+        <FilterContent {...props} />
+      </aside>
+
+      {/* Mobile drawer — shown when mobileOpen=true, hidden on xl+ */}
+      {mobileOpen && (
+        <div className="xl:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={onMobileClose}
+            aria-hidden
+          />
+          {/* Drawer panel */}
+          <aside className="relative ml-auto w-full max-w-xs h-full bg-background border-l border-outline-variant/15 overflow-y-auto px-6 py-6 no-scrollbar shadow-2xl">
+            <FilterContent {...props} onMobileClose={onMobileClose} />
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
