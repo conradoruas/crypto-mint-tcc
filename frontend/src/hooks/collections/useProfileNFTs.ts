@@ -19,13 +19,16 @@ export function useProfileNFTs(
   const [nfts, setNfts] = useState<CollectionNFTItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { collections } = useCollections();
+  const { collections: rawCollections } = useCollections();
+  const collections = useStableArray(rawCollections, (c) => c.contractAddress);
 
   useEffect(() => {
     if (!ownerAddress) {
       setIsLoading(false);
       return;
     }
+
+    let cancelled = false;
 
     const load = async () => {
       setIsLoading(true);
@@ -72,11 +75,11 @@ export function useProfileNFTs(
           }),
         );
 
-        setNfts(items);
+        if (!cancelled) setNfts(items);
       } catch (error) {
-        logger.error("Erro ao buscar NFTs do perfil", error);
+        if (!cancelled) logger.error("Erro ao buscar NFTs do perfil", error);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
@@ -85,6 +88,8 @@ export function useProfileNFTs(
     } else {
       setIsLoading(false);
     }
+
+    return () => { cancelled = true; };
   }, [ownerAddress, collectionAddress, collections]);
 
   return { nfts, isLoading };

@@ -37,7 +37,7 @@ import {
   listPriceSchema,
   offerAmountSchema,
   getZodErrors,
-  ensureAddress,
+  ensureAddressOrZero,
   addressSchema,
 } from "@/lib/schemas";
 import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
@@ -311,7 +311,7 @@ export default function AssetPageClient({
   const { id } = useParams();
   const searchParams = useSearchParams();
   const tokenId = (Array.isArray(id) ? id[0] : id) ?? "";
-  const nftContract = ensureAddress(searchParams.get("contract"));
+  const nftContract = ensureAddressOrZero(searchParams.get("contract"));
 
   const { address } = useConnection();
   const [nft, setNft] = useState<NFTItem | null>(initialNft);
@@ -415,18 +415,23 @@ export default function AssetPageClient({
       setIsLoadingNft(false);
       return;
     }
+    let cancelled = false;
+    const controller = new AbortController();
+    const { signal } = controller;
     const fetchNFT = async () => {
       try {
         const res = await fetch(
           `/api/alchemy/getNFTMetadata?contractAddress=${nftContract}&tokenId=${tokenId}&refreshCache=false`,
+          { signal },
         );
         const data = await res.json();
         let image = data.image?.cachedUrl ?? data.image?.originalUrl ?? "";
         if (!image && data.tokenUri) {
-          const metaRes = await fetch(resolveIpfsUrl(data.tokenUri));
+          const metaRes = await fetch(resolveIpfsUrl(data.tokenUri), { signal });
           const meta = await metaRes.json();
           image = resolveIpfsUrl(meta.image ?? "");
         }
+        if (cancelled) return;
         setNft({
           tokenId: data.tokenId,
           name: data.name ?? `NFT #${tokenId}`,
@@ -435,12 +440,14 @@ export default function AssetPageClient({
           nftContract,
         });
       } catch (error) {
+        if (cancelled) return;
         logger.error("Error fetching NFT", error);
       } finally {
-        setIsLoadingNft(false);
+        if (!cancelled) setIsLoadingNft(false);
       }
     };
     fetchNFT();
+    return () => { cancelled = true; controller.abort(); };
   }, [tokenId, nftContract, skipFetch]);
 
   useEffect(() => {
@@ -734,9 +741,9 @@ export default function AssetPageClient({
                   (showListForm ? (
                     <div className="space-y-3">
                       <input
-                        type="number"
-                        step="0.0001"
-                        min="0.0001"
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]*[.]?[0-9]*"
                         placeholder="Price in ETH (e.g. 0.05)"
                         aria-label="Listing price in ETH"
                         value={listPrice}
@@ -773,7 +780,8 @@ export default function AssetPageClient({
                         </button>
                         <button
                           onClick={() => setShowListForm(false)}
-                          className="px-4 py-3 rounded-sm bg-surface-container border border-outline-variant/15 text-on-surface-variant hover:text-on-surface transition-all"
+                          aria-label="Close"
+                          className="px-4 py-3 rounded-sm bg-surface-container border border-outline-variant/15 text-on-surface-variant hover:text-on-surface transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                         >
                           <X size={16} />
                         </button>
@@ -836,9 +844,9 @@ export default function AssetPageClient({
               ) : showOfferForm ? (
                 <div className="space-y-3">
                   <input
-                    type="number"
-                    step="0.0001"
-                    min="0.0001"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*[.]?[0-9]*"
                     placeholder="Amount in ETH (e.g. 0.08)"
                     aria-label="Offer amount in ETH"
                     value={offerAmount}
@@ -882,7 +890,8 @@ export default function AssetPageClient({
                     </button>
                     <button
                       onClick={() => setShowOfferForm(false)}
-                      className="px-4 py-3 rounded-sm bg-surface-container border border-outline-variant/15 text-on-surface-variant hover:text-on-surface transition-all"
+                      aria-label="Close"
+                      className="px-4 py-3 rounded-sm bg-surface-container border border-outline-variant/15 text-on-surface-variant hover:text-on-surface transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
                       <X size={16} />
                     </button>

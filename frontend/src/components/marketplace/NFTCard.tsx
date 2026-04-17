@@ -73,7 +73,7 @@ export function NFTCard({
               className={`touch-target transition-all drop-shadow-md ${
                 isFavorited
                   ? "text-error"
-                  : "text-white/60 opacity-0 group-hover:opacity-100 sm:opacity-0"
+                  : "text-white/60 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
               }`}
               aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
             >
