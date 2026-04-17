@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Heart, Tag } from "lucide-react";
 import type { NFTItemWithMarket } from "@/types/nft";
 import { useIsFavorited, useFavorite } from "@/hooks/user";
+import { IconButton } from "@/components/ui";
 
 export function NFTCard({
   nft,
@@ -64,21 +65,22 @@ export function NFTCard({
               )}
             </div>
 
-            <button
+            <IconButton
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 toggleFavorite(nft.nftContract, nft.tokenId);
               }}
-              className={`touch-target transition-all drop-shadow-md ${
+              aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+              size="sm"
+              className={`touch-target drop-shadow-md ${
                 isFavorited
                   ? "text-error"
-                  : "text-white/60 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                  : "text-white/60 opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
               }`}
-              aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
             >
               <Heart size={22} className={isFavorited ? "fill-error" : ""} />
-            </button>
+            </IconButton>
           </div>
         </div>
 
