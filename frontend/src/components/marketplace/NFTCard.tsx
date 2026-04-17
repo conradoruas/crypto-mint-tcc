@@ -3,7 +3,6 @@ import Link from "next/link";
 import { Heart, Tag } from "lucide-react";
 import type { NFTItemWithMarket } from "@/types/nft";
 import { useIsFavorited, useFavorite } from "@/hooks/user";
-import { IconButton } from "@/components/ui";
 
 export function NFTCard({
   nft,
@@ -25,6 +24,19 @@ export function NFTCard({
 
   return (
     <div className="relative group bg-surface-container-low rounded-sm overflow-hidden hover:scale-[1.02] transition-all duration-300 border border-outline-variant/5">
+      {/* Heart button sits outside the Link so click never bubbles into navigation */}
+      <button
+        onClick={() => toggleFavorite(nft.nftContract, nft.tokenId)}
+        aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+        className={`absolute top-3 right-3 z-20 touch-target transition-all drop-shadow-md ${
+          isFavorited
+            ? "text-error"
+            : "text-white/60 opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
+        }`}
+      >
+        <Heart size={22} className={isFavorited ? "fill-error" : ""} />
+      </button>
+
       <Link
         href={`/asset/${nft.tokenId}?contract=${nft.nftContract}`}
         className="block"
@@ -44,43 +56,24 @@ export function NFTCard({
             <div className="w-full h-full animate-pulse bg-surface-container-high" />
           )}
 
-          {/* Top overlay row: badges left, heart right */}
-          <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              {nft.listingPrice && (
-                <div
-                  className={`glass-panel px-2 py-1 text-[11px] font-bold uppercase tracking-wider border ${
-                    isMyListing
-                      ? "text-tertiary border-tertiary/20"
-                      : "text-primary border-primary/20"
-                  }`}
-                >
-                  {isMyListing ? "Your Listing" : "For Sale"}
-                </div>
-              )}
-              {nft.topOffer && (
-                <div className="glass-panel px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-secondary border border-secondary/20">
-                  Offer
-                </div>
-              )}
-            </div>
-
-            <IconButton
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleFavorite(nft.nftContract, nft.tokenId);
-              }}
-              aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
-              size="sm"
-              className={`touch-target drop-shadow-md ${
-                isFavorited
-                  ? "text-error"
-                  : "text-white/60 opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
-              }`}
-            >
-              <Heart size={22} className={isFavorited ? "fill-error" : ""} />
-            </IconButton>
+          {/* Top overlay row: badges left only — heart moved outside Link */}
+          <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
+            {nft.listingPrice && (
+              <div
+                className={`glass-panel px-2 py-1 text-[11px] font-bold uppercase tracking-wider border ${
+                  isMyListing
+                    ? "text-tertiary border-tertiary/20"
+                    : "text-primary border-primary/20"
+                }`}
+              >
+                {isMyListing ? "Your Listing" : "For Sale"}
+              </div>
+            )}
+            {nft.topOffer && (
+              <div className="glass-panel px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-secondary border border-secondary/20">
+                Offer
+              </div>
+            )}
           </div>
         </div>
 
