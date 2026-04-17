@@ -9,6 +9,7 @@ import {
 } from "@/lib/graphql/queries";
 import { POLL_TRENDING_MS } from "@/constants/polling";
 import { useNowBucketed } from "../useNowBucketed";
+import { logger } from "@/lib/logger";
 import type { TrendingCollection } from "@/types/collection";
 
 export type { TrendingCollection };
@@ -84,7 +85,7 @@ export function useTrendingCollections(limit = 10) {
     // If subgraph is skipped or error occurs, we don't need to do anything here.
     if (!SUBGRAPH_ENABLED) return;
     if (error) {
-      console.error("[useTrendingCollections] GQL Error:", error);
+      logger.error("[useTrendingCollections] GQL Error", error);
       return;
     }
 
