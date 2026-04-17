@@ -185,3 +185,12 @@ html:not(.dark) .text-gradient-primary {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Mobile touch target — ensures interactive elements meet 44×44px minimum */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

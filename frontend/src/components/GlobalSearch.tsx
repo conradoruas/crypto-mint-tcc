@@ -21,7 +21,7 @@ type GqlNFT = {
 };
 type GqlAllNFTsData = { nfts: GqlNFT[] };
 
-export function GlobalSearch() {
+export function GlobalSearch({ className }: { className?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -137,7 +137,7 @@ export function GlobalSearch() {
   };
 
   return (
-    <div ref={ref} className="relative hidden lg:block">
+    <div ref={ref} className={`relative ${className ?? ""}`}>
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant w-4 h-4 pointer-events-none z-10" />
       <input
         type="text"
@@ -155,7 +155,7 @@ export function GlobalSearch() {
         placeholder="Search collections, NFTs..."
         aria-label="Search collections and NFTs"
         aria-autocomplete="list"
-        className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-2 pl-10 pr-8 text-sm w-72 focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/50 text-on-surface"
+        className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-2 pl-10 pr-8 text-sm w-full focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/50 text-on-surface"
       />
       {query && (
         <button
@@ -168,7 +168,7 @@ export function GlobalSearch() {
       )}
 
       {open && trimmed.length >= 1 && (
-        <div className="absolute top-full mt-2 w-full min-w-[340px] bg-background border border-outline-variant/20 shadow-2xl z-50 overflow-hidden">
+        <div className="absolute top-full mt-2 w-full min-w-[280px] bg-background border border-outline-variant/20 shadow-2xl z-50 overflow-hidden">
           {!hasResults ? (
             <div className="px-4 py-6 text-center text-sm text-on-surface-variant">
               No results for &ldquo;{query}&rdquo;
