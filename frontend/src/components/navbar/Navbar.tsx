@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { BellDropdown } from "./BellDropdown";
 import { WalletDropdown } from "./WalletDropdown";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +30,11 @@ function NavbarContent() {
   const [isSwitchingChain, setIsSwitchingChain] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = isMobileMenuOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [isMobileMenuOpen]);
 
   const { mutateAsync } = useSwitchChain();
 
@@ -142,7 +147,7 @@ function NavbarContent() {
         </div>
 
         <div className="flex items-center gap-4 sm:gap-6">
-          <div className="hidden sm:block">
+          <div className="hidden lg:block w-72">
             <GlobalSearch />
           </div>
           <ThemeToggle />
@@ -186,9 +191,9 @@ function NavbarContent() {
 
       {/* Mobile Menu Dropdown */}
       {isMobileMenuOpen && (
-        <div className="md:hidden border-b border-outline-variant/15 bg-background shadow-lg px-4 py-4 space-y-4 font-headline uppercase tracking-wider text-sm flex flex-col">
-          <div className="sm:hidden mb-2">
-            <GlobalSearch />
+        <div className="md:hidden border-b border-outline-variant/15 bg-background shadow-lg px-4 py-4 space-y-1 font-headline uppercase tracking-wider text-sm flex flex-col">
+          <div className="mb-3">
+            <GlobalSearch className="w-full" />
           </div>
           {navLinks.map((link) => {
             const isActive = pathname === link.path;
@@ -198,10 +203,10 @@ function NavbarContent() {
                 href={link.path}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
-                  "transition-colors py-2",
+                  "transition-colors py-3 px-2 rounded-sm",
                   isActive
-                    ? "text-primary-container font-bold"
-                    : "text-on-surface-variant hover:text-on-surface",
+                    ? "text-primary-container font-bold bg-primary/5"
+                    : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container",
                 )}
               >
                 {link.name}

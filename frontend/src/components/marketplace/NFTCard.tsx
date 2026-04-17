@@ -48,7 +48,7 @@ export function NFTCard({
             <div className="flex items-center gap-1.5">
               {nft.listingPrice && (
                 <div
-                  className={`glass-panel px-2 py-1 text-[10px] font-bold uppercase tracking-wider border ${
+                  className={`glass-panel px-2 py-1 text-[11px] font-bold uppercase tracking-wider border ${
                     isMyListing
                       ? "text-tertiary border-tertiary/20"
                       : "text-primary border-primary/20"
@@ -58,7 +58,7 @@ export function NFTCard({
                 </div>
               )}
               {nft.topOffer && (
-                <div className="glass-panel px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-secondary border border-secondary/20">
+                <div className="glass-panel px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-secondary border border-secondary/20">
                   Offer
                 </div>
               )}
@@ -70,13 +70,14 @@ export function NFTCard({
                 e.stopPropagation();
                 toggleFavorite(nft.nftContract, nft.tokenId);
               }}
-              className={`transition-all drop-shadow-md ${
+              className={`touch-target transition-all drop-shadow-md ${
                 isFavorited
                   ? "text-error"
-                  : "text-white/60 opacity-0 group-hover:opacity-100"
+                  : "text-white/60 opacity-0 group-hover:opacity-100 sm:opacity-0"
               }`}
+              aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
             >
-              <Heart size={25} className={isFavorited ? "fill-error" : ""} />
+              <Heart size={22} className={isFavorited ? "fill-error" : ""} />
             </button>
           </div>
         </div>
@@ -84,13 +85,13 @@ export function NFTCard({
         <div className="p-5 space-y-4">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-secondary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
+              <p className="text-secondary text-[11px] font-bold uppercase tracking-[0.2em] mb-1">
                 {nft.collectionName}
               </p>
               <h4 className="font-headline text-lg font-bold group-hover:text-primary transition-colors">
                 {nft.name}
               </h4>
-              <span className="text-[10px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">
+              <span className="text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">
                 #{nft.tokenId.padStart(3, "0")}
               </span>
             </div>
@@ -98,7 +99,7 @@ export function NFTCard({
 
           <div className="flex items-center justify-between border-t border-outline-variant/10 pt-4">
             <div>
-              <span className="block text-[10px] text-on-surface-variant uppercase tracking-widest">
+              <span className="block text-[11px] text-on-surface-variant uppercase tracking-widest">
                 Price
               </span>
               <span className="font-headline font-bold text-on-surface">
@@ -111,7 +112,7 @@ export function NFTCard({
                 )}
               </span>
               {nft.topOffer && (
-                <span className="block text-[10px] text-secondary font-bold uppercase tracking-widest mt-0.5">
+                <span className="block text-[11px] text-secondary font-bold uppercase tracking-widest mt-0.5">
                   Offer {nft.topOffer} ETH
                 </span>
               )}

@@ -32,6 +32,7 @@ function ExploreContent() {
   const [onlyListed, setOnlyListed] = useState(false);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [page, setPage] = useState(1);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
   // Only favorites remain client-side (impacts pagination logic).
   const hasClientFilters = onlyFavorites;
@@ -114,6 +115,8 @@ function ExploreContent() {
           collections={collections}
           selectedCollection={selectedCollection}
           setSelectedCollection={setSelectedCollection}
+          mobileOpen={isMobileFilterOpen}
+          onMobileClose={() => setIsMobileFilterOpen(false)}
         />
 
         {/* Main content */}
@@ -135,7 +138,7 @@ function ExploreContent() {
               </p>
             </div>
             {/* Search bar */}
-            <div className="relative">
+            <div className="relative w-full md:w-72">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant w-4 h-4" />
               <input
                 type="text"
@@ -145,7 +148,7 @@ function ExploreContent() {
                   setPage(1);
                 }}
                 placeholder="Search by name or ID..."
-                className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-3 pl-12 pr-4 w-72 focus:outline-none focus:border-primary transition-all text-sm text-on-surface placeholder:text-on-surface-variant/50"
+                className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-3 pl-12 pr-4 w-full focus:outline-none focus:border-primary transition-all text-sm text-on-surface placeholder:text-on-surface-variant/50"
               />
               {search && (
                 <button
@@ -162,7 +165,17 @@ function ExploreContent() {
           </div>
 
           {/* Mobile filters */}
-          <div className="flex xl:hidden gap-2 mb-6 flex-wrap">
+          <div className="flex xl:hidden gap-2 mb-6 flex-wrap items-center">
+            <button
+              onClick={() => setIsMobileFilterOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold border border-outline-variant/15 bg-surface-container text-on-surface-variant hover:border-outline transition-all"
+            >
+              <SlidersHorizontal size={12} />
+              Filters
+              {hasActiveFilters && (
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              )}
+            </button>
             <button
               onClick={() => {
                 setOnlyListed((v) => !v);
@@ -173,8 +186,7 @@ function ExploreContent() {
                   : "bg-surface-container text-on-surface-variant border-outline-variant/15"
                 }`}
             >
-              <SlidersHorizontal size={12} className="inline mr-1" />
-              Buy Now Only
+              Buy Now
             </button>
             {hasActiveFilters && (
               <button
