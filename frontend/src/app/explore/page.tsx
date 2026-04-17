@@ -120,7 +120,7 @@ function ExploreContent() {
         />
 
         {/* Main content */}
-        <section className="flex-1 px-8 xl:ml-72 pb-20">
+        <section className="flex-1 px-8 pb-20">
           {/* Header */}
           <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 pt-4">
             <div>
