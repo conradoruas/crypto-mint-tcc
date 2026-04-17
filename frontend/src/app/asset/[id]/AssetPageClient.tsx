@@ -348,7 +348,7 @@ export default function AssetPageClient({
     isSuccess: isBought,
     hash: buyHash,
   } = useBuyNFT();
-  const { cancelListing, isPending: isCancelling } = useCancelListing();
+  const { cancelListing, isPending: isCancelling, isSuccess: isCancelled } = useCancelListing();
   const {
     makeOffer,
     isPending: isMakingOffer,
@@ -481,6 +481,13 @@ export default function AssetPageClient({
       refetchAll();
     }
   }, [isOfferCancelled, refetchAll]);
+  useEffect(() => {
+    if (isCancelled) {
+      toast.success("Listing cancelled.");
+      setShowListForm(false);
+      refetchAll();
+    }
+  }, [isCancelled, refetchAll]);
   const handleList = async () => {
     if (!nftContract) return;
     const errors = getZodErrors(listPriceSchema, {
@@ -512,8 +519,6 @@ export default function AssetPageClient({
     if (!nftContract) return;
     try {
       await cancelListing(nftContract, tokenId);
-      toast.success("Listing cancelled.");
-      refetchAll();
     } catch (e) {
       toast.error(formatTransactionError(e, "Could not cancel listing."));
     }
