@@ -73,11 +73,12 @@ export const addressSchema = z
   });
 
 /**
- * Garante um endereço válido ou retorna o Address Zero.
- * ATENÇÃO: use apenas quando o hook possui `enabled: false` como guarda,
- * evitando que o zero address seja realmente utilizado em chamadas de contrato.
+ * Returns a valid address or the zero address as fallback.
+ * Only use this when the calling hook has `enabled: false` as a guard,
+ * so the zero address is never actually passed to a contract call.
+ * Prefer `parseAddress` (returns undefined) for external/URL inputs.
  */
-export const ensureAddress = (addr: string | undefined | null): Address => {
+export const ensureAddressOrZero = (addr: string | undefined | null): Address => {
   const result = addressSchema.safeParse(addr);
   if (!result.success) return "0x0000000000000000000000000000000000000000";
   return result.data;

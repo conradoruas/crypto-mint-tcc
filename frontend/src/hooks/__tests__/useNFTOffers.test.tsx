@@ -4,7 +4,7 @@ import { useNFTOffers } from "../marketplace";
 import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
 import type { MockLink } from "@apollo/client/testing";
-import { ensureAddress } from "@/lib/schemas";
+import { ensureAddressOrZero } from "@/lib/schemas";
 import type { OfferData } from "@/types/marketplace";
 
 type MockedResponse = MockLink.MockedResponse;
@@ -29,14 +29,14 @@ vi.mock("wagmi", () => ({
   }),
 }));
 
-const CONTRACT = ensureAddress("0x9000000000000000000000000000000000000001");
-const ADDR_BUYER_1 = ensureAddress(
+const CONTRACT = ensureAddressOrZero("0x9000000000000000000000000000000000000001");
+const ADDR_BUYER_1 = ensureAddressOrZero(
   "0x1000000000000000000000000000000000000001",
 );
-const ADDR_BUYER_2 = ensureAddress(
+const ADDR_BUYER_2 = ensureAddressOrZero(
   "0x2000000000000000000000000000000000000002",
 );
-const ADDR_BUYER_3 = ensureAddress(
+const ADDR_BUYER_3 = ensureAddressOrZero(
   "0x3000000000000000000000000000000000000003",
 );
 

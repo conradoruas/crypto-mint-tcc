@@ -9,14 +9,14 @@ import {
   NFT_COLLECTION_ABI,
 } from "@/constants/contracts";
 import type { ListingData } from "@/types/marketplace";
-import { ensureAddress } from "@/lib/schemas";
+import { ensureAddressOrZero } from "@/lib/schemas";
 
 /**
  * Hook to fetch listing and owner information for a specific NFT.
  */
 export function useNFTListing(nftContract: string, tokenId: string) {
   const enabled = !!nftContract && !!tokenId;
-  const nftAddr = ensureAddress(nftContract);
+  const nftAddr = ensureAddressOrZero(nftContract);
 
   const { data: listing, refetch: refetchListing } = useReadContract({
     address: MARKETPLACE_ADDRESS,

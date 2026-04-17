@@ -11,7 +11,7 @@ import {
 } from "@/constants/contracts";
 import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
 import type { OfferData, OfferWithBuyer } from "@/types/marketplace";
-import { ensureAddress, parseAddress } from "@/lib/schemas";
+import { ensureAddressOrZero, parseAddress } from "@/lib/schemas";
 import { MAX_OFFER_BUYERS_MULTICALL } from "@/constants/polling";
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
@@ -90,7 +90,7 @@ export function useMyOffer(nftContract: string, tokenId: string) {
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOffer",
     args: [
-      ensureAddress(nftContract),
+      ensureAddressOrZero(nftContract),
       BigInt(tokenId || "0"),
       address ?? "0x0000000000000000000000000000000000000000",
     ],
@@ -122,7 +122,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   const userAddress = address?.toLowerCase();
 
   const enabled = !!nftContract && !!tokenId;
-  const nftAddr = ensureAddress(nftContract);
+  const nftAddr = ensureAddressOrZero(nftContract);
   const tokenIdBn = BigInt(tokenId || "0");
 
   const nowBucketed = useNowBucketed();

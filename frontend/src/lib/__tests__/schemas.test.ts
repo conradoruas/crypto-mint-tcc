@@ -5,7 +5,7 @@ import {
   offerAmountSchema,
   editProfileSchema,
   getZodErrors,
-  ensureAddress,
+  ensureAddressOrZero,
   parseAddress,
 } from "@/lib/schemas";
 
@@ -169,28 +169,28 @@ describe("getZodErrors", () => {
   });
 });
 
-// ─── ensureAddress ──────────────────────────────────────────────────────────
+// ─── ensureAddressOrZero ──────────────────────────────────────────────────────────
 
-describe("ensureAddress", () => {
+describe("ensureAddressOrZero", () => {
   it("returns valid address unchanged", () => {
     const addr = "0x0000000000000000000000000000000000000001";
-    expect(ensureAddress(addr)).toBe(addr);
+    expect(ensureAddressOrZero(addr)).toBe(addr);
   });
 
   it("returns zero address for undefined", () => {
-    expect(ensureAddress(undefined)).toBe(
+    expect(ensureAddressOrZero(undefined)).toBe(
       "0x0000000000000000000000000000000000000000",
     );
   });
 
   it("returns zero address for null", () => {
-    expect(ensureAddress(null)).toBe(
+    expect(ensureAddressOrZero(null)).toBe(
       "0x0000000000000000000000000000000000000000",
     );
   });
 
   it("returns zero address for invalid string", () => {
-    expect(ensureAddress("not-an-address")).toBe(
+    expect(ensureAddressOrZero("not-an-address")).toBe(
       "0x0000000000000000000000000000000000000000",
     );
   });

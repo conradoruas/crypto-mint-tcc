@@ -5,7 +5,7 @@ import { formatEther } from "viem";
 import { useMemo } from "react";
 import { useQuery } from "@apollo/client/react";
 import { NFT_COLLECTION_ABI } from "@/constants/contracts";
-import { ensureAddress } from "@/lib/schemas";
+import { ensureAddressOrZero } from "@/lib/schemas";
 import { GET_COLLECTION } from "@/lib/graphql/queries";
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
@@ -32,7 +32,7 @@ type GqlCollectionData = { collection: GqlCollection | null };
  */
 export function useCollectionDetails(collectionAddress: string | undefined) {
   const enabled = !!collectionAddress;
-  const addr = ensureAddress(collectionAddress);
+  const addr = ensureAddressOrZero(collectionAddress);
 
   // ── Subgraph path (metadata) ──
   const { data: gqlData, loading: gqlLoading } = useQuery<GqlCollectionData>(
@@ -95,7 +95,7 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
         mintPriceEth: formatEther(mintPriceBig),
         maxSupply: BigInt(gqlCol.maxSupply ?? 0),
         totalSupply: BigInt(gqlCol.totalSupply ?? 0),
-        owner: ensureAddress(owner),
+        owner: ensureAddressOrZero(owner),
         isLoading: gqlLoading,
       };
     }
@@ -118,7 +118,7 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
       mintPriceEth: mintPrice ? formatEther(mintPrice) : null,
       maxSupply: rpcMaxSupply,
       totalSupply: rpcTotalSupply,
-      owner: ensureAddress(owner),
+      owner: ensureAddressOrZero(owner),
       isLoading: false,
     };
   }, [gqlCol, gqlLoading, owner, rpcResults]);
