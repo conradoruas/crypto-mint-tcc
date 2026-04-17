@@ -524,18 +524,16 @@ export default function AssetPageClient({
   };
 
   const handleAcceptOffer = async (buyerAddress: string) => {
-    // 1. VALIDAÇÃO ESTRITA: Se falhar, paramos tudo aqui.
     const result = addressSchema.safeParse(buyerAddress);
 
     if (!result.success) {
-      // Aqui você avisa o usuário. Isso evita o erro crítico.
       toast.error(
-        "Endereço do comprador é inválido. Ação cancelada por segurança.",
+        "Buyer address is invalid. Action cancelled for security.",
       );
-      return; // Interrompe a execução antes de chamar o contrato
+      return;
     }
 
-    // 2. SUCESSO: Agora temos um endereço validado e tipado como Address (0x...)
+    // Validated and typed as Address (0x...)
     const safeBuyer = result.data;
 
     try {

@@ -30,13 +30,13 @@ export default function LandingPage() {
               </div>
 
               <h1 className="font-headline text-6xl md:text-8xl font-bold tracking-tighter mb-6 leading-none uppercase">
-                Crie. Negocie. <br />
-                <span className="text-gradient-primary">COLECIONE.</span>
+                Create. Trade. <br />
+                <span className="text-gradient-primary">COLLECT.</span>
               </h1>
 
               <p className="text-on-surface-variant text-lg max-w-lg mb-10 leading-relaxed">
-                Marketplace descentralizado para criação e negociação de NFTs.
-                Coleções, ofertas e royalties — processados via Smart Contracts.
+                Decentralized marketplace for creating and trading NFTs.
+                Collections, offers, and royalties — processed via Smart Contracts.
               </p>
 
               <div className="flex items-center gap-4">
@@ -116,8 +116,8 @@ export default function LandingPage() {
               Instant Liquidity
             </h3>
             <p className="text-on-surface-variant leading-relaxed">
-              Troque ativos digitais com latência zero. Nosso sistema de ofertas
-              on-chain garante execução segura em cada transação.
+              Trade digital assets with zero latency. Our on-chain offer system
+              guarantees secure execution in every transaction.
             </p>
           </div>
           <div className="space-y-4">
@@ -128,8 +128,8 @@ export default function LandingPage() {
               On-Chain Security
             </h3>
             <p className="text-on-surface-variant leading-relaxed">
-              Cada ativo é verificado criptograficamente. A proveniência é
-              imutável, armazenada diretamente na blockchain Ethereum.
+              Every asset is cryptographically verified. Provenance is
+              immutable, stored directly on the Ethereum blockchain.
             </p>
           </div>
           <div className="space-y-4">
@@ -140,8 +140,8 @@ export default function LandingPage() {
               IPFS & Pinata
             </h3>
             <p className="text-on-surface-variant leading-relaxed">
-              Metadados e mídias descentralizados. Seus NFTs não dependem de
-              servidores centrais, garantindo existência perpétua da sua arte.
+              Decentralized metadata and media. Your NFTs don&apos;t rely on
+              central servers, ensuring the perpetual existence of your art.
             </p>
           </div>
         </section>

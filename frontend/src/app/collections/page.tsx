@@ -102,7 +102,7 @@ function CollectionCard({ collection }: { collection: CollectionInfo }) {
             </p>
             <p className="font-headline text-sm font-medium">
               {new Date(Number(collection.createdAt) * 1000).toLocaleDateString(
-                "pt-BR",
+                "en-US",
               )}
             </p>
           </div>
