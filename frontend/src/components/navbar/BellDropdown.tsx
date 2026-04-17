@@ -91,7 +91,7 @@ export function BellDropdown({ address }: { address: string }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-outline-variant/20 shadow-2xl z-50 overflow-hidden">
+        <div className="fixed sm:absolute inset-x-4 sm:inset-x-auto sm:right-0 top-[64px] sm:top-full sm:mt-2 sm:w-80 bg-background border border-outline-variant/20 shadow-2xl z-50 overflow-hidden max-h-[80vh] overflow-y-auto sm:max-h-none sm:overflow-visible">
           <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant/10">
             <span className="text-[10px] font-headline font-bold uppercase tracking-[0.2em] text-on-surface-variant">
               Recent Activity

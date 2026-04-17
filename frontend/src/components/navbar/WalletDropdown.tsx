@@ -46,7 +46,7 @@ export function WalletDropdown({ address }: { address: string }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-72 bg-background border border-outline-variant/20 shadow-2xl z-50 overflow-hidden">
+        <div className="fixed sm:absolute inset-x-4 sm:inset-x-auto sm:right-0 top-[64px] sm:top-full sm:mt-2 sm:w-72 bg-background border border-outline-variant/20 shadow-2xl z-50 overflow-hidden">
           {/* Address */}
           <div className="px-4 py-4 border-b border-outline-variant/10">
             <p className="text-[10px] font-headline font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">

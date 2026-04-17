@@ -105,10 +105,10 @@ function NavbarContent() {
         </div>
       )}
       <div className="flex items-center justify-between px-4 sm:px-8 py-4 w-full max-w-[1920px] mx-auto">
-        <div className="flex items-center gap-2 md:gap-12">
-          {/* Mobile Hamburger */}
+        <div className="flex items-center gap-2 lg:gap-8">
+          {/* Hamburger — visible on mobile and tablet, hidden on desktop */}
           <button
-            className="md:hidden text-on-surface hover:text-primary transition-colors"
+            className="lg:hidden text-on-surface hover:text-primary transition-colors"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -117,7 +117,7 @@ function NavbarContent() {
 
           <Link
             href="/"
-            className="text-xl sm:text-2xl font-bold tracking-tighter text-primary-container uppercase font-headline"
+            className="text-xl font-bold tracking-tighter text-primary-container uppercase font-headline"
           >
             <div>
               <span className="text-on-surface lowercase">crypto.</span>
@@ -125,7 +125,8 @@ function NavbarContent() {
             </div>
           </Link>
 
-          <div className="hidden md:flex items-center gap-8 font-headline text-sm uppercase tracking-wider">
+          {/* Nav links — desktop only (lg+) */}
+          <div className="hidden lg:flex items-center gap-6 xl:gap-8 font-headline text-sm uppercase tracking-wider">
             {navLinks.map((link) => {
               const isActive = pathname === link.path;
               return (
@@ -133,7 +134,7 @@ function NavbarContent() {
                   key={link.path}
                   href={link.path}
                   className={cn(
-                    "transition-colors",
+                    "transition-colors whitespace-nowrap",
                     isActive
                       ? "text-primary-container border-b-2 border-primary-container pb-1"
                       : "text-on-surface-variant hover:text-on-surface",
@@ -146,8 +147,9 @@ function NavbarContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-4 lg:gap-6">
-          <div className="hidden lg:block w-72">
+        <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
+          {/* Search — xl+ only to avoid competing with nav links */}
+          <div className="hidden xl:block w-64">
             <GlobalSearch />
           </div>
           <ThemeToggle />
@@ -155,11 +157,13 @@ function NavbarContent() {
           {isConnected && address ? (
             <div className="flex items-center gap-1 text-on-surface-variant">
               <BellDropdown address={address} />
+              {/* Wallet icon dropdown — visible on sm+ */}
               <div className="hidden sm:block">
                 <WalletDropdown address={address} />
               </div>
             </div>
           ) : (
+            /* Disabled placeholder icons — only shown on tablet+ */
             <div className="hidden sm:flex items-center gap-1 text-on-surface-variant">
               <button
                 aria-label="Activity notifications"
@@ -179,22 +183,27 @@ function NavbarContent() {
           )}
 
           <ConnectKitButton.Custom>
-            {({ isConnected, show, truncatedAddress, ensName }) => (
-              <button
-                onClick={show}
-                className="bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed font-headline font-bold px-4 sm:px-6 py-2 rounded-sm text-xs sm:text-sm tracking-wider active:scale-95 transition-all uppercase hover:brightness-110 shrink-0"
-              >
-                {isConnected ? (ensName ?? truncatedAddress) : "Connect"}
-              </button>
-            )}
+            {({ isConnected, show, ensName }) => {
+              const shortAddr = address
+                ? `${address.slice(0, 6)}...${address.slice(-4)}`
+                : null;
+              return (
+                <button
+                  onClick={show}
+                  className="bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed font-headline font-bold px-3 sm:px-5 lg:px-6 py-2 rounded-sm text-xs tracking-wider active:scale-95 transition-all uppercase hover:brightness-110 shrink-0"
+                >
+                  {isConnected ? (ensName ?? shortAddr) : "Connect"}
+                </button>
+              );
+            }}
           </ConnectKitButton.Custom>
         </div>
       </div>
 
-      {/* Mobile Menu Dropdown */}
+      {/* Mobile / Tablet Menu Dropdown — hidden on lg+ */}
       {isMobileMenuOpen && (
-        <div className="md:hidden border-b border-outline-variant/15 bg-background shadow-lg px-4 py-4 space-y-1 font-headline uppercase tracking-wider text-sm flex flex-col">
-          <div className="mb-3">
+        <div className="lg:hidden border-b border-outline-variant/15 bg-background shadow-lg px-4 py-4 space-y-1 font-headline uppercase tracking-wider text-sm flex flex-col">
+          <div className="mb-3 xl:hidden">
             <GlobalSearch className="w-full" />
           </div>
           {navLinks.map((link) => {
