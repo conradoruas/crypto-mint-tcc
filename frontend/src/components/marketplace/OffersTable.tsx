@@ -1,20 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { formatEther } from "viem";
+import { useClock } from "@/hooks/useClock";
 import { Clock, TrendingUp, Loader2, CheckCircle } from "lucide-react";
 import type { OfferWithBuyer } from "@/types/marketplace";
 import { shortAddr } from "@/lib/utils";
 
-export function ExpiresIn({ expiresAt, now: nowProp }: { expiresAt: Date; now?: number }) {
-  const [localNow, setLocalNow] = useState(() => Date.now());
-  const now = nowProp ?? localNow;
-
-  useEffect(() => {
-    if (nowProp !== undefined) return;
-    const id = setInterval(() => setLocalNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [nowProp]);
+export function ExpiresIn({ expiresAt }: { expiresAt: Date }) {
+  const now = useClock(1000);
 
   const secondsLeft = Math.floor((expiresAt.getTime() - now) / 1000);
 
@@ -70,12 +63,7 @@ export function OffersTable({
   onAccept: (buyer: `0x${string}`) => void;
   isAccepting: boolean;
 }) {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useClock(1000);
 
   const liveOffers = offers.filter((o) => Number(o.expiresAt) * 1000 > now);
 
@@ -129,7 +117,7 @@ export function OffersTable({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <ExpiresIn expiresAt={expiresDate} now={now} />
+              <ExpiresIn expiresAt={expiresDate} />
               {isOwner && (
                 <button
                   onClick={() => onAccept(offer.buyerAddress)}

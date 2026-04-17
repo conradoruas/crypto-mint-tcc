@@ -3,6 +3,10 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { OffersTable } from "../marketplace/OffersTable";
 import type { OfferWithBuyer } from "@/types/marketplace";
 
+vi.mock("@/hooks/useClock", () => ({
+  useClock: () => Date.now(),
+}));
+
 // lucide-react icons render SVGs — no mock needed; jsdom handles them fine.
 
 const FUTURE = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 3600); // 7 days from now
