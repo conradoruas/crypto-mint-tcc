@@ -8,10 +8,11 @@ import {
 import { cn, formatTimeShort } from "@/lib/utils";
 import { useActivityFeed, ActivityEvent } from "@/hooks/activity";
 import { getEventConfig } from "@/lib/eventConfig";
-import { useState, useEffect, useRef, useMemo } from "react";
-import { fetchBatchNFTMetadata, type NFTMeta } from "@/lib/nftMetadata";
+import { useState, useRef, useMemo } from "react";
+import { fetchBatchNFTMetadata } from "@/lib/nftMetadata";
 import { useStableArray } from "@/hooks/useStableArray";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import { useQuery } from "@tanstack/react-query";
 
 const EVENT_CONFIG = getEventConfig(12);
 
@@ -23,7 +24,6 @@ export function BellDropdown({ address }: { address: string }) {
     if (typeof window === "undefined") return 0;
     return parseInt(localStorage.getItem(BELL_STORAGE_KEY) ?? "0", 10);
   });
-  const [metaMap, setMetaMap] = useState<Map<string, NFTMeta>>(new Map());
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, () => setOpen(false));
 
@@ -44,16 +44,19 @@ export function BellDropdown({ address }: { address: string }) {
     (e) => `${e.nftContract}-${e.tokenId}`,
   );
 
-  useEffect(() => {
-    if (!stableUserEvents.length) return;
-
-    const tokens = stableUserEvents.map((e) => ({
-      contractAddress: e.nftContract,
-      tokenId: e.tokenId,
-    }));
-
-    fetchBatchNFTMetadata(tokens).then(setMetaMap);
-  }, [stableUserEvents]);
+  const eventKeys = stableUserEvents.map((e) => `${e.nftContract}-${e.tokenId}`);
+  const { data: metaMap = new Map() } = useQuery({
+    queryKey: ["bell-meta", address, eventKeys],
+    queryFn: () =>
+      fetchBatchNFTMetadata(
+        stableUserEvents.map((e) => ({
+          contractAddress: e.nftContract,
+          tokenId: e.tokenId,
+        })),
+      ),
+    enabled: stableUserEvents.length > 0,
+    staleTime: 5 * 60_000,
+  });
 
   // Count events newer than last time the user opened the dropdown
   const unread = useMemo(

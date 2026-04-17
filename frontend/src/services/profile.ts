@@ -3,6 +3,7 @@
 // Os dados ficam no IPFS e o hash no localStorage
 // ─────────────────────────────────────────────
 
+import { useQuery } from "@tanstack/react-query";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
 
@@ -99,4 +100,14 @@ export async function fetchProfile(
 export function clearProfile(address: string): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(STORAGE_KEY(address));
+}
+
+// ─── React Query wrapper ───
+export function useProfileQuery(address: string | undefined) {
+  return useQuery({
+    queryKey: ["profile", address],
+    queryFn: () => fetchProfile(address!),
+    enabled: !!address,
+    staleTime: 5 * 60_000,
+  });
 }
