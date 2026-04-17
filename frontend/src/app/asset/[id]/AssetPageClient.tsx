@@ -289,7 +289,7 @@ function LoadingSkeleton() {
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
-      <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-8 grid grid-cols-1 md:grid-cols-2 gap-12">
+      <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-4 sm:px-8 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
         <div className="aspect-square animate-pulse bg-surface-container-high rounded-sm" />
         <div className="flex flex-col justify-center space-y-4 pt-4">
           <div className="h-3 rounded-sm animate-pulse w-1/4 bg-surface-container-high" />
@@ -581,9 +581,9 @@ export default function AssetPageClient({
   }
 
   return (
-    <main className="min-h-screen bg-background text-on-surface">
+    <main className="min-h-screen bg-background text-on-surface overflow-x-hidden">
       <Navbar />
-      <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-8 grid grid-cols-1 md:grid-cols-2 gap-12">
+      <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-4 sm:px-8 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
         {/* Image */}
         <div className="relative overflow-hidden aspect-square bg-surface-container-high border border-outline-variant/10 rounded-sm">
           {nft.image ? (
@@ -618,7 +618,7 @@ export default function AssetPageClient({
           </div>
 
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {owner && (
                 <div className="flex items-center gap-2 text-sm bg-surface-container px-3 py-1.5 rounded-sm border border-outline-variant/15">
                   <ShieldCheck size={13} className="text-primary" />
