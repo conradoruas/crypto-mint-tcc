@@ -6,7 +6,7 @@ export { resolveIpfsUrl } from "./ipfs";
 export { cn, shortAddr, formatTimeAgo, formatTimeShort } from "./utils";
 export { formatTransactionError, getTransactionErrorKind } from "./txErrors";
 export { estimateContractGasWithBuffer } from "./estimateContractGas";
-export { getZodErrors, ensureAddress, parseAddress } from "./schemas";
+export { getZodErrors, parseAddress } from "./schemas";
 export {
   fetchContractNFTMetadata,
   fetchBatchNFTMetadata,

@@ -210,8 +210,10 @@ export function FilterSidebar(props: FilterSidebarProps) {
   return (
     <>
       {/* Desktop sidebar — xl+ only */}
-      <aside className="w-72 fixed h-[calc(100vh-6rem)] overflow-y-auto px-8 hidden xl:block no-scrollbar top-24">
-        <FilterContent {...props} />
+      <aside className="w-72 shrink-0 hidden xl:block">
+        <div className="sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto px-8 no-scrollbar">
+          <FilterContent {...props} />
+        </div>
       </aside>
 
       {/* Mobile drawer — shown when mobileOpen=true, hidden on xl+ */}

@@ -23,7 +23,7 @@ import {
   Activity,
   Heart,
 } from "lucide-react";
-import { fetchProfile, UserProfile } from "@/services/profile";
+import { useProfileQuery } from "@/services/profile";
 import { useActivityFeed } from "@/hooks/activity";
 import { usePaginationState } from "@/hooks/usePaginationState";
 import { getEventConfig } from "@/lib/eventConfig";
@@ -126,9 +126,7 @@ export default function ProfilePage() {
   const { address } = useConnection();
   const { collections, isLoading: isLoadingCollections } = useCollections();
   const [selectedCollection, setSelectedCollection] = useState<string>("");
-  const [profile, setProfile] = useState<UserProfile | null | undefined>(
-    undefined,
-  );
+  const { data: profile } = useProfileQuery(address);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<ProfileSortOption>("default");
   const [activeTab, setActiveTab] = useState("Collected");
@@ -199,16 +197,6 @@ export default function ProfilePage() {
     fetchAlchemyMetaForEvents(userEvents).then(setMetaMap);
   }, [userEvents]);
 
-  useEffect(() => {
-    if (!address) return;
-    let cancelled = false;
-    fetchProfile(address).then((p) => {
-      if (!cancelled) setProfile(p ?? null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [address]);
 
   return (
     <main className="min-h-screen bg-background text-on-surface">

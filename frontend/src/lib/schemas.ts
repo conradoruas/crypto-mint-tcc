@@ -73,17 +73,6 @@ export const addressSchema = z
   });
 
 /**
- * Garante um endereço válido ou retorna o Address Zero.
- * ATENÇÃO: use apenas quando o hook possui `enabled: false` como guarda,
- * evitando que o zero address seja realmente utilizado em chamadas de contrato.
- */
-export const ensureAddress = (addr: string | undefined | null): Address => {
-  const result = addressSchema.safeParse(addr);
-  if (!result.success) return "0x0000000000000000000000000000000000000000";
-  return result.data;
-};
-
-/**
  * Retorna um endereço validado ou `undefined` se inválido.
  * Preferir este helper para dados externos (GraphQL, parâmetros de URL)
  * onde um endereço inválido deve ser descartado, não substituído pelo zero address.

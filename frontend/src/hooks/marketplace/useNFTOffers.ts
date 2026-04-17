@@ -11,7 +11,7 @@ import {
 } from "@/constants/contracts";
 import { GET_OFFERS_FOR_NFT } from "@/lib/graphql/queries";
 import type { OfferData, OfferWithBuyer } from "@/types/marketplace";
-import { ensureAddress, parseAddress } from "@/lib/schemas";
+import { parseAddress } from "@/lib/schemas";
 import { MAX_OFFER_BUYERS_MULTICALL } from "@/constants/polling";
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
@@ -85,16 +85,13 @@ const NO_OFFER_BUYERS: readonly `0x${string}`[] = [];
  */
 export function useMyOffer(nftContract: string, tokenId: string) {
   const { address } = useConnection();
+  const nftAddr = parseAddress(nftContract);
   const { data: offer, refetch } = useReadContract({
     address: MARKETPLACE_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOffer",
-    args: [
-      ensureAddress(nftContract),
-      BigInt(tokenId || "0"),
-      address ?? "0x0000000000000000000000000000000000000000",
-    ],
-    query: { enabled: !!address && !!nftContract && !!tokenId },
+    args: [nftAddr!, BigInt(tokenId || "0"), address!],
+    query: { enabled: !!address && !!nftAddr && !!tokenId },
   });
 
   const offerData = offer as OfferData | undefined;
@@ -121,8 +118,8 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   const { address } = useConnection();
   const userAddress = address?.toLowerCase();
 
-  const enabled = !!nftContract && !!tokenId;
-  const nftAddr = ensureAddress(nftContract);
+  const nftAddr = parseAddress(nftContract);
+  const enabled = !!nftAddr && !!tokenId;
   const tokenIdBn = BigInt(tokenId || "0");
 
   const nowBucketed = useNowBucketed();
@@ -158,7 +155,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     address: MARKETPLACE_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOfferBuyers",
-    args: [nftAddr, tokenIdBn],
+    args: [nftAddr!, tokenIdBn],
     query: {
       enabled: rpcEnabled,
       refetchInterval: false,
@@ -181,7 +178,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
         address: MARKETPLACE_ADDRESS,
         abi: NFT_MARKETPLACE_ABI,
         functionName: "getOffer" as const,
-        args: [nftAddr, tokenIdBn, buyer] as const,
+        args: [nftAddr!, tokenIdBn, buyer] as const,
       })),
     [nftAddr, tokenIdBn, buyerAddresses],
   );

@@ -5,7 +5,6 @@ import {
   offerAmountSchema,
   editProfileSchema,
   getZodErrors,
-  ensureAddress,
   parseAddress,
 } from "@/lib/schemas";
 
@@ -166,33 +165,6 @@ describe("getZodErrors", () => {
       mintPrice: "",
     });
     expect(Object.keys(errors).length).toBeGreaterThanOrEqual(3);
-  });
-});
-
-// ─── ensureAddress ──────────────────────────────────────────────────────────
-
-describe("ensureAddress", () => {
-  it("returns valid address unchanged", () => {
-    const addr = "0x0000000000000000000000000000000000000001";
-    expect(ensureAddress(addr)).toBe(addr);
-  });
-
-  it("returns zero address for undefined", () => {
-    expect(ensureAddress(undefined)).toBe(
-      "0x0000000000000000000000000000000000000000",
-    );
-  });
-
-  it("returns zero address for null", () => {
-    expect(ensureAddress(null)).toBe(
-      "0x0000000000000000000000000000000000000000",
-    );
-  });
-
-  it("returns zero address for invalid string", () => {
-    expect(ensureAddress("not-an-address")).toBe(
-      "0x0000000000000000000000000000000000000000",
-    );
   });
 });
 

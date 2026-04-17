@@ -2,108 +2,106 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useStableArray } from "@/hooks/useStableArray";
 import { Search, X, Layers, Image as ImageIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCollections } from "@/hooks/collections";
-import { useQuery } from "@apollo/client/react";
-import { GET_ALL_NFTS } from "@/lib/graphql/queries";
-
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
+import { useQuery as useApolloQuery } from "@apollo/client/react";
+import { useQuery } from "@tanstack/react-query";
+import { GET_SEARCH_SUGGESTIONS } from "@/lib/graphql/queries";
 import { fetchAlchemyMeta, NFTMeta } from "@/lib/alchemyMeta";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 
-type GqlNFT = {
-  id: string;
-  tokenId: string;
-  collection: { contractAddress: string; name: string; symbol: string };
+const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
+const DEBOUNCE_MS = 200;
+
+type GqlSuggestionsData = {
+  collections: {
+    id: string;
+    contractAddress: string;
+    name: string;
+    symbol: string;
+    image: string;
+    totalSupply: string;
+  }[];
+  nfts: {
+    id: string;
+    tokenId: string;
+    collection: { contractAddress: string; name: string; symbol: string };
+  }[];
 };
-type GqlAllNFTsData = { nfts: GqlNFT[] };
 
 export function GlobalSearch({ className }: { className?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [metaMap, setMetaMap] = useState<Map<string, NFTMeta>>(new Map());
   const ref = useRef<HTMLDivElement>(null);
 
   const { collections } = useCollections();
 
-  const { data: nftData } = useQuery<GqlAllNFTsData>(GET_ALL_NFTS, {
-    variables: { first: 1000 },
-    skip: !SUBGRAPH_ENABLED,
-  });
-
-  // Pre-load all NFT metadata as soon as subgraph data arrives
-  // 1. Estabilizamos a lista de tokens. O useStableArray garante que a referência
-  // só mude se os tokens reais mudarem — evita re-disparo pelo churn de referência
-  // do Apollo (causado pelo polling do wagmi ao conectar a carteira).
-  const rawTokens = useMemo(() => {
-    const nfts = nftData?.nfts ?? [];
-    return nfts.map((n) => ({
-      contractAddress: n.collection.contractAddress,
-      tokenId: n.tokenId,
-    }));
-  }, [nftData]);
-
-  const tokensToFetch = useStableArray(
-    rawTokens,
-    (t) => `${t.contractAddress}-${t.tokenId}`,
-  );
-
-  // 2. Pré-carregamento de metadados
+  // 200ms debounce
+  const [debounced, setDebounced] = useState("");
   useEffect(() => {
-    // Evitamos a execução se não houver tokens para buscar
-    if (!tokensToFetch.length) return;
-
-    const fetchAll = async () => {
-      const merged = new Map<string, NFTMeta>();
-      const chunkSize = 100;
-
-      // Processamento em chunks para evitar sobrecarga da API
-      for (let i = 0; i < tokensToFetch.length; i += chunkSize) {
-        const chunk = tokensToFetch.slice(i, i + chunkSize);
-        const partial = await fetchAlchemyMeta(chunk);
-        partial.forEach((v, k) => merged.set(k, v));
-      }
-
-      setMetaMap(merged);
-    };
-
-    fetchAll();
-  }, [tokensToFetch]); // Agora utilizamos a dependência estável
+    const id = setTimeout(() => setDebounced(query.trim().toLowerCase()), DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [query]);
 
   const trimmed = query.trim().toLowerCase();
 
-  const collectionResults = useMemo(
-    () =>
-      trimmed.length >= 1
-        ? collections
-            .filter(
-              (c) =>
-                c.name.toLowerCase().includes(trimmed) ||
-                c.symbol.toLowerCase().includes(trimmed) ||
-                c.contractAddress.toLowerCase().includes(trimmed),
-            )
-            .slice(0, 5)
-        : [],
-    [collections, trimmed],
+  // Subgraph search — fires only after debounce settles + ≥2 chars
+  const { data: suggestionsData } = useApolloQuery<GqlSuggestionsData>(
+    GET_SEARCH_SUGGESTIONS,
+    {
+      variables: { q: debounced, limit: 5 },
+      skip: !SUBGRAPH_ENABLED || debounced.length < 2,
+      fetchPolicy: "cache-first",
+    },
   );
 
-  const nftResults = useMemo(
+  // Alchemy metadata only for the ≤5 NFTs actually returned
+  const nftTokens = useMemo(
     () =>
-      trimmed.length >= 1 && SUBGRAPH_ENABLED
-        ? (nftData?.nfts ?? [])
-            .filter(
-              (n) =>
-                n.tokenId.includes(trimmed) ||
-                `#${n.tokenId}`.includes(trimmed) ||
-                n.collection.name.toLowerCase().includes(trimmed),
-            )
-            .slice(0, 4)
-        : [],
-    [nftData, trimmed],
+      (suggestionsData?.nfts ?? []).map((n) => ({
+        contractAddress: n.collection.contractAddress,
+        tokenId: n.tokenId,
+      })),
+    [suggestionsData],
+  );
+
+  const { data: metaMap = new Map<string, NFTMeta>() } = useQuery({
+    queryKey: ["search-meta", nftTokens.map((t) => `${t.contractAddress}-${t.tokenId}`)],
+    queryFn: () => fetchAlchemyMeta(nftTokens),
+    enabled: nftTokens.length > 0,
+    staleTime: 5 * 60_000,
+  });
+
+  // Collection results — from subgraph when available, RPC fallback otherwise
+  const collectionResults = useMemo(() => {
+    if (trimmed.length < 1) return [];
+    if (SUBGRAPH_ENABLED && suggestionsData) {
+      return suggestionsData.collections.slice(0, 5);
+    }
+    return collections
+      .filter(
+        (c) =>
+          c.name.toLowerCase().includes(trimmed) ||
+          c.symbol.toLowerCase().includes(trimmed) ||
+          c.contractAddress.toLowerCase().includes(trimmed),
+      )
+      .slice(0, 5)
+      .map((c) => ({
+        id: c.contractAddress,
+        contractAddress: c.contractAddress,
+        name: c.name,
+        symbol: c.symbol,
+        image: c.image ?? "",
+        totalSupply: c.totalSupply?.toString() ?? undefined,
+      }));
+  }, [trimmed, collections, suggestionsData]);
+
+  const nftResults = useMemo(
+    () => (SUBGRAPH_ENABLED && trimmed.length >= 1 ? suggestionsData?.nfts ?? [] : []),
+    [trimmed, suggestionsData],
   );
 
   const hasResults = collectionResults.length > 0 || nftResults.length > 0;
@@ -150,7 +148,7 @@ export function GlobalSearch({ className }: { className?: string }) {
           setQuery(e.target.value);
           setOpen(true);
         }}
-        onFocus={() => trimmed && setOpen(true)}
+        onFocus={() => { if (trimmed) setOpen(true); }}
         onKeyDown={handleKeyDown}
         placeholder="Search collections, NFTs..."
         aria-label="Search collections and NFTs"
@@ -199,10 +197,7 @@ export function GlobalSearch({ className }: { className?: string }) {
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <Layers
-                              size={14}
-                              className="text-on-surface-variant/30"
-                            />
+                            <Layers size={14} className="text-on-surface-variant/30" />
                           </div>
                         )}
                       </div>
@@ -216,7 +211,7 @@ export function GlobalSearch({ className }: { className?: string }) {
                       </div>
                       {c.totalSupply !== undefined && (
                         <span className="text-[10px] text-on-surface-variant shrink-0">
-                          {c.totalSupply.toString()} NFTs
+                          {c.totalSupply} NFTs
                         </span>
                       )}
                     </Link>
@@ -256,10 +251,7 @@ export function GlobalSearch({ className }: { className?: string }) {
                               sizes="36px"
                             />
                           ) : (
-                            <ImageIcon
-                              size={14}
-                              className="text-on-surface-variant/30"
-                            />
+                            <ImageIcon size={14} className="text-on-surface-variant/30" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">

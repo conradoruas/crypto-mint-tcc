@@ -194,3 +194,8 @@ html:not(.dark) .text-gradient-primary {
   align-items: center;
   justify-content: center;
 }
+
+/* Shared focus-visible ring — apply to all interactive elements */
+.focus-ring {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40;
+}

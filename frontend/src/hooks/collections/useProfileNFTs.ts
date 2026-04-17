@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useCollections } from "./useCollections";
 import { useCreatorCollections } from "./useCollections";
 import { useStableArray } from "../useStableArray";
@@ -9,93 +10,66 @@ import { logger } from "@/lib/logger";
 import type { CollectionNFTItem, CreatedNFTItem } from "@/types/nft";
 import type { AlchemyNFT } from "@/types/alchemy";
 
-/**
- * Hook to fetch NFTs owned by a specific address from all known collections or a specific one.
- */
 export function useProfileNFTs(
   ownerAddress: string | undefined,
   collectionAddress?: string,
 ) {
-  const [nfts, setNfts] = useState<CollectionNFTItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { collections: rawCollections } = useCollections();
+  const collections = useStableArray(rawCollections, (c) => c.contractAddress);
 
-  const { collections } = useCollections();
+  const contractList = useMemo(
+    () =>
+      collectionAddress
+        ? [collectionAddress]
+        : collections.map((c) => c.contractAddress),
+    [collectionAddress, collections],
+  );
 
-  useEffect(() => {
-    if (!ownerAddress) {
-      setIsLoading(false);
-      return;
-    }
-
-    const load = async () => {
-      setIsLoading(true);
-      try {
-        const contractList = collectionAddress
-          ? [collectionAddress]
-          : collections.map((c) => c.contractAddress);
-
-        if (contractList.length === 0) {
-          setNfts([]);
-          setIsLoading(false);
-          return;
-        }
-
-        const contractParams = contractList
-          .map((addr) => `contractAddresses[]=${addr}`)
-          .join("&");
-
-        const res = await fetch(
-          `/api/alchemy/getNFTsForOwner?owner=${ownerAddress}&${contractParams}&withMetadata=true`,
-        );
-        const data = await res.json();
-
-        const items: CollectionNFTItem[] = await Promise.all(
-          (data.ownedNfts ?? []).map(async (nft: AlchemyNFT) => {
-            let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
-            if (!image && nft.tokenUri) {
-              try {
-                const metaRes = await fetch(resolveIpfsUrl(nft.tokenUri));
-                const meta = await metaRes.json();
-                image = resolveIpfsUrl(meta.image ?? "");
-              } catch {
-                image = "";
-              }
+  const { data: nfts = [], isLoading } = useQuery<CollectionNFTItem[]>({
+    queryKey: ["profile-nfts", ownerAddress, contractList],
+    queryFn: async ({ signal }) => {
+      if (!ownerAddress || contractList.length === 0) return [];
+      const contractParams = contractList
+        .map((addr) => `contractAddresses[]=${addr}`)
+        .join("&");
+      const res = await fetch(
+        `/api/alchemy/getNFTsForOwner?owner=${ownerAddress}&${contractParams}&withMetadata=true`,
+        { signal },
+      );
+      const data = await res.json();
+      return Promise.all(
+        (data.ownedNfts ?? []).map(async (nft: AlchemyNFT) => {
+          let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
+          if (!image && nft.tokenUri) {
+            try {
+              const metaRes = await fetch(resolveIpfsUrl(nft.tokenUri), { signal });
+              const meta = await metaRes.json();
+              image = resolveIpfsUrl(meta.image ?? "");
+            } catch {
+              image = "";
             }
-            return {
-              tokenId: nft.tokenId,
-              name: nft.name ?? `NFT #${nft.tokenId}`,
-              description: nft.description ?? "",
-              image,
-              nftContract: nft.contract?.address ?? collectionAddress ?? "",
-              collectionName: nft.collection?.name ?? "",
-            };
-          }),
-        );
-
-        setNfts(items);
-      } catch (error) {
-        logger.error("Erro ao buscar NFTs do perfil", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (collectionAddress || collections.length > 0) {
-      load();
-    } else {
-      setIsLoading(false);
-    }
-  }, [ownerAddress, collectionAddress, collections]);
+          }
+          return {
+            tokenId: nft.tokenId,
+            name: nft.name ?? `NFT #${nft.tokenId}`,
+            description: nft.description ?? "",
+            image,
+            nftContract: nft.contract?.address ?? collectionAddress ?? "",
+            collectionName: nft.collection?.name ?? "",
+          } satisfies CollectionNFTItem;
+        }),
+      );
+    },
+    enabled: !!ownerAddress && (!!collectionAddress || collections.length > 0),
+    staleTime: 60_000,
+    throwOnError: false,
+    meta: { onError: (err: unknown) => logger.error("Error fetching profile NFTs", err) },
+  });
 
   return { nfts, isLoading };
 }
 
-/**
- * Hook to fetch all NFTs from collections created by the specific user.
- */
 export function useCreatedNFTs(ownerAddress: string | undefined) {
-  const [nfts, setNfts] = useState<CreatedNFTItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const { collections: creatorCollections, isLoading: isLoadingCollections } =
     useCreatorCollections();
   const stableCollections = useStableArray(
@@ -103,43 +77,37 @@ export function useCreatedNFTs(ownerAddress: string | undefined) {
     (col) => col.contractAddress,
   );
 
-  useEffect(() => {
-    if (!ownerAddress || isLoadingCollections) return;
-    if (stableCollections.length === 0) {
-      setNfts([]);
-      setIsLoading(false);
-      return;
-    }
+  const { data: nfts = [], isLoading: isQueryLoading } = useQuery<CreatedNFTItem[]>({
+    queryKey: [
+      "created-nfts",
+      ownerAddress,
+      stableCollections.map((c) => c.contractAddress),
+    ],
+    queryFn: async ({ signal }) => {
+      const results = await Promise.all(
+        stableCollections.map(async (col) => {
+          const res = await fetch(
+            `/api/alchemy/getNFTsForContract?contractAddress=${col.contractAddress}&withMetadata=true&refreshCache=false`,
+            { signal },
+          );
+          const data = await res.json();
+          return (data.nfts ?? []).map((nft: AlchemyNFT) => ({
+            tokenId: nft.tokenId,
+            name: nft.name ?? `NFT #${nft.tokenId}`,
+            description: nft.description ?? "",
+            image: nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "",
+            nftContract: col.contractAddress,
+            collectionName: col.name,
+          })) satisfies CreatedNFTItem[];
+        }),
+      );
+      return results.flat();
+    },
+    enabled: !!ownerAddress && !isLoadingCollections && stableCollections.length > 0,
+    staleTime: 60_000,
+    throwOnError: false,
+    meta: { onError: (err: unknown) => logger.error("Error fetching created NFTs", err) },
+  });
 
-    const fetchAll = async () => {
-      setIsLoading(true);
-      try {
-        const results = await Promise.all(
-          stableCollections.map(async (col) => {
-            const res = await fetch(
-              `/api/alchemy/getNFTsForContract?contractAddress=${col.contractAddress}&withMetadata=true&refreshCache=false`,
-            );
-            const data = await res.json();
-            return (data.nfts ?? []).map((nft: AlchemyNFT) => ({
-              tokenId: nft.tokenId,
-              name: nft.name ?? `NFT #${nft.tokenId}`,
-              description: nft.description ?? "",
-              image: nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "",
-              nftContract: col.contractAddress,
-              collectionName: col.name,
-            }));
-          }),
-        );
-        setNfts(results.flat());
-      } catch (error) {
-        logger.error("Erro ao buscar NFTs criados", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchAll();
-  }, [ownerAddress, isLoadingCollections, stableCollections]);
-
-  return { nfts, isLoading };
+  return { nfts, isLoading: isLoadingCollections || isQueryLoading };
 }

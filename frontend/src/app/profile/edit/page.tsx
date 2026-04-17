@@ -8,11 +8,11 @@ import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Camera, Loader2, ArrowLeft, Check } from "lucide-react";
 import {
-  fetchProfile,
+  useProfileQuery,
   uploadProfileImage,
   uploadProfileToIPFS,
   saveProfileHash,
-  UserProfile,
+  type UserProfile,
 } from "@/services/profile";
 import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
 import {
@@ -35,10 +35,7 @@ export default function EditProfilePage() {
   );
   const router = useRouter();
 
-  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(
-    null,
-  );
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const { data: currentProfile, isLoading: isLoadingProfile } = useProfileQuery(address);
   const [name, setName] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -49,17 +46,10 @@ export default function EditProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!address) {
-      setIsLoadingProfile(false);
-      return;
-    }
-    fetchProfile(address).then((p) => {
-      setCurrentProfile(p);
-      setName(p?.name ?? "");
-      setPreviewUrl(p?.imageUri ? resolveIpfsUrl(p.imageUri) : "");
-      setIsLoadingProfile(false);
-    });
-  }, [address]);
+    if (isLoadingProfile || currentProfile === undefined) return;
+    setName(currentProfile?.name ?? "");
+    setPreviewUrl(currentProfile?.imageUri ? resolveIpfsUrl(currentProfile.imageUri) : "");
+  }, [currentProfile, isLoadingProfile]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

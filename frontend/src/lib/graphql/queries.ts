@@ -335,3 +335,35 @@ export const GET_COLLECTION_STATS_RANKED = gql`
     }
   }
 `;
+
+export const GET_SEARCH_SUGGESTIONS = gql`
+  query GetSearchSuggestions($q: String!, $limit: Int!) {
+    collections(
+      first: $limit
+      where: { name_contains_nocase: $q }
+      orderBy: totalSupply
+      orderDirection: desc
+    ) {
+      id
+      contractAddress
+      name
+      symbol
+      image
+      totalSupply
+    }
+    nfts(
+      first: $limit
+      where: { collection_: { name_contains_nocase: $q } }
+      orderBy: tokenId
+      orderDirection: asc
+    ) {
+      id
+      tokenId
+      collection {
+        contractAddress
+        name
+        symbol
+      }
+    }
+  }
+`;

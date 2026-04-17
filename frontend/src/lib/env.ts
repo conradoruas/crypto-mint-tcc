@@ -51,7 +51,3 @@ export const WALLETCONNECT_PROJECT_ID =
 /** The Graph subgraph URL. If absent, all subgraph-dependent features are disabled. */
 export const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
-/** Address of the NFTFavorites contract. If absent, on-chain favorites are disabled. */
-export const FAVORITES_ADDRESS = process.env.NEXT_PUBLIC_FAVORITES_ADDRESS as
-  | `0x${string}`
-  | undefined;

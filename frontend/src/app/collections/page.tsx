@@ -16,6 +16,7 @@ import {
 
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { shortAddr } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
@@ -194,7 +195,7 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     if (statsError) {
-      console.error("[CollectionsPage] Subgraph stats error:", statsError);
+      logger.error("[CollectionsPage] Subgraph stats error", statsError);
     }
   }, [statsError]);
 

@@ -1,4 +1,5 @@
 import {
+  ContractFunctionExecutionError,
   ContractFunctionRevertedError,
   HttpRequestError,
   InsufficientFundsError,
@@ -95,6 +96,13 @@ export function getTransactionErrorKind(error: unknown): TransactionErrorKind {
     if (isUserRejectedNode(node)) return "user_rejected";
     if (node instanceof InsufficientFundsError) return "insufficient_funds";
     if (node instanceof ContractFunctionRevertedError) return "reverted";
+    if (node instanceof ContractFunctionExecutionError) {
+      const msg = errorMessage(node);
+      if (isUserRejectedMessage(msg)) return "user_rejected";
+      if (isInsufficientFundsMessage(msg)) return "insufficient_funds";
+      if (isUnauthorizedMessage(msg)) return "unauthorized";
+      return "reverted";
+    }
     if (
       node instanceof HttpRequestError ||
       node instanceof TimeoutError ||
@@ -141,11 +149,15 @@ function getRevertDetail(error: unknown): string | null {
         return r.length > 160 ? `${r.slice(0, 157)}…` : r;
       }
       const firstLine = node.shortMessage?.split("\n")[0]?.trim();
-      if (
-        firstLine &&
-        firstLine.length > 0 &&
-        firstLine.length <= 180
-      ) {
+      if (firstLine && firstLine.length > 0 && firstLine.length <= 180) {
+        return firstLine;
+      }
+    }
+    if (node instanceof ContractFunctionExecutionError) {
+      const inner = getRevertDetail(node.cause);
+      if (inner) return inner;
+      const firstLine = node.shortMessage?.split("\n")[0]?.trim();
+      if (firstLine && firstLine.length > 0 && firstLine.length <= 180) {
         return firstLine;
       }
     }

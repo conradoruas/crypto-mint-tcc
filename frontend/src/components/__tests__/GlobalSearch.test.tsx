@@ -26,6 +26,14 @@ vi.mock("@apollo/client/react", async (importOriginal) => {
   };
 });
 
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useQuery: vi.fn().mockReturnValue({ data: new Map(), isLoading: false }),
+  };
+});
+
 vi.mock("@/lib/alchemyMeta", () => ({
   fetchAlchemyMeta: vi.fn().mockResolvedValue(new Map()),
 }));
