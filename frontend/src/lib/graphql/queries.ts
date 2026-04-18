@@ -2,6 +2,31 @@ import { gql } from "@apollo/client";
 
 /** Which layers are authoritative for listings vs metadata: see `src/lib/DATA_SOURCES.md`. */
 
+export const GET_COLLECTIONS_BY_CREATOR = gql`
+  query GetCollectionsByCreator($creator: Bytes!, $first: Int!, $skip: Int!) {
+    collections(
+      where: { creator: $creator }
+      first: $first
+      skip: $skip
+      orderBy: createdAt
+      orderDirection: desc
+    ) {
+      id
+      contractAddress
+      creator
+      name
+      symbol
+      description
+      image
+      maxSupply
+      mintPrice
+      totalSupply
+      createdAt
+      collectionId
+    }
+  }
+`;
+
 export const GET_COLLECTIONS = gql`
   query GetCollections($first: Int!, $skip: Int!) {
     collections(first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {

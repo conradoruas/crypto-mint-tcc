@@ -8,7 +8,10 @@ import {
   NFT_COLLECTION_ABI,
   NFT_COLLECTION_FACTORY_ABI,
 } from "@/constants/contracts";
-import { GET_COLLECTIONS } from "@/lib/graphql/queries";
+import {
+  GET_COLLECTIONS,
+  GET_COLLECTIONS_BY_CREATOR,
+} from "@/lib/graphql/queries";
 import type { CollectionInfo } from "@/types/collection";
 export type { CollectionInfo };
 import { parseAddress } from "@/lib/schemas";
@@ -118,14 +121,74 @@ export function useCollections(page: number = 1, pageSize: number = 100) {
 
 /**
  * Hook to fetch collections created by the currently connected user.
+ * Uses a server-side `where: { creator }` filter instead of fetching all and
+ * filtering on the client.
  */
 export function useCreatorCollections() {
   const { address } = useConnection();
-  const { collections, isLoading } = useCollections();
 
-  const myCollections = collections.filter(
-    (c) => address && c.creator.toLowerCase() === address.toLowerCase(),
+  type GqlCollection = {
+    contractAddress: string;
+    creator: string;
+    name: string;
+    symbol: string;
+    description?: string;
+    image?: string;
+    maxSupply?: string;
+    mintPrice?: string;
+    createdAt?: string;
+    totalSupply?: string;
+  };
+  type GqlCollectionsData = { collections: GqlCollection[] };
+
+  const {
+    data: gqlData,
+    loading: gqlLoading,
+    refetch: gqlRefetch,
+  } = useQuery<GqlCollectionsData>(GET_COLLECTIONS_BY_CREATOR, {
+    skip: !SUBGRAPH_ENABLED || !address,
+    variables: { creator: address?.toLowerCase() ?? "", first: 100, skip: 0 },
+  });
+
+  // RPC fallback: fetch all and filter client-side (only when subgraph is unavailable)
+  const { collections: allCollections, isLoading: rpcLoading } = useCollections();
+  const rpcMyCollections = useMemo(
+    () =>
+      allCollections.filter(
+        (c) => address && c.creator.toLowerCase() === address.toLowerCase(),
+      ),
+    [allCollections, address],
   );
 
-  return { collections: myCollections, isLoading };
+  const gqlCollections = useMemo(
+    () =>
+      (gqlData?.collections ?? []).flatMap((c) => {
+        const contractAddress = parseAddress(c.contractAddress);
+        const creator = parseAddress(c.creator);
+        if (!contractAddress || !creator) return [];
+        return [{
+          contractAddress,
+          creator,
+          name: c.name,
+          symbol: c.symbol,
+          description: c.description ?? "",
+          image: c.image ?? "",
+          maxSupply: BigInt(c.maxSupply ?? 0),
+          mintPrice: BigInt(c.mintPrice ?? 0),
+          createdAt: BigInt(c.createdAt ?? 0),
+          totalSupply: BigInt(c.totalSupply ?? 0),
+        }];
+      }),
+    [gqlData?.collections],
+  );
+
+  if (SUBGRAPH_ENABLED) {
+    return {
+      collections: gqlCollections,
+      isLoading: gqlLoading,
+      refetch: gqlRefetch as () => void,
+    };
+  }
+
+  return { collections: rpcMyCollections, isLoading: rpcLoading, refetch: () => {} };
 }
