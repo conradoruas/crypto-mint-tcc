@@ -6,11 +6,20 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectKitProvider, getDefaultConfig } from "connectkit";
 import { ReactNode, useState } from "react";
 
+const walletConnectProjectId =
+  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "";
+
+if (process.env.NODE_ENV !== "production" && !walletConnectProjectId) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[Web3Provider] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set — " +
+      "WalletConnect will be disabled. Set it in .env.local to enable mobile wallet support.",
+  );
+}
+
 const config = createConfig(
   getDefaultConfig({
-    // Obtenha seu WalletConnect Project ID em cloud.walletconnect.com
-    walletConnectProjectId:
-      process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "",
+    walletConnectProjectId,
     chains: [sepolia],
     appName: "CryptoMint NFT Marketplace",
     enableAaveAccount: false,
