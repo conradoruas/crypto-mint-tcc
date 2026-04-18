@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import type { ActivityEvent } from "@/types/marketplace";
 import { useActivityFeed } from "@/hooks/activity";
 
 const W = 500;
@@ -35,9 +36,11 @@ export function PriceHistory({
   const sales = useMemo(
     () =>
       events
-        .filter((e) => e.type === "sale" && e.tokenId === tokenId && e.priceETH)
+        .filter((e): e is ActivityEvent & { priceETH: string } =>
+          e.type === "sale" && e.tokenId === tokenId && e.priceETH != null,
+        )
         .map((e) => ({
-          price: parseFloat(e.priceETH!),
+          price: parseFloat(e.priceETH),
           ts: e.timestamp ?? 0,
           txHash: e.txHash,
         }))
@@ -80,7 +83,8 @@ export function PriceHistory({
   const yTicks = [minP, (minP + maxP) / 2, maxP];
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = svgRef.current!.getBoundingClientRect();
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
     const mouseX = ((e.clientX - rect.left) / rect.width) * W;
     let closest = pts[0];
     let minDist = Math.abs(pts[0].cx - mouseX);

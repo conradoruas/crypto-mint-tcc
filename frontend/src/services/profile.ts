@@ -106,7 +106,7 @@ export function clearProfile(address: string): void {
 export function useProfileQuery(address: string | undefined) {
   return useQuery({
     queryKey: ["profile", address],
-    queryFn: () => fetchProfile(address!),
+    queryFn: () => fetchProfile(address ?? ""),
     enabled: !!address,
     staleTime: 5 * 60_000,
   });

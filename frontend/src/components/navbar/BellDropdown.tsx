@@ -6,7 +6,7 @@ import {
   Activity,
 } from "lucide-react";
 import { cn, formatTimeShort } from "@/lib/utils";
-import { useActivityFeed, ActivityEvent } from "@/hooks/activity";
+import { useActivityFeed, type ActivityEvent } from "@/hooks/activity";
 import { getEventConfig } from "@/lib/eventConfig";
 import { useState, useRef, useMemo } from "react";
 import { fetchBatchNFTMetadata } from "@/lib/nftMetadata";

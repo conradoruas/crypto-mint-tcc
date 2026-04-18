@@ -8,15 +8,23 @@ function bucket(now: number): number {
   return Math.floor(now / BUCKET_MS) * 60;
 }
 
+function syncCurrentBucket(): number {
+  const next = bucket(Date.now());
+  if (next !== currentBucket) {
+    currentBucket = next;
+  }
+  return currentBucket;
+}
+
 // Module-level singleton — shared across every component that calls
 // useNowBucketed(), so only one interval fires regardless of usage count.
 let currentBucket = bucket(Date.now());
 const listeners = new Set<() => void>();
 
 const intervalId = setInterval(() => {
-  const next = bucket(Date.now());
-  if (next !== currentBucket) {
-    currentBucket = next;
+  const previous = currentBucket;
+  const next = syncCurrentBucket();
+  if (next !== previous) {
     for (const l of listeners) l();
   }
 }, BUCKET_MS);
@@ -38,7 +46,7 @@ function subscribe(listener: () => void): () => void {
 export function useNowBucketed(): number {
   return useSyncExternalStore(
     subscribe,
-    () => currentBucket,
-    () => currentBucket,
+    syncCurrentBucket,
+    syncCurrentBucket,
   );
 }

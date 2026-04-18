@@ -6,7 +6,7 @@ import {
   GET_ACTIVITY_FEED,
 } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
-import { MockLink } from "@apollo/client/testing";
+import { type MockLink } from "@apollo/client/testing";
 
 type MockedResponse = MockLink.MockedResponse;
 

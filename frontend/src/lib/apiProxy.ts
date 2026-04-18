@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 // ─── Rate limit config ────────────────────────────────────────────────────────
 // Requests allowed per IP per WINDOW_MS for each proxy prefix

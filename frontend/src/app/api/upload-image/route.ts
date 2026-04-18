@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { PINATA_JWT as jwt } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";

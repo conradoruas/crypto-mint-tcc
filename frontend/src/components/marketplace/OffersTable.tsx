@@ -93,7 +93,7 @@ export function OffersTable({
         const isExpired = expiresDate.getTime() <= now;
         return (
           <div
-            key={offer.buyerAddress}
+            key={`${offer.buyerAddress}-${offer.expiresAt.toString()}-${offer.amount.toString()}`}
             className={`flex items-center justify-between p-3 rounded-sm border transition-all ${
               i === 0
                 ? "border-tertiary/30 bg-tertiary/5"
