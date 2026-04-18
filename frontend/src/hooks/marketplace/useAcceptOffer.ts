@@ -20,6 +20,7 @@ export function useAcceptOffer() {
   const { address } = useConnection();
   const { mutateAsync } = useWriteContract();
   const [phase, setPhase] = useState<TwoStepTxPhase>("idle");
+  const [isSuccess, setIsSuccess] = useState(false);
   const inFlightRef = useRef(false);
 
   const acceptOffer = useCallback(
@@ -84,6 +85,7 @@ export function useAcceptOffer() {
 
         setPhase("exec-confirm");
         await waitForTransactionReceipt(publicClient, { hash: acceptHash });
+        setIsSuccess(true);
       } finally {
         setPhase("idle");
         inFlightRef.current = false;
@@ -99,7 +101,6 @@ export function useAcceptOffer() {
     phase,
     isPending: isFlowBusy,
     isConfirming: phase === "approve-confirm" || phase === "exec-confirm",
-    /** Use completion of `await acceptOffer()` for success UX; hook no longer tracks a single hash. */
-    isSuccess: false,
+    isSuccess,
   };
 }

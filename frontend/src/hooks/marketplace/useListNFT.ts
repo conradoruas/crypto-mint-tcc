@@ -4,6 +4,7 @@ import { useWriteContract, useConnection, usePublicClient } from "wagmi";
 import { parseEther } from "viem";
 import { waitForTransactionReceipt } from "viem/actions";
 import { useCallback, useRef, useState } from "react";
+
 import {
   MARKETPLACE_ADDRESS,
   NFT_MARKETPLACE_ABI,
@@ -21,6 +22,7 @@ export function useListNFT() {
   const { address } = useConnection();
   const { mutateAsync } = useWriteContract();
   const [phase, setPhase] = useState<TwoStepTxPhase>("idle");
+  const [isSuccess, setIsSuccess] = useState(false);
   const inFlightRef = useRef(false);
 
   const listNFT = useCallback(
@@ -81,6 +83,7 @@ export function useListNFT() {
 
         setPhase("exec-confirm");
         await waitForTransactionReceipt(publicClient, { hash: listHash });
+        setIsSuccess(true);
       } finally {
         setPhase("idle");
         inFlightRef.current = false;
@@ -96,8 +99,7 @@ export function useListNFT() {
     phase,
     isPending: isFlowBusy,
     isConfirming: phase === "approve-confirm" || phase === "exec-confirm",
-    /** @deprecated Single-hash hook was misleading for two txs; use await listNFT() success. */
-    isSuccess: false,
+    isSuccess,
     hash: undefined as `0x${string}` | undefined,
   };
 }
