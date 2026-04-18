@@ -1,20 +1,15 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useConnection } from "wagmi";
 import { Navbar } from "@/components/navbar";
 import {
-  ShoppingCart,
   ShieldCheck,
-  Tag,
-  X,
-  Loader2,
-  HandCoins,
-  CheckCircle,
   TrendingUp,
   Heart,
   Share2,
+  HandCoins,
   Check,
 } from "lucide-react";
 import Image from "next/image";
@@ -30,12 +25,11 @@ import {
   useAcceptOffer,
   useCancelOffer,
 } from "@/hooks/marketplace";
-import { OffersTable, ExpiresIn } from "@/components/marketplace/OffersTable";
+import { OffersTable } from "@/components/marketplace/OffersTable";
 import { useIsFavorited, useFavorite } from "@/hooks/user";
-import { useActivityFeed } from "@/hooks/activity";
 import {
-  listPriceSchema,
   offerAmountSchema,
+  listPriceSchema,
   getZodErrors,
   parseAddress,
   addressSchema,
@@ -46,244 +40,9 @@ import { shortAddr } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { formatTransactionError } from "@/lib/txErrors";
 import { toast } from "sonner";
-import { EthAmountInput, IconButton } from "@/components/ui";
-
-// ─── Price History Chart ──────────────────────────────────────────────────────
-
-const W = 500;
-const H = 150;
-const PAD = { top: 10, right: 16, bottom: 36, left: 56 };
-const PLOT_W = W - PAD.left - PAD.right;
-const PLOT_H = H - PAD.top - PAD.bottom;
-
-function fmtDate(ts: number) {
-  return new Date(ts * 1000).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function PriceHistory({
-  nftContract,
-  tokenId,
-}: {
-  nftContract: string;
-  tokenId: string;
-}) {
-  const { events, isLoading } = useActivityFeed(nftContract, 200);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [tooltip, setTooltip] = useState<{
-    x: number;
-    y: number;
-    price: string;
-    date: string;
-  } | null>(null);
-
-  const sales = useMemo(
-    () =>
-      events
-        .filter((e) => e.type === "sale" && e.tokenId === tokenId && e.priceETH)
-        .map((e) => ({
-          price: parseFloat(e.priceETH!),
-          ts: e.timestamp ?? 0,
-          txHash: e.txHash,
-        }))
-        .sort((a, b) => a.ts - b.ts),
-    [events, tokenId],
-  );
-
-  const isSkeleton = isLoading && sales.length === 0;
-
-  if (isSkeleton) {
-    return (
-      <div className="h-[150px] animate-pulse bg-surface-container-high rounded-sm" />
-    );
-  }
-
-  if (sales.length < 2) {
-    return (
-      <div className="h-[150px] flex items-center justify-center text-xs text-on-surface-variant/40 uppercase tracking-widest border border-dashed border-outline-variant/15 rounded-sm">
-        No sales recorded yet
-      </div>
-    );
-  }
-
-  const minP = Math.min(...sales.map((s) => s.price));
-  const maxP = Math.max(...sales.map((s) => s.price));
-  const minTs = sales[0].ts;
-  const maxTs = sales[sales.length - 1].ts;
-  const rangeP = maxP - minP || 1;
-  const rangeTs = maxTs - minTs || 1;
-
-  const sx = (ts: number) => PAD.left + ((ts - minTs) / rangeTs) * PLOT_W;
-  const sy = (p: number) => PAD.top + (1 - (p - minP) / rangeP) * PLOT_H;
-
-  const pts = sales.map((s) => ({ ...s, cx: sx(s.ts), cy: sy(s.price) }));
-  const linePath = pts
-    .map((p, i) => `${i === 0 ? "M" : "L"}${p.cx},${p.cy}`)
-    .join(" ");
-  const areaPath = `${linePath} L${pts[pts.length - 1].cx},${PAD.top + PLOT_H} L${pts[0].cx},${PAD.top + PLOT_H} Z`;
-
-  const yTicks = [minP, (minP + maxP) / 2, maxP];
-
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = svgRef.current!.getBoundingClientRect();
-    const mouseX = ((e.clientX - rect.left) / rect.width) * W;
-    let closest = pts[0];
-    let minDist = Math.abs(pts[0].cx - mouseX);
-    for (const p of pts) {
-      const d = Math.abs(p.cx - mouseX);
-      if (d < minDist) {
-        minDist = d;
-        closest = p;
-      }
-    }
-    setTooltip({
-      x: (closest.cx / W) * 100,
-      y: (closest.cy / H) * 100,
-      price: closest.price.toFixed(4),
-      date: fmtDate(closest.ts),
-    });
-  };
-
-  return (
-    <div className="relative">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${W} ${H}`}
-        className="w-full"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setTooltip(null)}
-      >
-        <defs>
-          <linearGradient id="priceAreaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop
-              offset="0%"
-              stopColor="var(--color-primary)"
-              stopOpacity="0.25"
-            />
-            <stop
-              offset="100%"
-              stopColor="var(--color-primary)"
-              stopOpacity="0.01"
-            />
-          </linearGradient>
-        </defs>
-
-        {/* Grid lines + Y labels */}
-        {yTicks.map((tick, i) => {
-          const y = sy(tick);
-          return (
-            <g key={i}>
-              <line
-                x1={PAD.left}
-                y1={y}
-                x2={W - PAD.right}
-                y2={y}
-                stroke="currentColor"
-                strokeOpacity="0.06"
-                strokeWidth="1"
-              />
-              <text
-                x={PAD.left - 12}
-                y={y + 4.5}
-                textAnchor="end"
-                fontSize="14"
-                fill="currentColor"
-                fillOpacity="0.6"
-              >
-                {tick.toFixed(3)}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* X axis labels */}
-        <text
-          x={PAD.left}
-          y={H - 6}
-          fontSize="14"
-          fill="currentColor"
-          fillOpacity="0.6"
-        >
-          {fmtDate(minTs)}
-        </text>
-        <text
-          x={W - PAD.right}
-          y={H - 6}
-          fontSize="14"
-          textAnchor="end"
-          fill="currentColor"
-          fillOpacity="0.6"
-        >
-          {fmtDate(maxTs)}
-        </text>
-
-        {/* Area fill */}
-        <path d={areaPath} fill="url(#priceAreaGrad)" />
-
-        {/* Line */}
-        <path
-          d={linePath}
-          fill="none"
-          stroke="var(--color-primary)"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-
-        {/* Dots */}
-        {pts.map((p, i) => (
-          <circle
-            key={i}
-            cx={p.cx}
-            cy={p.cy}
-            r="3"
-            fill="var(--color-primary)"
-            stroke="var(--color-background)"
-            strokeWidth="1.5"
-          />
-        ))}
-
-        {/* Crosshair on hover */}
-        {tooltip && (
-          <line
-            x1={(tooltip.x / 100) * W}
-            y1={PAD.top}
-            x2={(tooltip.x / 100) * W}
-            y2={PAD.top + PLOT_H}
-            stroke="var(--color-primary)"
-            strokeOpacity="0.3"
-            strokeWidth="1"
-            strokeDasharray="3 3"
-          />
-        )}
-      </svg>
-
-      {/* Tooltip */}
-      {tooltip && (
-        <div
-          className="pointer-events-none absolute z-10 px-2.5 py-1.5 rounded-sm bg-surface-container-high border border-outline-variant/20 shadow-md text-xs"
-          style={{
-            left: `clamp(0%, calc(${tooltip.x}% - 48px), calc(100% - 96px))`,
-            top: `calc(${tooltip.y}% - 38px)`,
-          }}
-        >
-          <p className="font-headline font-bold text-primary">
-            {tooltip.price} ETH
-          </p>
-          <p className="text-on-surface-variant">{tooltip.date}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-
-
-// ─────────────────────────────────────────────────────────────────────────────
+import { PriceHistory } from "@/components/asset/PriceHistory";
+import { ListingPanel } from "@/components/asset/ListingPanel";
+import { OfferPanel } from "@/components/asset/OfferPanel";
 
 function LoadingSkeleton() {
   return (
@@ -320,6 +79,9 @@ export default function AssetPageClient({
   const [offerAmount, setOfferAmount] = useState("");
   const [showListForm, setShowListForm] = useState(false);
   const [showOfferForm, setShowOfferForm] = useState(false);
+  const [listErrors, setListErrors] = useState<ListPriceErrors>({});
+  const [offerErrors, setOfferErrors] = useState<OfferAmountErrors>({});
+  const [copied, setCopied] = useState(false);
 
   const {
     owner,
@@ -348,7 +110,8 @@ export default function AssetPageClient({
     isSuccess: isBought,
     hash: buyHash,
   } = useBuyNFT();
-  const { cancelListing, isPending: isCancelling, isSuccess: isCancelled } = useCancelListing();
+  const { cancelListing, isPending: isCancelling, isSuccess: isCancelled } =
+    useCancelListing();
   const {
     makeOffer,
     isPending: isMakingOffer,
@@ -364,39 +127,9 @@ export default function AssetPageClient({
 
   const { isFavorited } = useIsFavorited(nftContract ?? "", tokenId);
   const { toggleFavorite } = useFavorite();
-  const [copied, setCopied] = useState(false);
-  const [listErrors, setListErrors] = useState<ListPriceErrors>({});
-  const [offerErrors, setOfferErrors] = useState<OfferAmountErrors>({});
-
-  const handleShare = async () => {
-    const url = window.location.href;
-    const title = nft?.name ?? "NFT";
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, url });
-      } catch {
-        /* user cancelled */
-      }
-    } else {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   const isOwner =
     address && owner && address.toLowerCase() === owner.toLowerCase();
-
-  const listFlowLabel =
-    listPhase === "approve-wallet"
-      ? "Approve in wallet…"
-      : listPhase === "approve-confirm"
-        ? "Confirming approval…"
-        : listPhase === "exec-wallet"
-          ? "Sign listing…"
-          : listPhase === "exec-confirm"
-            ? "Confirming listing…"
-            : "Working…";
 
   const refetchAll = useCallback(() => {
     refetchListing();
@@ -405,8 +138,6 @@ export default function AssetPageClient({
   }, [refetchListing, refetchMyOffer, refetchOffers]);
 
   // Skip the client-side fetch when the Server Component already provided initialNft.
-  // Falls back to a client fetch only when the server fetch failed or returned null
-  // (e.g., bot crawlers without JS, or a cold-miss on the server cache).
   const skipFetch = initialNft != null;
 
   useEffect(() => {
@@ -450,23 +181,26 @@ export default function AssetPageClient({
     return () => { cancelled = true; controller.abort(); };
   }, [tokenId, nftContract, skipFetch]);
 
+  // Consolidate all transaction-success side-effects into a single effect.
+  // Each flag is stable across renders and only transitions once per mutation.
   useEffect(() => {
     if (isBought) {
       toast.success("NFT purchased successfully!", {
         action: buyHash
           ? {
-            label: "View Tx",
-            onClick: () =>
-              window.open(
-                `https://sepolia.etherscan.io/tx/${buyHash}`,
-                "_blank",
-              ),
-          }
+              label: "View Tx",
+              onClick: () =>
+                window.open(
+                  `https://sepolia.etherscan.io/tx/${buyHash}`,
+                  "_blank",
+                ),
+            }
           : undefined,
       });
       refetchAll();
     }
   }, [isBought, refetchAll, buyHash]);
+
   useEffect(() => {
     if (isOfferMade) {
       toast.success("Offer sent! ETH is held in escrow for 7 days.");
@@ -475,12 +209,14 @@ export default function AssetPageClient({
       refetchAll();
     }
   }, [isOfferMade, refetchAll]);
+
   useEffect(() => {
     if (isOfferCancelled) {
       toast.success("Offer cancelled. ETH returned.");
       refetchAll();
     }
   }, [isOfferCancelled, refetchAll]);
+
   useEffect(() => {
     if (isCancelled) {
       toast.success("Listing cancelled.");
@@ -488,11 +224,24 @@ export default function AssetPageClient({
       refetchAll();
     }
   }, [isCancelled, refetchAll]);
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    const title = nft?.name ?? "NFT";
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, url });
+      } catch { /* user cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   const handleList = async () => {
     if (!nftContract) return;
-    const errors = getZodErrors(listPriceSchema, {
-      price: listPrice,
-    }) as ListPriceErrors;
+    const errors = getZodErrors(listPriceSchema, { price: listPrice }) as ListPriceErrors;
     setListErrors(errors);
     if (errors.price) return;
     try {
@@ -526,9 +275,7 @@ export default function AssetPageClient({
 
   const handleMakeOffer = async () => {
     if (!nftContract) return;
-    const errors = getZodErrors(offerAmountSchema, {
-      amount: offerAmount,
-    }) as OfferAmountErrors;
+    const errors = getZodErrors(offerAmountSchema, { amount: offerAmount }) as OfferAmountErrors;
     setOfferErrors(errors);
     if (errors.amount) return;
     try {
@@ -541,19 +288,12 @@ export default function AssetPageClient({
   const handleAcceptOffer = async (buyerAddress: string) => {
     if (!nftContract) return;
     const result = addressSchema.safeParse(buyerAddress);
-
     if (!result.success) {
-      toast.error(
-        "Buyer address is invalid. Action cancelled for security.",
-      );
+      toast.error("Buyer address is invalid. Action cancelled for security.");
       return;
     }
-
-    // Validated and typed as Address (0x...)
-    const safeBuyer = result.data;
-
     try {
-      await acceptOffer(nftContract, tokenId, safeBuyer);
+      await acceptOffer(nftContract, tokenId, result.data);
       toast.success("Offer accepted! NFT transferred.");
       refetchAll();
     } catch (e) {
@@ -641,24 +381,20 @@ export default function AssetPageClient({
                     Owner
                   </span>
                   <span className="font-headline font-bold text-sm font-mono text-on-surface">
-                    {isOwner
-                      ? "You"
-                      : shortAddr(owner)}
+                    {isOwner ? "You" : shortAddr(owner)}
                   </span>
                 </div>
               )}
               {nftContract && (
                 <button
                   onClick={() => toggleFavorite(nftContract, tokenId)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm border transition-all text-xs font-bold uppercase tracking-widest ${isFavorited
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm border transition-all text-xs font-bold uppercase tracking-widest ${
+                    isFavorited
                       ? "bg-error/10 border-error/30 text-error"
                       : "bg-surface-container border-outline-variant/15 text-on-surface-variant hover:border-outline"
-                    }`}
+                  }`}
                 >
-                  <Heart
-                    size={13}
-                    className={isFavorited ? "fill-error" : ""}
-                  />
+                  <Heart size={13} className={isFavorited ? "fill-error" : ""} />
                   {isFavorited ? "Saved" : "Save"}
                 </button>
               )}
@@ -687,205 +423,43 @@ export default function AssetPageClient({
             )}
           </div>
 
-          {/* Buy / List Panel */}
-          <div className="bg-surface-container-low border border-outline-variant/10 p-6 space-y-4 rounded-sm">
-            {isListed && price ? (
-              <>
-                <div>
-                  <p className="text-[10px] text-on-surface-variant uppercase tracking-widest mb-1 font-headline font-bold">
-                    Sale Price
-                  </p>
-                  <p className="font-headline text-3xl font-bold text-primary">
-                    {price} ETH
-                  </p>
-                </div>
-                {isOwner ? (
-                  <button
-                    onClick={handleCancelListing}
-                    disabled={isCancelling}
-                    className={`w-full font-headline font-bold py-4 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest border ${isCancelling
-                        ? "bg-surface-container-high text-on-surface-variant/50 border-outline-variant/10 cursor-not-allowed"
-                        : "bg-error/5 border-error/20 text-error hover:bg-error/10"
-                      }`}
-                  >
-                    {isCancelling ? (
-                      <Loader2 className="animate-spin" size={18} />
-                    ) : (
-                      <X size={18} />
-                    )}
-                    {isCancelling ? "Cancelling..." : "Cancel Listing"}
-                  </button>
-                ) : (
-                  <div className="relative group overflow-hidden">
-                    <button
-                      onClick={handleBuy}
-                      disabled={isBuying || isBuyConfirming}
-                      className={`w-full relative overflow-hidden font-headline font-bold py-4 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest ${isBuying || isBuyConfirming
-                          ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
-                          : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
-                        }`}
-                    >
-                      {!(isBuying || isBuyConfirming) && (
-                        <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
-                      )}
-                      {isBuying || isBuyConfirming ? (
-                        <Loader2 className="animate-spin" size={18} />
-                      ) : (
-                        <ShoppingCart size={18} />
-                      )}
-                      {isBuying
-                        ? "Awaiting wallet..."
-                        : isBuyConfirming
-                          ? "Confirming..."
-                          : "Buy Now"}
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-on-surface-variant/50 uppercase tracking-widest text-xs">
-                  This NFT is not for sale.
-                </p>
-                {isOwner &&
-                  (showListForm ? (
-                    <div className="space-y-3">
-                      <EthAmountInput
-                        value={listPrice}
-                        onChange={(v) => { setListPrice(v); setListErrors({}); }}
-                        placeholder="Price in ETH (e.g. 0.05)"
-                        aria-label="Listing price in ETH"
-                        error={listErrors.price}
-                      />
-                      <div className="flex gap-3">
-                        <button
-                          onClick={handleList}
-                          disabled={isListing}
-                          className={`flex-1 font-headline font-bold py-3 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest ${isListing
-                              ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
-                              : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110"
-                            }`}
-                        >
-                          {isListing ? (
-                            <Loader2 className="animate-spin" size={16} />
-                          ) : (
-                            <Tag size={16} />
-                          )}
-                          {isListing ? listFlowLabel : "Confirm Listing"}
-                        </button>
-                        <IconButton
-                          onClick={() => setShowListForm(false)}
-                          aria-label="Close"
-                          variant="outlined"
-                        >
-                          <X size={16} />
-                        </IconButton>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="relative group overflow-hidden">
-                      <button
-                        onClick={() => setShowListForm(true)}
-                        className="w-full relative overflow-hidden font-headline font-bold py-4 flex items-center justify-center gap-2 rounded-sm bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99] transition-all text-sm uppercase tracking-widest"
-                      >
-                        <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
-                        <Tag size={18} /> List for Sale
-                      </button>
-                    </div>
-                  ))}
-              </>
-            )}
-          </div>
+          <ListingPanel
+            isListed={!!isListed}
+            price={price}
+            isOwner={!!isOwner}
+            isBuying={isBuying}
+            isBuyConfirming={isBuyConfirming}
+            onBuy={handleBuy}
+            isCancelling={isCancelling}
+            onCancelListing={handleCancelListing}
+            showListForm={showListForm}
+            listPrice={listPrice}
+            listErrors={listErrors}
+            isListing={isListing}
+            listPhase={listPhase}
+            onShowListForm={() => setShowListForm(true)}
+            onHideListForm={() => setShowListForm(false)}
+            onListPriceChange={(v) => { setListPrice(v); setListErrors({}); }}
+            onList={handleList}
+          />
 
-          {/* Offer panel (non-owner) */}
           {!isOwner && address && (
-            <div className="bg-surface-container-low border border-outline-variant/10 p-6 space-y-4 rounded-sm">
-              <h3 className="font-headline font-bold text-sm uppercase tracking-widest flex items-center gap-2">
-                <HandCoins size={16} className="text-secondary" />
-                Make an Offer
-              </h3>
-              {hasActiveOffer ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm p-3 rounded-sm bg-primary/5 border border-primary/20 text-primary">
-                    <CheckCircle size={14} />
-                    <span>
-                      Your active offer:{" "}
-                      <strong className="font-mono">{myOfferAmount} ETH</strong>
-                    </span>
-                  </div>
-                  {expiresAt && (
-                    <div className="flex items-center gap-2 text-xs text-on-surface-variant">
-                      Expires: <ExpiresIn expiresAt={expiresAt} />
-                    </div>
-                  )}
-                  <button
-                    onClick={handleCancelOffer}
-                    disabled={isCancellingOffer}
-                    className={`w-full font-headline font-bold py-3 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest border ${isCancellingOffer
-                        ? "bg-surface-container-high text-on-surface-variant/50 border-outline-variant/10 cursor-not-allowed"
-                        : "bg-error/5 border-error/20 text-error hover:bg-error/10"
-                      }`}
-                  >
-                    {isCancellingOffer ? (
-                      <Loader2 className="animate-spin" size={16} />
-                    ) : (
-                      <X size={16} />
-                    )}
-                    {isCancellingOffer
-                      ? "Cancelling..."
-                      : "Cancel Offer & Reclaim ETH"}
-                  </button>
-                </div>
-              ) : showOfferForm ? (
-                <div className="space-y-3">
-                  <EthAmountInput
-                    value={offerAmount}
-                    onChange={(v) => { setOfferAmount(v); setOfferErrors({}); }}
-                    placeholder="Amount in ETH (e.g. 0.08)"
-                    aria-label="Offer amount in ETH"
-                    error={offerErrors.amount}
-                  />
-                  <p className="text-xs text-on-surface-variant/50 uppercase tracking-widest">
-                    ETH will be held in escrow for 7 days.
-                  </p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={handleMakeOffer}
-                      disabled={isMakingOffer || isOfferConfirming}
-                      className={`flex-1 font-headline font-bold py-3 flex items-center justify-center gap-2 rounded-sm transition-all text-sm uppercase tracking-widest ${isMakingOffer || isOfferConfirming
-                          ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
-                          : "bg-secondary/10 border border-secondary/20 text-secondary hover:bg-secondary/20"
-                        }`}
-                    >
-                      {isMakingOffer || isOfferConfirming ? (
-                        <Loader2 className="animate-spin" size={16} />
-                      ) : (
-                        <HandCoins size={16} />
-                      )}
-                      {isMakingOffer
-                        ? "Awaiting wallet..."
-                        : isOfferConfirming
-                          ? "Confirming..."
-                          : "Send Offer"}
-                    </button>
-                    <IconButton
-                      onClick={() => setShowOfferForm(false)}
-                      aria-label="Close"
-                      variant="outlined"
-                    >
-                      <X size={16} />
-                    </IconButton>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowOfferForm(true)}
-                  className="w-full font-headline font-bold py-4 flex items-center justify-center gap-2 rounded-sm bg-secondary/5 border border-secondary/20 text-secondary hover:bg-secondary/10 transition-all text-sm uppercase tracking-widest"
-                >
-                  <HandCoins size={18} /> Make an Offer
-                </button>
-              )}
-            </div>
+            <OfferPanel
+              hasActiveOffer={!!hasActiveOffer}
+              myOfferAmount={myOfferAmount}
+              expiresAt={expiresAt ?? null}
+              showOfferForm={showOfferForm}
+              offerAmount={offerAmount}
+              offerErrors={offerErrors}
+              isMakingOffer={isMakingOffer}
+              isOfferConfirming={isOfferConfirming}
+              isCancellingOffer={isCancellingOffer}
+              onShowOfferForm={() => setShowOfferForm(true)}
+              onHideOfferForm={() => setShowOfferForm(false)}
+              onOfferAmountChange={(v) => { setOfferAmount(v); setOfferErrors({}); }}
+              onMakeOffer={handleMakeOffer}
+              onCancelOffer={handleCancelOffer}
+            />
           )}
 
           {/* Price History */}
