@@ -29,9 +29,9 @@ function buildLinks() {
 // Browser: reuse a single instance across the lifetime of the page.
 // Server (RSC / SSR): create a new instance per request to prevent cache
 // leaking between concurrent requests.
-let _browserClient: ApolloClient<object> | null = null;
+let _browserClient: ApolloClient | null = null;
 
-export function makeApolloClient(): ApolloClient<object> {
+export function makeApolloClient(): ApolloClient {
   return new ApolloClient({
     link: buildLinks(),
     cache: buildCacheConfig(),
@@ -41,7 +41,7 @@ export function makeApolloClient(): ApolloClient<object> {
   });
 }
 
-export function getApolloClient(): ApolloClient<object> {
+export function getApolloClient(): ApolloClient {
   if (typeof window === "undefined") {
     // Server-side: always create a fresh client so requests don't share cache.
     return makeApolloClient();
