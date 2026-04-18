@@ -18,7 +18,7 @@ import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
 import {
   editProfileSchema,
   getZodErrors,
-  EditProfileErrors,
+  type EditProfileErrors,
 } from "@/lib/schemas";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 

@@ -336,9 +336,10 @@ export default function CreateCollectionPage() {
       const limit = pLimit(5);
       let completed = 0;
       const uris: string[] = await Promise.all(
-        nfts.map((nft, _i) =>
+        nfts.map((nft) =>
           limit(async () => {
-            const imageUri = await uploadImage(nft.file!);
+            if (!nft.file) throw new Error(`NFT "${nft.name}" is missing an image file`);
+            const imageUri = await uploadImage(nft.file);
             const metaUri = await uploadMetadata(nft.name, nft.description, imageUri);
             completed++;
             dispatch({ type: "SET_UPLOAD_PROGRESS", value: Math.round((completed / nfts.length) * 90) });

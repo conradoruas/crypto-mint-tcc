@@ -181,8 +181,8 @@ function LoadNFTsPanel({
         setProgress(Math.round((i / nftDrafts.length) * 90));
         const nft = nftDrafts[i];
 
-        // 1. Upload da Imagem
-        const imageUri = await uploadImage(nft.file!);
+        if (!nft.file) throw new Error(`NFT "${nft.name}" is missing an image file`);
+        const imageUri = await uploadImage(nft.file);
         // 2. Upload do Metadado (agora com descrição)
         const metaUri = await uploadMetadata(
           nft.name,

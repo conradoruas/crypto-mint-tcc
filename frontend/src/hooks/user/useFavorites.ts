@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useConnection } from "wagmi";
-import { fetchAlchemyMeta } from "@/lib/alchemyMeta";
+import { fetchBatchNFTMetadata as fetchAlchemyMeta } from "@/lib/nftMetadata";
 import type { CollectionNFTItem, FavoriteRef } from "@/types/nft";
 
 function storageKey(address: string) {
