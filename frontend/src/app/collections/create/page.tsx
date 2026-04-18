@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useCallback, type ChangeEvent } from "react";
+import { useEffect, useCallback, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   useConnection,
@@ -1166,11 +1166,12 @@ export default function CreateCollectionPage() {
         </div>
       )}
 
-      <div className="relative group overflow-hidden">
+      <div className="flex justify-center pt-2 pb-8">
+        <div className="relative group overflow-hidden rounded-sm">
         <button
           onClick={handleCreateCollection}
           disabled={isLoading || nfts.length === 0}
-          className={`w-full relative overflow-hidden font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${isLoading || nfts.length === 0
+          className={`relative overflow-hidden font-headline font-bold px-10 py-3.5 flex items-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${isLoading || nfts.length === 0
             ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
             : "bg-gradient-to-r from-primary to-primary-container text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
             }`}
@@ -1192,6 +1193,7 @@ export default function CreateCollectionPage() {
                 : `Create Collection with ${nfts.length} NFT${nfts.length !== 1 ? "s" : ""
                 }`}
         </button>
+        </div>
       </div>
       <Footer />
     </div>,
