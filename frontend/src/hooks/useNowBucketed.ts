@@ -1,28 +1,44 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 
-const BUCKET_MS = 60_000; // 60 seconds
+const BUCKET_MS = 60_000;
 
-function bucket(): number {
-  return Math.floor(Date.now() / BUCKET_MS) * 60;
+function bucket(now: number): number {
+  return Math.floor(now / BUCKET_MS) * 60;
+}
+
+// Module-level singleton — shared across every component that calls
+// useNowBucketed(), so only one interval fires regardless of usage count.
+let currentBucket = bucket(Date.now());
+const listeners = new Set<() => void>();
+
+const intervalId = setInterval(() => {
+  const next = bucket(Date.now());
+  if (next !== currentBucket) {
+    currentBucket = next;
+    for (const l of listeners) l();
+  }
+}, BUCKET_MS);
+
+// Prevent the interval from blocking Node.js exit in test environments.
+if (typeof intervalId === "object" && intervalId !== null && "unref" in intervalId) {
+  (intervalId as { unref(): void }).unref();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 /**
  * Returns a unix timestamp (seconds) bucketed to 60s intervals.
- * Automatically refreshes when the bucket changes so GraphQL queries
- * that filter by `now` don't serve stale expired-offer data.
+ * Shares a single module-level interval across all consumers.
  */
 export function useNowBucketed(): number {
-  const [now, setNow] = useState(bucket);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      const next = bucket();
-      setNow((prev) => (prev !== next ? next : prev));
-    }, BUCKET_MS);
-    return () => clearInterval(id);
-  }, []);
-
-  return now;
+  return useSyncExternalStore(
+    subscribe,
+    () => currentBucket,
+    () => currentBucket,
+  );
 }
