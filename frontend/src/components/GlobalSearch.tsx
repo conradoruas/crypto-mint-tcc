@@ -1,4 +1,5 @@
 "use client";
+import { SUBGRAPH_ENABLED } from "@/lib/env";
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -6,13 +7,14 @@ import { Search, X, Layers, Image as ImageIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCollections } from "@/hooks/collections";
+import { useClickOutside } from "@/hooks/useClickOutside";
 import { useQuery as useApolloQuery } from "@apollo/client/react";
 import { useQuery } from "@tanstack/react-query";
 import { GET_SEARCH_SUGGESTIONS } from "@/lib/graphql/queries";
-import { fetchAlchemyMeta, NFTMeta } from "@/lib/alchemyMeta";
+import { fetchBatchNFTMetadata as fetchAlchemyMeta } from "@/lib/nftMetadata";
+import type { NFTMeta } from "@/types/alchemy";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 const DEBOUNCE_MS = 200;
 
 type GqlSuggestionsData = {
@@ -106,16 +108,7 @@ export function GlobalSearch({ className }: { className?: string }) {
 
   const hasResults = collectionResults.length > 0 || nftResults.length > 0;
 
-  // Close on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  useClickOutside(ref, () => setOpen(false));
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {

@@ -1,7 +1,8 @@
 "use client";
+import { SUBGRAPH_ENABLED } from "@/lib/env";
 
 import { useReadContract, useReadContracts, useConnection } from "wagmi";
-import { formatEther } from "viem";
+import { formatEther, zeroAddress } from "viem";
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@apollo/client/react";
 import { useNowBucketed } from "../useNowBucketed";
@@ -14,7 +15,6 @@ import type { OfferData, OfferWithBuyer } from "@/types/marketplace";
 import { parseAddress } from "@/lib/schemas";
 import { MAX_OFFER_BUYERS_MULTICALL } from "@/constants/polling";
 
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 // ─── Helpers ───
 
@@ -24,6 +24,23 @@ type GqlOfferRow = {
   expiresAt: string;
   active: boolean;
 };
+
+function compareOffers(a: OfferWithBuyer, b: OfferWithBuyer): number {
+  if (a.amount !== b.amount) return a.amount > b.amount ? -1 : 1;
+  if (a.expiresAt !== b.expiresAt) return a.expiresAt > b.expiresAt ? -1 : 1;
+  return 0;
+}
+
+function upsertBestOffer(
+  offers: Map<string, OfferWithBuyer>,
+  offer: OfferWithBuyer,
+) {
+  const key = offer.buyerAddress.toLowerCase();
+  const current = offers.get(key);
+  if (!current || compareOffers(offer, current) < 0) {
+    offers.set(key, offer);
+  }
+}
 
 function buildChainOfferMap(
   buyersRaw: readonly `0x${string}`[] | undefined,
@@ -42,9 +59,9 @@ function buildChainOfferMap(
   for (let i = 0; i < buyersRaw.length; i++) {
     const row = offerRows[i]?.result as OfferData | undefined;
     if (!row?.active || now > row.expiresAt) continue;
-    const buyer = parseAddress(row.buyer) ?? parseAddress(buyersRaw[i]!);
+    const buyer = parseAddress(row.buyer) ?? parseAddress(buyersRaw[i]);
     if (!buyer) continue;
-    m.set(buyer.toLowerCase(), {
+    upsertBestOffer(m, {
       buyer,
       buyerAddress: buyer,
       amount: row.amount,
@@ -57,12 +74,12 @@ function buildChainOfferMap(
 
 function indexerOffersFromGql(gqlOffers: GqlOfferRow[] | undefined) {
   const now = BigInt(Math.floor(Date.now() / 1000));
-  const out: OfferWithBuyer[] = [];
+  const deduped = new Map<string, OfferWithBuyer>();
   for (const o of gqlOffers ?? []) {
     if (!o.active || BigInt(o.expiresAt) <= now) continue;
     const buyer = parseAddress(o.buyer);
     if (!buyer) continue;
-    out.push({
+    upsertBestOffer(deduped, {
       buyer,
       buyerAddress: buyer,
       amount: BigInt(o.amount),
@@ -70,6 +87,7 @@ function indexerOffersFromGql(gqlOffers: GqlOfferRow[] | undefined) {
       active: true,
     });
   }
+  const out = [...deduped.values()];
   out.sort((a, b) =>
     a.amount === b.amount ? 0 : a.amount > b.amount ? -1 : 1,
   );
@@ -90,7 +108,7 @@ export function useMyOffer(nftContract: string, tokenId: string) {
     address: MARKETPLACE_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOffer",
-    args: [nftAddr!, BigInt(tokenId || "0"), address!],
+    args: [nftAddr ?? zeroAddress, BigInt(tokenId || "0"), address ?? zeroAddress],
     query: { enabled: !!address && !!nftAddr && !!tokenId },
   });
 
@@ -155,7 +173,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
     address: MARKETPLACE_ADDRESS,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOfferBuyers",
-    args: [nftAddr!, tokenIdBn],
+    args: [nftAddr ?? zeroAddress, tokenIdBn],
     query: {
       enabled: rpcEnabled,
       refetchInterval: false,
@@ -178,7 +196,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
         address: MARKETPLACE_ADDRESS,
         abi: NFT_MARKETPLACE_ABI,
         functionName: "getOffer" as const,
-        args: [nftAddr!, tokenIdBn, buyer] as const,
+        args: [nftAddr ?? zeroAddress, tokenIdBn, buyer] as const,
       })),
     [nftAddr, tokenIdBn, buyerAddresses],
   );
@@ -225,7 +243,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   return {
     offers,
     isLoading,
-    topOffer: offers.length > 0 ? formatEther(offers[0]!.amount) : null,
+    topOffer: offers.length > 0 ? formatEther(offers[0].amount) : null,
     refetch,
   };
 }

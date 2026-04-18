@@ -51,3 +51,6 @@ export const WALLETCONNECT_PROJECT_ID =
 /** The Graph subgraph URL. If absent, all subgraph-dependent features are disabled. */
 export const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
+/** True when a subgraph URL is configured; use to gate subgraph-dependent code paths. */
+export const SUBGRAPH_ENABLED = !!SUBGRAPH_URL;
+
