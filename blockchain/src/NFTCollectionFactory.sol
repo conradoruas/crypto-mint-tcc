@@ -118,8 +118,31 @@ contract NFTCollectionFactory {
     }
 
     /// @notice Returns all registered collections.
+    /// @dev Unbounded — only safe while the registry is small. Prefer
+    ///      `getCollections(offset, limit)` for production use.
     function getAllCollections() external view returns (CollectionInfo[] memory) {
         return _collections;
+    }
+
+    /// @notice Returns a paginated slice of registered collections.
+    /// @param offset Index of the first element to return.
+    /// @param limit  Maximum number of elements to return.
+    function getCollections(uint256 offset, uint256 limit)
+        external
+        view
+        returns (CollectionInfo[] memory page)
+    {
+        uint256 total = _collections.length;
+        if (offset >= total || limit == 0) return new CollectionInfo[](0);
+
+        uint256 end = offset + limit;
+        if (end > total) end = total;
+        uint256 count = end - offset;
+
+        page = new CollectionInfo[](count);
+        for (uint256 i = 0; i < count; i++) {
+            page[i] = _collections[offset + i];
+        }
     }
 
     /// @notice Returns the collection indices created by a specific address.
