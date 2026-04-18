@@ -36,18 +36,19 @@ export default function LandingPage() {
 
               <p className="text-on-surface-variant text-lg max-w-lg mb-10 leading-relaxed">
                 Decentralized marketplace for creating and trading NFTs.
-                Collections, offers, and royalties — processed via Smart Contracts.
+                Collections, offers, and royalties — processed via Smart
+                Contracts.
               </p>
 
               <div className="flex items-center gap-4">
                 <Link href="/explore">
                   <button className="bg-gradient-to-br from-primary to-primary-container text-on-primary-fixed font-headline font-bold px-10 py-4 rounded-sm hover:brightness-110 active:scale-95 transition-all text-sm tracking-widest uppercase">
-                    Explorar NFTs
+                    Explore
                   </button>
                 </Link>
                 <Link href="/create">
                   <button className="glass-panel border border-outline-variant/15 text-on-surface font-headline font-bold px-10 py-4 rounded-sm hover:bg-surface-variant/40 transition-all text-sm tracking-widest uppercase">
-                    Mint NFT
+                    Mint
                   </button>
                 </Link>
               </div>
