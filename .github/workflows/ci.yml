@@ -33,6 +33,9 @@ jobs:
       - name: Run snapshot (gas report)
         run: forge snapshot
 
+      - name: Coverage report
+        run: forge coverage --report lcov --report summary
+
   # ─── Smart Contract Security (Slither) ─────────
   security-contracts:
     name: Slither Static Analysis
