@@ -27,16 +27,16 @@ interface FilterSidebarProps {
   hasActiveFilters: boolean;
   clearFilters: () => void;
   onlyListed: boolean;
-  setOnlyListed: React.Dispatch<React.SetStateAction<boolean>>;
+  setOnlyListed: (v: boolean) => void;
   onlyFavorites: boolean;
-  setOnlyFavorites: React.Dispatch<React.SetStateAction<boolean>>;
-  setPage: React.Dispatch<React.SetStateAction<number>>;
+  setOnlyFavorites: (v: boolean) => void;
+  setPage: (v: number) => void;
   sort: SortOption;
-  setSort: React.Dispatch<React.SetStateAction<SortOption>>;
+  setSort: (v: SortOption) => void;
   isLoadingCollections: boolean;
   collections: CollectionInfo[];
   selectedCollection: string;
-  setSelectedCollection: React.Dispatch<React.SetStateAction<string>>;
+  setSelectedCollection: (v: string) => void;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
@@ -56,7 +56,7 @@ function FilterContent({
   selectedCollection,
   setSelectedCollection,
   onMobileClose,
-}: Omit<FilterSidebarProps, "mobileOpen">) {
+}: Omit<FilterSidebarProps, "mobileOpen"> & { onMobileClose?: () => void }) {
   return (
     <div className="space-y-10 pt-4">
       <header className="flex items-center justify-between">

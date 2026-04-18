@@ -3,6 +3,7 @@
 import { Navbar } from "@/components/navbar";
 import { useCollections } from "@/hooks/collections";
 import { useExploreAllNFTs } from "@/hooks/marketplace";
+import { useExploreFilters } from "@/hooks/marketplace/useExploreFilters";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers, Heart } from "lucide-react";
 import { useState, useMemo, Suspense, useEffect } from "react";
@@ -12,13 +13,7 @@ import { useConnection } from "wagmi";
 import { useUserFavorites } from "@/hooks/user";
 import { NFTCard } from "@/components/marketplace/NFTCard";
 import { Pagination } from "@/components/ui";
-import { FilterSidebar, type SortOption } from "@/components/marketplace/FilterSidebar";
-
-
-
-
-
-
+import { FilterSidebar } from "@/components/marketplace/FilterSidebar";
 
 const PAGE_SIZE = 8;
 
@@ -26,20 +21,24 @@ function ExploreContent() {
   const searchParams = useSearchParams();
   const { address } = useConnection();
   const { collections, isLoading: isLoadingCollections } = useCollections();
-  const [selectedCollection, setSelectedCollection] = useState<string>("");
-  const [search, setSearch] = useState(searchParams.get("q") ?? "");
-  const [sort, setSort] = useState<SortOption>("default");
-  const [onlyListed, setOnlyListed] = useState(false);
-  const [onlyFavorites, setOnlyFavorites] = useState(false);
-  const [page, setPage] = useState(1);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
-  // Only favorites remain client-side (impacts pagination logic).
-  const hasClientFilters = onlyFavorites;
-
-  // Any filter or sort active (impacts UI elements like "Clear Filters").
-  const hasActiveFilters =
-    search !== "" || sort !== "default" || onlyListed || onlyFavorites || selectedCollection !== "";
+  const {
+    selectedCollection,
+    search,
+    sort,
+    onlyListed,
+    onlyFavorites,
+    page,
+    setSelectedCollection,
+    setSearch,
+    setSort,
+    setOnlyListed,
+    setOnlyFavorites,
+    setPage,
+    clearFilters,
+    hasActiveFilters,
+  } = useExploreFilters(searchParams.get("q") ?? "");
 
   const {
     nfts,
@@ -63,6 +62,7 @@ function ExploreContent() {
       ),
     [favorites],
   );
+
   const isLoading = isLoadingCollections || isLoadingNFTs;
 
   useEffect(() => {
@@ -74,27 +74,16 @@ function ExploreContent() {
   }, [refetchExploreNfts]);
 
   const isFavoritesEmpty = onlyFavorites && favoriteSet.size === 0;
+  const hasClientFilters = onlyFavorites;
 
-  // now handled server-side.
   const displayedNFTs = useMemo(() => {
-    // Only favorites filter remains client-side because it depends on local state/address
     if (onlyFavorites) {
-      return nfts.filter((nft) => {
-        const key = `${nft.nftContract.toLowerCase()}-${nft.tokenId}`;
-        return favoriteSet.has(key);
-      });
+      return nfts.filter((nft) =>
+        favoriteSet.has(`${nft.nftContract.toLowerCase()}-${nft.tokenId}`),
+      );
     }
     return nfts;
   }, [nfts, onlyFavorites, favoriteSet]);
-
-  const totalFilteredPages = undefined;
-
-  const clearFilters = () => {
-    setSearch("");
-    setSort("default");
-    setOnlyListed(false);
-    setPage(1);
-  };
 
   return (
     <main className="min-h-screen bg-background text-on-surface">
@@ -143,19 +132,13 @@ function ExploreContent() {
               <input
                 type="text"
                 value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name or ID..."
                 className="bg-surface-container-lowest border border-outline-variant/15 rounded-sm py-3 pl-12 pr-4 w-full focus:outline-none focus:border-primary transition-all text-sm text-on-surface placeholder:text-on-surface-variant/50"
               />
               {search && (
                 <button
-                  onClick={() => {
-                    setSearch("");
-                    setPage(1);
-                  }}
+                  onClick={() => setSearch("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
                 >
                   <X size={14} />
@@ -177,14 +160,12 @@ function ExploreContent() {
               )}
             </button>
             <button
-              onClick={() => {
-                setOnlyListed((v) => !v);
-                setPage(1);
-              }}
-              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${onlyListed
+              onClick={() => setOnlyListed(!onlyListed)}
+              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+                onlyListed
                   ? "bg-secondary-container text-on-secondary-container border-secondary/20"
                   : "bg-surface-container text-on-surface-variant border-outline-variant/15"
-                }`}
+              }`}
             >
               Buy Now
             </button>
@@ -217,13 +198,8 @@ function ExploreContent() {
             </div>
           ) : collections.length === 0 ? (
             <div className="text-center py-24 border border-dashed border-outline-variant/20">
-              <Layers
-                size={48}
-                className="mx-auto mb-4 text-on-surface-variant/30"
-              />
-              <h2 className="font-headline text-xl font-bold mb-2">
-                No collections yet
-              </h2>
+              <Layers size={48} className="mx-auto mb-4 text-on-surface-variant/30" />
+              <h2 className="font-headline text-xl font-bold mb-2">No collections yet</h2>
               <p className="mb-6 text-sm text-on-surface-variant">
                 Create a collection to start minting NFTs.
               </p>
@@ -249,22 +225,15 @@ function ExploreContent() {
           ) : isFavoritesEmpty ? (
             <div className="text-center py-20 border border-dashed border-outline-variant/20">
               <Heart size={40} className="mx-auto mb-4 text-error/70" />
-              <h3 className="font-headline text-lg font-bold mb-2">
-                No favorites yet
-              </h3>
+              <h3 className="font-headline text-lg font-bold mb-2">No favorites yet</h3>
               <p className="mb-6 text-sm text-on-surface-variant">
                 Favorite an item by clicking the heart to see it here.
               </p>
             </div>
           ) : displayedNFTs.length === 0 ? (
             <div className="text-center py-20 border border-dashed border-outline-variant/20">
-              <Search
-                size={40}
-                className="mx-auto mb-4 text-on-surface-variant/30"
-              />
-              <h3 className="font-headline text-lg font-bold mb-2">
-                No results found
-              </h3>
+              <Search size={40} className="mx-auto mb-4 text-on-surface-variant/30" />
+              <h3 className="font-headline text-lg font-bold mb-2">No results found</h3>
               <p className="mb-6 text-sm text-on-surface-variant">
                 Try adjusting your search or filters.
               </p>
@@ -292,7 +261,7 @@ function ExploreContent() {
             page={page}
             setPage={setPage}
             hasActiveFilters={hasClientFilters}
-            totalFilteredPages={totalFilteredPages}
+            totalFilteredPages={undefined}
             hasMore={hasMore}
           />
         </section>
