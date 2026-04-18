@@ -65,7 +65,8 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
 
   // Owner is always fetched via RPC (not indexed in subgraph)
   const { data: owner } = useReadContract({
-    ...base,
+    address: rpcAddress,
+    abi: NFT_COLLECTION_ABI,
     functionName: "owner",
     query: { enabled },
   });

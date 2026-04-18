@@ -9,7 +9,8 @@
     "lint": "eslint src --max-warnings 0",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:ci": "vitest run --coverage --reporter=dot --reporter=junit --outputFile=./reports/junit.xml"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -45,6 +46,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.4",
     "@vitest/ui": "^4.1.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.0",
