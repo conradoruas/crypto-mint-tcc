@@ -10,29 +10,37 @@ export function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+const MINUTE = 60;
+const HOUR = 3600;
+const DAY = 86400;
+
 /**
  * Formats a Unix timestamp as a human-readable relative time string.
- * e.g. "42s ago", "5m ago", "3h ago", "2d ago"
+ *
+ * @param suffix - When true (default), appends " ago". Set to false for
+ *                 compact contexts like notification dropdowns.
+ *
+ * @example
+ * formatTimeAgo(ts)               // "5m ago"
+ * formatTimeAgo(ts, { suffix: false }) // "5m"
  */
-export function formatTimeAgo(ts?: number): string {
+export function formatTimeAgo(ts?: number, { suffix = true }: { suffix?: boolean } = {}): string {
   if (!ts) return "—";
   const diff = Math.floor(Date.now() / 1000) - ts;
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+  let label: string;
+  if (diff < MINUTE) label = `${diff}s`;
+  else if (diff < HOUR) label = `${Math.floor(diff / MINUTE)}m`;
+  else if (diff < DAY) label = `${Math.floor(diff / HOUR)}h`;
+  else label = `${Math.floor(diff / DAY)}d`;
+  return suffix ? `${label} ago` : label;
 }
 
 /**
- * Compact variant — no "ago" suffix, no seconds unit.
+ * Compact variant of {@link formatTimeAgo} — no "ago" suffix, no seconds unit.
  * Used in space-constrained contexts like the bell dropdown.
- * e.g. "5m", "3h", "2d"
+ *
+ * @deprecated Pass `{ suffix: false }` to `formatTimeAgo` instead.
  */
 export function formatTimeShort(ts?: number): string {
-  if (!ts) return "—";
-  const diff = Math.floor(Date.now() / 1000) - ts;
-  if (diff < 60) return `${diff}s`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  return `${Math.floor(diff / 86400)}d`;
+  return formatTimeAgo(ts, { suffix: false });
 }

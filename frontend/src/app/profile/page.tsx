@@ -28,7 +28,9 @@ import { useActivityFeed } from "@/hooks/activity";
 import { usePaginationState } from "@/hooks/usePaginationState";
 import { getEventConfig } from "@/lib/eventConfig";
 import Footer from "@/components/Footer";
-import { fetchAlchemyMetaForEvents, type MetaMap } from "@/lib/alchemyMeta";
+import { fetchBatchNFTMetadataForEvents as fetchAlchemyMetaForEvents } from "@/lib/nftMetadata";
+import { NFTCardSkeleton } from "@/components/ui";
+import type { MetaMap } from "@/types/alchemy";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { shortAddr, formatTimeAgo } from "@/lib/utils";
 
@@ -655,7 +657,7 @@ export default function ProfilePage() {
                     key={i}
                     className="bg-surface-container-low rounded-sm overflow-hidden border border-outline-variant/5"
                   >
-                    <div className="aspect-square animate-pulse bg-surface-container-high" />
+                    <NFTCardSkeleton />
                     <div className="p-5 space-y-3">
                       <div className="h-3 rounded-sm animate-pulse w-1/2 bg-surface-container-high" />
                       <div className="h-4 rounded-sm animate-pulse w-3/4 bg-surface-container-high" />
@@ -781,7 +783,7 @@ export default function ProfilePage() {
                     key={i}
                     className="bg-surface-container-low rounded-sm overflow-hidden border border-outline-variant/5"
                   >
-                    <div className="aspect-square animate-pulse bg-surface-container-high" />
+                    <NFTCardSkeleton />
                     <div className="p-5 space-y-3">
                       <div className="h-3 rounded-sm animate-pulse w-1/2 bg-surface-container-high" />
                       <div className="h-4 rounded-sm animate-pulse w-3/4 bg-surface-container-high" />
@@ -916,7 +918,7 @@ export default function ProfilePage() {
                     key={i}
                     className="bg-surface-container-low rounded-sm overflow-hidden border border-outline-variant/5"
                   >
-                    <div className="aspect-square animate-pulse bg-surface-container-high" />
+                    <NFTCardSkeleton />
                     <div className="p-5 space-y-3">
                       <div className="h-3 rounded-sm animate-pulse w-1/2 bg-surface-container-high" />
                       <div className="h-4 rounded-sm animate-pulse w-3/4 bg-surface-container-high" />
