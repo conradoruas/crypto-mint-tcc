@@ -3,26 +3,29 @@ import Link from "next/link";
 const Footer = () => {
   return (
     <footer className="w-full border-t border-outline-variant/15 mt-20 bg-background">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-12 py-16 w-full max-w-[1920px] mx-auto">
-        <div>
-          <span className="text-lg font-black text-on-surface font-headline lowercase tracking-tighter mb-4 block">
-            crypto.mint
-          </span>
-          <p className="text-on-surface-variant text-sm max-w-sm mb-8 leading-relaxed">
-            The premier destination for high-fidelity synthetic assets and
-            digital artifacts. Engineered for the future of value.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-8">
+      <div className="max-w-[1920px] mx-auto px-6 sm:px-10 lg:px-16 py-12 sm:py-16">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-10">
+          {/* Brand */}
+          <div className="max-w-xs">
+            <span className="text-lg font-black text-on-surface font-headline uppercase tracking-tighter mb-3 block">
+              CryptoMint
+            </span>
+            <p className="text-on-surface-variant text-sm leading-relaxed">
+              The premier destination for high-fidelity synthetic assets and
+              digital artifacts. Engineered for the future of value.
+            </p>
+          </div>
+
+          {/* Links */}
           <div>
-            <h4 className="text-primary-container text-[10px] font-bold uppercase tracking-[0.3em] mb-6">
+            <h4 className="text-primary-container text-[10px] font-bold uppercase tracking-[0.3em] mb-5">
               Platform
             </h4>
             <ul className="space-y-3">
               <li>
                 <Link
                   href="/explore"
-                  className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider"
+                  className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider transition-colors"
                 >
                   Explore
                 </Link>
@@ -30,7 +33,7 @@ const Footer = () => {
               <li>
                 <Link
                   href="/collections"
-                  className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider"
+                  className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider transition-colors"
                 >
                   Collections
                 </Link>
@@ -38,49 +41,19 @@ const Footer = () => {
               <li>
                 <Link
                   href="/mint"
-                  className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider"
+                  className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider transition-colors"
                 >
                   Mint
                 </Link>
               </li>
             </ul>
           </div>
-          <div>
-            <h4 className="text-primary-container text-[10px] font-bold uppercase tracking-[0.3em] mb-6">
-              Security
-            </h4>
-            <ul className="space-y-3">
-              <li>
-                <a
-                  href="#"
-                  className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider"
-                >
-                  Terms of Service
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#"
-                  className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider"
-                >
-                  Privacy Policy
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#"
-                  className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider"
-                >
-                  Audit
-                </a>
-              </li>
-            </ul>
-          </div>
         </div>
       </div>
-      <div className="border-t border-outline-variant/5 py-8 text-center">
+
+      <div className="border-t border-outline-variant/5 py-6 text-center px-6">
         <p className="text-on-surface-variant text-[10px] uppercase tracking-[0.5em]">
-          © 2026 CryptoMint. SYNTHETIC ASSETS RESERVED.
+          © 2026 CryptoMint. Synthetic Assets Reserved.
         </p>
       </div>
     </footer>
