@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNowBucketed } from "../useNowBucketed";
 import {
   GET_ALL_NFTS,
@@ -41,72 +42,60 @@ type GqlNFT = {
 };
 type GqlNFTsData = { nfts: GqlNFT[] };
 
-// ─── IPFS metadata resolution (replaces Alchemy cascade) ───
+// ─── IPFS metadata resolution ───────────────────────────────────────────────
 
 type IpfsMeta = { name: string; description: string; image: string };
 
-/**
- * Simple LRU cache keyed by tokenUri — metadata is immutable once pinned.
- * Capped at 500 entries to prevent unbounded memory growth on long sessions.
- */
-const LRU_MAX = 500;
-const ipfsMetaCache = new Map<string, IpfsMeta>();
+const IPFS_FETCH_TIMEOUT_MS = 5_000;
 
-function lruGet(key: string): IpfsMeta | undefined {
-  const val = ipfsMetaCache.get(key);
-  if (val !== undefined) {
-    // Move to end (most recently used)
-    ipfsMetaCache.delete(key);
-    ipfsMetaCache.set(key, val);
-  }
-  return val;
-}
-
-function lruSet(key: string, val: IpfsMeta): void {
-  if (ipfsMetaCache.has(key)) ipfsMetaCache.delete(key);
-  ipfsMetaCache.set(key, val);
-  if (ipfsMetaCache.size > LRU_MAX) {
-    // Delete oldest (first) entry
-    const oldest = ipfsMetaCache.keys().next().value;
-    if (oldest !== undefined) ipfsMetaCache.delete(oldest);
-  }
-}
-
-async function resolveTokenMeta(tokenUri: string): Promise<IpfsMeta | null> {
+async function fetchTokenMeta(tokenUri: string): Promise<IpfsMeta | null> {
   if (!tokenUri) return null;
 
-  const cached = lruGet(tokenUri);
-  if (cached) return cached;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), IPFS_FETCH_TIMEOUT_MS);
 
   try {
-    const res = await fetch(resolveIpfsUrl(tokenUri));
+    const res = await fetch(resolveIpfsUrl(tokenUri), {
+      signal: controller.signal,
+    });
     const json = await res.json();
-    const meta: IpfsMeta = {
+    return {
       name: json.name ?? "",
       description: json.description ?? "",
       image: resolveIpfsUrl(json.image ?? ""),
     };
-    lruSet(tokenUri, meta);
-    return meta;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
+// TanStack QueryClient is used for IPFS metadata caching — content-addressed
+// URIs never change, so staleTime: Infinity is safe and eliminates the need
+// for a hand-rolled LRU cache.
+const IPFS_QUERY_KEY = (uri: string) => ["ipfs-meta", uri] as const;
+const IPFS_STALE_TIME = Infinity;
+
 /**
  * Resolve metadata for a batch of NFTs directly from their tokenUri (IPFS).
- *
- * Previously this called the Alchemy `/getNFTsForContract` endpoint per
- * contract, creating a waterfall: GraphQL → Alchemy HTTP → merge.  Since
- * the subgraph already provides `tokenUri`, we resolve IPFS in parallel,
- * with an in-memory cache so repeated renders are instant.
+ * Caching is delegated to TanStack QueryClient (staleTime: Infinity) since
+ * IPFS content is immutable once pinned — eliminates the hand-rolled LRU.
  */
 async function resolveNFTsMetadata(
   nfts: GqlNFT[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queryClient: { fetchQuery: (opts: any) => Promise<IpfsMeta | null> },
   collectionAddress?: string,
 ): Promise<NFTItemWithMarket[]> {
   const metaResults = await Promise.all(
-    nfts.map((nft) => resolveTokenMeta(nft.tokenUri ?? "")),
+    nfts.map((nft) =>
+      queryClient.fetchQuery({
+        queryKey: IPFS_QUERY_KEY(nft.tokenUri ?? ""),
+        queryFn: () => fetchTokenMeta(nft.tokenUri ?? ""),
+        staleTime: IPFS_STALE_TIME,
+      }),
+    ),
   );
 
   return nfts.map((nft, i) => {
@@ -143,6 +132,7 @@ export function useExploreNFTs(
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
+  const queryClient = useQueryClient();
 
   const skip = (page - 1) * pageSize;
 
@@ -184,7 +174,7 @@ export function useExploreNFTs(
         setIsLoading(true);
         setHasMore(raw.length === pageSize);
       }
-      const items = await resolveNFTsMetadata(raw, collectionAddress);
+      const items = await resolveNFTsMetadata(raw, queryClient, collectionAddress);
       if (!cancelled) {
         setNfts(items);
         setIsLoading(false);
@@ -194,7 +184,7 @@ export function useExploreNFTs(
     return () => {
       cancelled = true;
     };
-  }, [gqlData, gqlQueryLoading, collectionAddress, pageSize]);
+  }, [gqlData, gqlQueryLoading, collectionAddress, pageSize, queryClient]);
 
   const refetch = useCallback(() => refetchGql(), [refetchGql]);
 
@@ -216,6 +206,7 @@ export function useExploreAllNFTs(
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
+  const queryClient = useQueryClient();
 
   const skip = (page - 1) * pageSize;
 
@@ -311,7 +302,7 @@ export function useExploreAllNFTs(
         setIsLoading(true);
         setHasMore(hasNextPage);
       }
-      const items = await resolveNFTsMetadata(raw, collectionAddress);
+      const items = await resolveNFTsMetadata(raw, queryClient, collectionAddress);
       const sorted =
         sort === "offer_desc"
           ? items
@@ -331,7 +322,7 @@ export function useExploreAllNFTs(
     return () => {
       cancelled = true;
     };
-  }, [gqlData, gqlLoading, collectionAddress, pageSize, sort]);
+  }, [gqlData, gqlLoading, collectionAddress, pageSize, sort, queryClient]);
 
   const refetch = useCallback(async () => {
     await refetchNfts();
