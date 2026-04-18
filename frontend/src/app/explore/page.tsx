@@ -12,7 +12,7 @@ import Footer from "@/components/Footer";
 import { useConnection } from "wagmi";
 import { useUserFavorites } from "@/hooks/user";
 import { NFTCard } from "@/components/marketplace/NFTCard";
-import { Pagination } from "@/components/ui";
+import { Pagination, NFTCardSkeleton } from "@/components/ui";
 import { FilterSidebar } from "@/components/marketplace/FilterSidebar";
 
 const PAGE_SIZE = 8;
@@ -187,7 +187,7 @@ function ExploreContent() {
                   key={i}
                   className="bg-surface-container-low rounded-sm overflow-hidden border border-outline-variant/5"
                 >
-                  <div className="aspect-square animate-pulse bg-surface-container-high" />
+                  <NFTCardSkeleton />
                   <div className="p-5 space-y-3">
                     <div className="h-3 rounded-sm animate-pulse w-1/2 bg-surface-container-high" />
                     <div className="h-4 rounded-sm animate-pulse w-3/4 bg-surface-container-high" />

@@ -43,13 +43,14 @@ import { toast } from "sonner";
 import { PriceHistory } from "@/components/asset/PriceHistory";
 import { ListingPanel } from "@/components/asset/ListingPanel";
 import { OfferPanel } from "@/components/asset/OfferPanel";
+import { NFTCardSkeleton } from "@/components/ui";
 
 function LoadingSkeleton() {
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-4 sm:px-8 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
-        <div className="aspect-square animate-pulse bg-surface-container-high rounded-sm" />
+        <NFTCardSkeleton rounded />
         <div className="flex flex-col justify-center space-y-4 pt-4">
           <div className="h-3 rounded-sm animate-pulse w-1/4 bg-surface-container-high" />
           <div className="h-10 rounded-sm animate-pulse w-2/3 bg-surface-container-high" />

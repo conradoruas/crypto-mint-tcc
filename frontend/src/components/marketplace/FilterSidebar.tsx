@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect } from "react";
 import { X } from "lucide-react";
 import type { CollectionInfo } from "@/types/collection";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 export type SortOption =
   | "default"
@@ -197,15 +197,7 @@ function FilterContent({
 export function FilterSidebar(props: FilterSidebarProps) {
   const { mobileOpen, onMobileClose } = props;
 
-  // Prevent body scroll when mobile drawer is open
-  useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => { document.body.style.overflow = ""; };
-  }, [mobileOpen]);
+  useBodyScrollLock(mobileOpen ?? false);
 
   return (
     <>
