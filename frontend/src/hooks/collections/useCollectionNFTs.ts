@@ -1,38 +1,28 @@
 "use client";
+import { SUBGRAPH_ENABLED } from "@/lib/env";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CollectionNFTItem } from "@/types/nft";
-import { resolveIpfsUrl } from "@/lib/ipfs";
+import { fetchIpfsJson, resolveIpfsUrl } from "@/lib/ipfs";
 import { logger } from "@/lib/logger";
 import type { AlchemyNFT } from "@/types/alchemy";
 import { apolloClient } from "@/lib/apolloClient";
 import { GET_COLLECTION_WITH_NFTS } from "@/lib/graphql/queries";
 
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 const PAGE_SIZE = 20;
 
 // ─── IPFS metadata resolution ───
 
 type IpfsMeta = { name: string; description: string; image: string };
-const ipfsMetaCache = new Map<string, IpfsMeta>();
 
 async function resolveTokenMeta(tokenUri: string): Promise<IpfsMeta | null> {
-  if (!tokenUri) return null;
-  const cached = ipfsMetaCache.get(tokenUri);
-  if (cached) return cached;
-  try {
-    const res = await fetch(resolveIpfsUrl(tokenUri));
-    const json = await res.json();
-    const meta: IpfsMeta = {
-      name: json.name ?? "",
-      description: json.description ?? "",
-      image: resolveIpfsUrl(json.image ?? ""),
-    };
-    ipfsMetaCache.set(tokenUri, meta);
-    return meta;
-  } catch {
-    return null;
-  }
+  const json = await fetchIpfsJson<{ name?: string; description?: string; image?: string }>(tokenUri);
+  if (!json) return null;
+  return {
+    name: json.name ?? "",
+    description: json.description ?? "",
+    image: resolveIpfsUrl(json.image ?? ""),
+  };
 }
 
 // ─── Subgraph fetch ───
@@ -105,13 +95,8 @@ async function fetchAlchemyPage(
     (data.nfts ?? []).map(async (nft: AlchemyNFT) => {
       let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
       if (!image && nft.tokenUri) {
-        try {
-          const metaRes = await fetch(resolveIpfsUrl(nft.tokenUri));
-          const meta = await metaRes.json();
-          image = resolveIpfsUrl(meta.image ?? "");
-        } catch {
-          image = "";
-        }
+        const meta = await fetchIpfsJson<{ image?: string }>(nft.tokenUri);
+        image = resolveIpfsUrl(meta?.image ?? "");
       }
       return {
         tokenId: nft.tokenId,

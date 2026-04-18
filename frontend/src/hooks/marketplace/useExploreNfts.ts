@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useNowBucketed } from "../useNowBucketed";
 import {
   GET_ALL_NFTS,
   GET_NFTS_FOR_CONTRACT,
 } from "@/lib/graphql/queries";
-import { resolveIpfsUrl } from "@/lib/ipfs";
+import { fetchIpfsJson, resolveIpfsUrl } from "@/lib/ipfs";
 import type { NFTItemWithMarket } from "@/types/nft";
 
 export type { NFTItemWithMarket };
@@ -46,29 +46,14 @@ type GqlNFTsData = { nfts: GqlNFT[] };
 
 type IpfsMeta = { name: string; description: string; image: string };
 
-const IPFS_FETCH_TIMEOUT_MS = 5_000;
-
 async function fetchTokenMeta(tokenUri: string): Promise<IpfsMeta | null> {
-  if (!tokenUri) return null;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), IPFS_FETCH_TIMEOUT_MS);
-
-  try {
-    const res = await fetch(resolveIpfsUrl(tokenUri), {
-      signal: controller.signal,
-    });
-    const json = await res.json();
-    return {
-      name: json.name ?? "",
-      description: json.description ?? "",
-      image: resolveIpfsUrl(json.image ?? ""),
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  const json = await fetchIpfsJson<{ name?: string; description?: string; image?: string }>(tokenUri);
+  if (!json) return null;
+  return {
+    name: json.name ?? "",
+    description: json.description ?? "",
+    image: resolveIpfsUrl(json.image ?? ""),
+  };
 }
 
 // TanStack QueryClient is used for IPFS metadata caching — content-addressed
@@ -84,8 +69,7 @@ const IPFS_STALE_TIME = Infinity;
  */
 async function resolveNFTsMetadata(
   nfts: GqlNFT[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  queryClient: { fetchQuery: (opts: any) => Promise<IpfsMeta | null> },
+    queryClient: QueryClient,
   collectionAddress?: string,
 ): Promise<NFTItemWithMarket[]> {
   const metaResults = await Promise.all(

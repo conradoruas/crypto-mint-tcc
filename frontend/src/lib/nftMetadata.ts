@@ -6,7 +6,7 @@
  * This module consolidates all Alchemy metadata fetching into one place.
  */
 
-import { resolveIpfsUrl } from "@/lib/ipfs";
+import { fetchIpfsJson, resolveIpfsUrl } from "@/lib/ipfs";
 import type { AlchemyNFT, NFTMeta, MetaMap } from "@/types/alchemy";
 
 export type { NFTMeta, MetaMap };
@@ -39,13 +39,8 @@ export async function fetchContractNFTMetadata(
     for (const nft of data.nfts ?? []) {
       let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
       if (!image && nft.tokenUri) {
-        try {
-          const metaRes = await fetch(resolveIpfsUrl(nft.tokenUri));
-          const meta = await metaRes.json();
-          image = resolveIpfsUrl(meta.image ?? "");
-        } catch {
-          image = "";
-        }
+        const meta = await fetchIpfsJson<{ image?: string }>(nft.tokenUri);
+        image = resolveIpfsUrl(meta?.image ?? "");
       }
       map.set(nft.tokenId, {
         name: nft.name ?? `NFT #${nft.tokenId}`,

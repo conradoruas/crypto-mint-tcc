@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCollections } from "./useCollections";
 import { useCreatorCollections } from "./useCollections";
 import { useStableArray } from "../useStableArray";
-import { resolveIpfsUrl } from "@/lib/ipfs";
+import { fetchIpfsJson, resolveIpfsUrl } from "@/lib/ipfs";
 import { logger } from "@/lib/logger";
 import type { CollectionNFTItem, CreatedNFTItem } from "@/types/nft";
 import type { AlchemyNFT } from "@/types/alchemy";
@@ -41,13 +41,8 @@ export function useProfileNFTs(
         (data.ownedNfts ?? []).map(async (nft: AlchemyNFT) => {
           let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
           if (!image && nft.tokenUri) {
-            try {
-              const metaRes = await fetch(resolveIpfsUrl(nft.tokenUri), { signal });
-              const meta = await metaRes.json();
-              image = resolveIpfsUrl(meta.image ?? "");
-            } catch {
-              image = "";
-            }
+            const meta = await fetchIpfsJson<{ image?: string }>(nft.tokenUri, { signal });
+            image = resolveIpfsUrl(meta?.image ?? "");
           }
           return {
             tokenId: nft.tokenId,
