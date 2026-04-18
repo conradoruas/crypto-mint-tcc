@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useCallback, type ChangeEvent } from "react";
+import { useEffect, useCallback, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   useConnection,
@@ -22,6 +22,8 @@ import {
   Image as ImageIcon,
   CheckCircle,
   Layers,
+  ShieldCheck,
+  Download,
 } from "lucide-react";
 import { useCreateCollection } from "@/hooks/collections";
 import {
@@ -30,23 +32,15 @@ import {
   NFT_COLLECTION_FACTORY_ABI,
 } from "@/constants/contracts";
 import Footer from "@/components/Footer";
-import {
-  createCollectionSchema,
-  getZodErrors,
-  type CreateCollectionErrors,
-} from "@/lib/schemas";
+import { createCollectionSchema, getZodErrors } from "@/lib/schemas";
+import type { CreateCollectionErrors } from "@/lib/schemas";
+import { keccak256 } from "viem";
 import { formatTransactionError } from "@/lib/txErrors";
 import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
 import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
 import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
-
-interface NFTDraft {
-  id: number;
-  name: string;
-  description: string;
-  file: File | null;
-  previewUrl: string;
-}
+import pLimit from "p-limit";
+import { useCollectionForm, type NFTDraft } from "./useCollectionForm";
 
 interface BulkMetadataItem {
   name?: string;
@@ -129,42 +123,27 @@ export default function CreateCollectionPage() {
     [getAuthHeaders],
   );
 
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverPreview, setCoverPreview] = useState<string>("");
-  const [name, setName] = useState("");
-  const [symbol, setSymbol] = useState("");
-  const [description, setDescription] = useState("");
-  const [mintPrice, setMintPrice] = useState("0.0001");
-  const [nfts, setNfts] = useState<NFTDraft[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [form, dispatch] = useCollectionForm();
+  const {
+    coverFile, coverPreview, name, symbol, description, mintPrice,
+    nfts, currentPage,
+    isUploadingCover, isUploadingNFTs, isBulkProcessing, uploadProgress,
+    bulkMetadataFile, bulkImageFiles, bulkMetadataName, bulkImageNames,
+    error, bulkParsingError, fieldErrors, hasMounted,
+  } = form;
+
   const NFTs_PER_PAGE = 10;
   const totalPages = Math.max(1, Math.ceil(nfts.length / NFTs_PER_PAGE));
   const pagedNFTs = nfts.slice(
     (currentPage - 1) * NFTs_PER_PAGE,
     currentPage * NFTs_PER_PAGE,
   );
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
-  const [isUploadingNFTs, setIsUploadingNFTs] = useState(false);
-  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
-  const [bulkMetadataFile, setBulkMetadataFile] = useState<File | null>(null);
-  const [bulkImageFiles, setBulkImageFiles] = useState<File[]>([]);
-  const [bulkMetadataName, setBulkMetadataName] = useState<string>("");
-  const [bulkImageNames, setBulkImageNames] = useState<string[]>([]);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [bulkParsingError, setBulkParsingError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<CreateCollectionErrors>({});
-  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => { dispatch({ type: "MOUNTED" }); }, [dispatch]);
 
   useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
+    if (currentPage > totalPages) dispatch({ type: "SET_PAGE", page: totalPages });
+  }, [currentPage, totalPages, dispatch]);
 
   const {
     createCollection,
@@ -174,10 +153,17 @@ export default function CreateCollectionPage() {
     hash: createHash,
   } = useCreateCollection();
 
-  const { mutateAsync, isPending: isLoadingURIs } = useWriteContract();
+  const { mutateAsync, isPending: isTxPending } = useWriteContract();
   const [loadURIsHash, setLoadURIsHash] = useState<`0x${string}` | undefined>();
   const { isLoading: isConfirmingLoad, isSuccess: urisLoaded } =
     useWaitForTransactionReceipt({ hash: loadURIsHash });
+
+  const [commitSeedHash, setCommitSeedHash] = useState<`0x${string}` | undefined>();
+  const { isLoading: isConfirmingSeed, isSuccess: seedCommitted } =
+    useWaitForTransactionReceipt({ hash: commitSeedHash });
+  const [generatedSeed, setGeneratedSeed] = useState<`0x${string}` | null>(null);
+  const [seedCopied, setSeedCopied] = useState(false);
+  const [isCommittingSeed, setIsCommittingSeed] = useState(false);
 
   const { data: creatorCollectionIds } = useReadContract({
     address: FACTORY_ADDRESS,
@@ -205,65 +191,46 @@ export default function CreateCollectionPage() {
     (lastCollectionData as { contractAddress: `0x${string}` } | undefined)
       ?.contractAddress ?? null;
 
+  const isLoadingURIs = isTxPending;
   const isLoading =
     isUploadingCover ||
     isCreating ||
     isConfirmingCreate ||
     isUploadingNFTs ||
     isLoadingURIs ||
-    isConfirmingLoad;
+    isConfirmingLoad ||
+    isCommittingSeed ||
+    isConfirmingSeed;
 
-  const addNFT = () =>
-    setNfts((prev) => [
-      ...prev,
-      { id: Date.now(), name: "", description: "", file: null, previewUrl: "" },
-    ]);
+  const addNFT = () => dispatch({ type: "ADD_NFT" });
+  const removeNFT = (id: number) => dispatch({ type: "REMOVE_NFT", id });
+  const updateNFT = (id: number, field: keyof NFTDraft, value: string | File | null) =>
+    dispatch({ type: "UPDATE_NFT", id, field, value });
 
-  const removeNFT = (id: number) =>
-    setNfts((prev) => prev.filter((n) => n.id !== id));
-
-  const updateNFT = (
-    id: number,
-    field: keyof NFTDraft,
-    value: string | File | null,
-  ) =>
-    setNfts((prev) =>
-      prev.map((n) => {
-        if (n.id !== id) return n;
-        if (field === "file" && value instanceof File)
-          return { ...n, file: value, previewUrl: URL.createObjectURL(value) };
-        return { ...n, [field]: value };
-      }),
-    );
-
-  const handleBulkMetadataFileChange = (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleBulkMetadataFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
-    setBulkMetadataFile(file);
-    setBulkMetadataName(file?.name ?? "");
+    dispatch({ type: "SET_BULK_METADATA_FILE", file, name: file?.name ?? "" });
   };
 
   const handleBulkImageFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files ? Array.from(event.target.files) : [];
-    setBulkImageFiles(files);
-    setBulkImageNames(files.map((f) => f.name));
+    dispatch({ type: "SET_BULK_IMAGE_FILES", files, names: files.map((f) => f.name) });
   };
 
   const handleParseBulkNFTs = async () => {
-    setError(null);
-    setBulkParsingError(null);
+    dispatch({ type: "SET_ERROR", error: null });
+    dispatch({ type: "SET_BULK_PARSING_ERROR", error: null });
 
     if (!bulkMetadataFile) {
-      setError("Please select a metadata JSON file.");
+      dispatch({ type: "SET_ERROR", error: "Please select a metadata JSON file." });
       return;
     }
     if (bulkImageFiles.length === 0) {
-      setError("Please select matching image files for bulk import.");
+      dispatch({ type: "SET_ERROR", error: "Please select matching image files for bulk import." });
       return;
     }
 
-    setIsBulkProcessing(true);
+    dispatch({ type: "SET_BULK_PROCESSING", value: true });
     try {
       const text = await bulkMetadataFile.text();
       const json = JSON.parse(text);
@@ -271,13 +238,13 @@ export default function CreateCollectionPage() {
         throw new Error("Bulk metadata must be an array of objects.");
       }
 
-      const parsedNFTs: NFTDraft[] = json.map(
+      const parsedNFTs = json.map(
         (item: BulkMetadataItem, idx: number) => {
-          const name = String(item.name ?? "").trim();
-          const description = String(item.description ?? "").trim();
+          const nftName = String(item.name ?? "").trim();
+          const nftDescription = String(item.description ?? "").trim();
           const imageName = String(item.image ?? "").trim();
 
-          if (!name || !imageName) {
+          if (!nftName || !imageName) {
             throw new Error(
               `Entry ${idx + 1} must contain 'name' and 'image' fields.`,
             );
@@ -297,55 +264,54 @@ export default function CreateCollectionPage() {
 
           return {
             id: Date.now() + idx,
-            name,
-            description,
+            name: nftName,
+            description: nftDescription,
             file: imageFile,
             previewUrl: URL.createObjectURL(imageFile),
           };
         },
       );
 
-      setNfts(parsedNFTs);
-      setError(null);
+      dispatch({ type: "SET_NFTS", nfts: parsedNFTs });
+      dispatch({ type: "SET_ERROR", error: null });
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Failed to parse bulk metadata.";
-      setBulkParsingError(message);
+      const message = e instanceof Error ? e.message : "Failed to parse bulk metadata.";
+      dispatch({ type: "SET_BULK_PARSING_ERROR", error: message });
     } finally {
-      setIsBulkProcessing(false);
+      dispatch({ type: "SET_BULK_PROCESSING", value: false });
     }
   };
 
   const handleCreateCollection = async () => {
-    setError(null);
+    dispatch({ type: "SET_ERROR", error: null });
     const errors = getZodErrors(createCollectionSchema, {
       name,
       symbol,
       description: description || undefined,
       mintPrice,
     }) as CreateCollectionErrors;
-    setFieldErrors(errors);
+    dispatch({ type: "SET_FIELD_ERRORS", errors });
     if (Object.keys(errors).length > 0) return;
     if (!coverFile) {
-      setError("Select a cover image.");
+      dispatch({ type: "SET_ERROR", error: "Select a cover image." });
       return;
     }
     if (!isConnected) {
-      setError("Connect your wallet.");
+      dispatch({ type: "SET_ERROR", error: "Connect your wallet." });
       return;
     }
     if (nfts.length === 0) {
-      setError("Add at least 1 NFT to the collection.");
+      dispatch({ type: "SET_ERROR", error: "Add at least 1 NFT to the collection." });
       return;
     }
     if (nfts.some((n) => !n.name || !n.file)) {
-      setError("All NFTs need a name and image.");
+      dispatch({ type: "SET_ERROR", error: "All NFTs need a name and image." });
       return;
     }
     try {
-      setIsUploadingCover(true);
+      dispatch({ type: "SET_UPLOADING_COVER", value: true });
       const coverUri = await uploadImage(coverFile);
-      setIsUploadingCover(false);
+      dispatch({ type: "SET_UPLOADING_COVER", value: false });
       await createCollection({
         name,
         symbol: symbol.toUpperCase(),
@@ -355,47 +321,40 @@ export default function CreateCollectionPage() {
         mintPrice,
       });
     } catch (e) {
-      setError(
-        formatTransactionError(
-          e,
-          "Could not create collection. Check uploads and try again.",
-        ),
-      );
-      setIsUploadingCover(false);
+      dispatch({
+        type: "SET_ERROR",
+        error: formatTransactionError(e, "Could not create collection. Check uploads and try again."),
+      });
+      dispatch({ type: "SET_UPLOADING_COVER", value: false });
     }
   };
 
   const handleLoadURIs = async (addr: `0x${string}`) => {
-    setError(null);
+    dispatch({ type: "SET_ERROR", error: null });
     try {
-      setIsUploadingNFTs(true);
-      const uris: string[] = [];
-      for (let i = 0; i < nfts.length; i++) {
-        setUploadProgress(Math.round((i / nfts.length) * 90));
-        const nft = nfts[i];
-        const imageUri = await uploadImage(nft.file!);
-        const metaUri = await uploadMetadata(
-          nft.name,
-          nft.description,
-          imageUri,
-        );
-        uris.push(metaUri);
-      }
-      setUploadProgress(95);
-      setIsUploadingNFTs(false);
-      if (!address || !publicClient) {
-        throw new Error("Connect your wallet.");
-      }
+      dispatch({ type: "SET_UPLOADING_NFTS", value: true });
+      const limit = pLimit(5);
+      let completed = 0;
+      const uris: string[] = await Promise.all(
+        nfts.map((nft, _i) =>
+          limit(async () => {
+            const imageUri = await uploadImage(nft.file!);
+            const metaUri = await uploadMetadata(nft.name, nft.description, imageUri);
+            completed++;
+            dispatch({ type: "SET_UPLOAD_PROGRESS", value: Math.round((completed / nfts.length) * 90) });
+            return metaUri;
+          }),
+        ),
+      );
+      dispatch({ type: "SET_UPLOAD_PROGRESS", value: 95 });
+      dispatch({ type: "SET_UPLOADING_NFTS", value: false });
+      if (!address || !publicClient) throw new Error("Connect your wallet.");
+      if (uris.length === 0) throw new Error("No NFT metadata URIs to load.");
 
       const CHUNK_LOAD_SIZE = 200;
       let lastTxHash: `0x${string}` | undefined;
 
-      if (uris.length === 0) {
-        throw new Error("No NFT metadata URIs to load.");
-      }
-
-      const shouldUseBatch = uris.length <= CHUNK_LOAD_SIZE;
-      if (shouldUseBatch) {
+      if (uris.length <= CHUNK_LOAD_SIZE) {
         const gas = await estimateContractGasWithBuffer(publicClient, {
           account: address,
           address: addr,
@@ -413,9 +372,10 @@ export default function CreateCollectionPage() {
       } else {
         for (let i = 0; i < uris.length; i += CHUNK_LOAD_SIZE) {
           const chunk = uris.slice(i, i + CHUNK_LOAD_SIZE);
-          setUploadProgress(
-            95 + Math.round(((i + chunk.length) / uris.length) * 5),
-          );
+          dispatch({
+            type: "SET_UPLOAD_PROGRESS",
+            value: 95 + Math.round(((i + chunk.length) / uris.length) * 5),
+          });
           const gas = await estimateContractGasWithBuffer(publicClient, {
             account: address,
             address: addr,
@@ -433,19 +393,74 @@ export default function CreateCollectionPage() {
         }
       }
 
-      if (lastTxHash) {
-        setLoadURIsHash(lastTxHash);
-      }
-      setUploadProgress(100);
+      if (lastTxHash) setLoadURIsHash(lastTxHash);
+      dispatch({ type: "SET_UPLOAD_PROGRESS", value: 100 });
     } catch (e) {
-      setError(
-        formatTransactionError(
-          e,
-          "Could not publish metadata on-chain. Try again.",
-        ),
-      );
-      setIsUploadingNFTs(false);
+      dispatch({
+        type: "SET_ERROR",
+        error: formatTransactionError(e, "Could not publish metadata on-chain. Try again."),
+      });
+      dispatch({ type: "SET_UPLOADING_NFTS", value: false });
     }
+  };
+
+  const handleCommitSeed = async (addr: `0x${string}`) => {
+    dispatch({ type: "SET_ERROR", error: null });
+    if (!address || !publicClient) {
+      dispatch({ type: "SET_ERROR", error: "Connect your wallet." });
+      return;
+    }
+    try {
+      setIsCommittingSeed(true);
+      const seedBytes = crypto.getRandomValues(new Uint8Array(32));
+      const seed = `0x${Array.from(seedBytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")}` as `0x${string}`;
+      const commitment = keccak256(seed);
+      setGeneratedSeed(seed);
+
+      const gas = await estimateContractGasWithBuffer(publicClient, {
+        account: address,
+        address: addr,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "commitMintSeed",
+        args: [commitment],
+      });
+      const hash = await mutateAsync({
+        address: addr,
+        abi: NFT_COLLECTION_ABI,
+        functionName: "commitMintSeed",
+        args: [commitment],
+        gas,
+      });
+      setCommitSeedHash(hash);
+    } catch (e) {
+      setGeneratedSeed(null);
+      dispatch({ type: "SET_ERROR", error: formatTransactionError(e, "Could not commit mint seed. Try again.") });
+    } finally {
+      setIsCommittingSeed(false);
+    }
+  };
+
+  const handleDownloadSeed = () => {
+    if (!generatedSeed) return;
+    const blob = new Blob(
+      [JSON.stringify({ seed: generatedSeed, commitment: keccak256(generatedSeed) }, null, 2)],
+      { type: "application/json" },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "mint-seed.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopySeed = async () => {
+    if (!generatedSeed) return;
+    await navigator.clipboard.writeText(generatedSeed);
+    setSeedCopied(true);
+    setTimeout(() => setSeedCopied(false), 2000);
   };
 
   // ── Render Logic ───────────────────────────────────────────────────────────
@@ -465,8 +480,8 @@ export default function CreateCollectionPage() {
     );
   }
 
-  // 2. Success screen
-  if (urisLoaded) {
+  // 2. All done — seed committed
+  if (seedCommitted) {
     return pageWrapper(
       <div className="max-w-lg mx-auto px-8 py-32 text-center">
         <div className="w-20 h-20 flex items-center justify-center mx-auto mb-6 bg-primary/5 border border-primary/20 rounded-sm">
@@ -478,18 +493,35 @@ export default function CreateCollectionPage() {
         <h1 className="font-headline text-4xl font-bold tracking-tighter mb-3 uppercase">
           Collection Ready!
         </h1>
-        <p className="mb-2 text-sm text-on-surface-variant">
-          {nfts.length} NFTs loaded and ready to mint.
+        <p className="mb-6 text-sm text-on-surface-variant">
+          {nfts.length} NFTs loaded and minting is unlocked. Keep your reveal
+          seed safe — you will need it to call{" "}
+          <code className="font-mono text-primary">revealMintSeed</code> after
+          the sale closes.
         </p>
-        {loadURIsHash && (
-          <a
-            href={`https://sepolia.etherscan.io/tx/${loadURIsHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block mb-8 text-sm text-primary hover:text-primary-container transition-colors font-mono underline"
-          >
-            View on Etherscan
-          </a>
+        {generatedSeed && (
+          <div className="mb-6 p-4 text-left bg-surface-container-low border border-outline-variant/10 rounded-sm space-y-3">
+            <p className="text-[10px] font-headline font-bold uppercase tracking-widest text-on-surface-variant">
+              Your Reveal Seed (save this!)
+            </p>
+            <p className="text-xs font-mono text-primary break-all">
+              {generatedSeed}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDownloadSeed}
+                className="flex items-center gap-1.5 text-xs font-headline font-bold px-3 py-1.5 rounded-sm bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-all"
+              >
+                <Download size={12} /> Download JSON
+              </button>
+              <button
+                onClick={handleCopySeed}
+                className="flex items-center gap-1.5 text-xs font-headline font-bold px-3 py-1.5 rounded-sm border border-outline-variant/20 text-on-surface-variant hover:border-outline transition-all"
+              >
+                {seedCopied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+          </div>
         )}
         <div className="flex gap-4 justify-center">
           <button
@@ -509,7 +541,108 @@ export default function CreateCollectionPage() {
     );
   }
 
-  // 3. Deployed, needs loadTokenURIs
+  // 3. URIs loaded — needs commitMintSeed before minting is possible
+  if (urisLoaded && !seedCommitted) {
+    return pageWrapper(
+      <div className="max-w-xl mx-auto px-8 py-32 text-center">
+        <div className="w-20 h-20 flex items-center justify-center mx-auto mb-6 bg-secondary/5 border border-secondary/20 rounded-sm">
+          <ShieldCheck size={36} className="text-secondary" />
+        </div>
+        <span className="text-xs font-headline font-bold tracking-[0.3em] text-secondary uppercase block mb-3">
+          Step 3 of 3
+        </span>
+        <h1 className="font-headline text-4xl font-bold tracking-tighter mb-3 uppercase">
+          Commit Mint Seed
+        </h1>
+        <p className="mb-6 text-sm text-on-surface-variant leading-relaxed">
+          A random seed commitment must be submitted on-chain before minting is
+          unlocked. A unique seed will be generated in your browser and its
+          hash committed to the contract. Save the seed — you need it to reveal
+          randomness after the sale closes.
+        </p>
+
+        <div className="p-4 mb-6 text-left bg-surface-container-low border border-outline-variant/10 rounded-sm space-y-2">
+          <p className="text-[10px] font-headline font-bold uppercase tracking-widest text-on-surface-variant">
+            Why is this needed?
+          </p>
+          <p className="text-xs text-on-surface-variant leading-relaxed">
+            The contract uses commit-reveal randomness to assign NFT IDs fairly.
+            The commitment is a hash of your secret seed; the seed itself is
+            revealed only after all mints are done, preventing manipulation.
+          </p>
+        </div>
+
+        {generatedSeed && (
+          <div className="mb-6 p-4 text-left bg-primary/5 border border-primary/20 rounded-sm space-y-3">
+            <p className="text-[10px] font-headline font-bold uppercase tracking-widest text-primary">
+              Generated Seed — Save Before Confirming
+            </p>
+            <p className="text-xs font-mono text-primary break-all">
+              {generatedSeed}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDownloadSeed}
+                className="flex items-center gap-1.5 text-xs font-headline font-bold px-3 py-1.5 rounded-sm bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-all"
+              >
+                <Download size={12} /> Download JSON
+              </button>
+              <button
+                onClick={handleCopySeed}
+                className="flex items-center gap-1.5 text-xs font-headline font-bold px-3 py-1.5 rounded-sm border border-outline-variant/20 text-on-surface-variant hover:border-outline transition-all"
+              >
+                {seedCopied ? "Copied!" : "Copy Seed"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="text-sm p-4 mb-4 bg-error/5 border border-error/20 text-error rounded-sm">
+            {error}
+          </div>
+        )}
+
+        {loadURIsHash && (
+          <a
+            href={`https://sepolia.etherscan.io/tx/${loadURIsHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block mb-6 text-sm text-primary hover:text-primary-container transition-colors font-mono underline"
+          >
+            View load URIs tx on Etherscan
+          </a>
+        )}
+
+        <button
+          onClick={() => deployedAddress && handleCommitSeed(deployedAddress)}
+          disabled={isLoading || !deployedAddress}
+          className={`w-full font-headline font-bold py-5 flex items-center justify-center gap-3 text-sm uppercase tracking-widest rounded-sm transition-all ${
+            isLoading || !deployedAddress
+              ? "bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed"
+              : "bg-gradient-to-r from-secondary to-primary text-on-primary-fixed hover:brightness-110 active:scale-[0.99]"
+          }`}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="animate-spin" size={18} />
+              {isCommittingSeed
+                ? "Awaiting wallet..."
+                : isConfirmingSeed
+                  ? "Confirming on blockchain..."
+                  : "Working..."}
+            </>
+          ) : (
+            <>
+              <ShieldCheck size={18} /> Generate Seed & Commit
+            </>
+          )}
+        </button>
+      </div>,
+    );
+  }
+
+  // 4. Deployed, needs loadTokenURIs
   if (collectionCreated && !urisLoaded) {
     return pageWrapper(
       <div className="max-w-xl mx-auto px-8 py-32 text-center">
@@ -517,13 +650,14 @@ export default function CreateCollectionPage() {
           <CheckCircle size={36} className="text-secondary" />
         </div>
         <span className="text-xs font-headline font-bold tracking-[0.3em] text-secondary uppercase block mb-3">
-          Contract Deployed
+          Step 2 of 3 · Contract Deployed
         </span>
         <h1 className="font-headline text-4xl font-bold tracking-tighter mb-3 uppercase">
           Collection Deployed!
         </h1>
         <p className="mb-6 text-sm text-on-surface-variant">
-          Now load the {nfts.length} NFTs onto the blockchain to enable minting.
+          Now load the {nfts.length} NFTs onto the blockchain. A mint seed
+          commitment step will follow.
         </p>
 
         {deployedAddress ? (
@@ -658,8 +792,7 @@ export default function CreateCollectionPage() {
               accept="image/*"
               onChange={(e) => {
                 const f = e.target.files?.[0] || null;
-                setCoverFile(f);
-                setCoverPreview(f ? URL.createObjectURL(f) : "");
+                dispatch({ type: "SET_COVER", file: f, preview: f ? URL.createObjectURL(f) : "" });
               }}
             />
             <label
@@ -716,8 +849,8 @@ export default function CreateCollectionPage() {
                 type="text"
                 value={name}
                 onChange={(e) => {
-                  setName(e.target.value);
-                  setFieldErrors((p) => ({ ...p, name: undefined }));
+                  dispatch({ type: "SET_NAME", value: e.target.value });
+                  dispatch({ type: "CLEAR_FIELD_ERROR", field: "name" });
                 }}
                 className={fieldErrors.name ? inputErrorClass : inputClass}
                 placeholder="e.g. Cyber Monkeys"
@@ -736,8 +869,8 @@ export default function CreateCollectionPage() {
                 type="text"
                 value={symbol}
                 onChange={(e) => {
-                  setSymbol(e.target.value.toUpperCase());
-                  setFieldErrors((p) => ({ ...p, symbol: undefined }));
+                  dispatch({ type: "SET_SYMBOL", value: e.target.value.toUpperCase() });
+                  dispatch({ type: "CLEAR_FIELD_ERROR", field: "symbol" });
                 }}
                 maxLength={8}
                 className={`${fieldErrors.symbol ? inputErrorClass : inputClass
@@ -759,8 +892,8 @@ export default function CreateCollectionPage() {
               id="col-description"
               value={description}
               onChange={(e) => {
-                setDescription(e.target.value);
-                setFieldErrors((p) => ({ ...p, description: undefined }));
+                dispatch({ type: "SET_DESCRIPTION", value: e.target.value });
+                dispatch({ type: "CLEAR_FIELD_ERROR", field: "description" });
               }}
               className={`${fieldErrors.description ? inputErrorClass : inputClass
                 } h-24 resize-none`}
@@ -783,8 +916,8 @@ export default function CreateCollectionPage() {
               min="0.0001"
               value={mintPrice}
               onChange={(e) => {
-                setMintPrice(e.target.value);
-                setFieldErrors((p) => ({ ...p, mintPrice: undefined }));
+                dispatch({ type: "SET_MINT_PRICE", value: e.target.value });
+                dispatch({ type: "CLEAR_FIELD_ERROR", field: "mintPrice" });
               }}
               className={fieldErrors.mintPrice ? inputErrorClass : inputClass}
               placeholder="0.0001"
@@ -997,7 +1130,7 @@ export default function CreateCollectionPage() {
 
             <div className="flex items-center justify-between px-2 py-1 text-xs text-on-surface-variant bg-surface-container-high rounded-sm">
               <button
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                onClick={() => dispatch({ type: "SET_PAGE", page: Math.max(1, currentPage - 1) })}
                 disabled={currentPage === 1}
                 className="px-2 py-1 rounded-sm border border-outline-variant/20 hover:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -1008,7 +1141,7 @@ export default function CreateCollectionPage() {
               </span>
               <button
                 onClick={() =>
-                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                  dispatch({ type: "SET_PAGE", page: Math.min(totalPages, currentPage + 1) })
                 }
                 disabled={currentPage === totalPages}
                 className="px-2 py-1 rounded-sm border border-outline-variant/20 hover:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
