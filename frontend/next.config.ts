@@ -23,12 +23,10 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      // 'unsafe-inline' kept only for style-src (required by Next.js style injection).
-      // script-src uses 'strict-dynamic' with 'unsafe-inline' as a fallback for
-      // browsers that don't support strict-dynamic (the fallback is ignored when
-      // strict-dynamic is supported). 'unsafe-eval' has been removed.
-      // React dev mode uses eval() for stack-trace reconstruction; only
-      // enable 'unsafe-eval' in development.
+      // 'unsafe-inline' is required for Next.js style and inline script injection.
+      // 'strict-dynamic' is NOT currently set — adding it would require per-request
+      // nonces threaded through Next.js middleware, which is a future improvement.
+      // 'unsafe-eval' is only enabled in dev for React stack-trace reconstruction.
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
