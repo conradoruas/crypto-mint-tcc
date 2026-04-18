@@ -56,7 +56,8 @@ async function fetchSubgraphPage(
     fetchPolicy: "network-only",
   });
 
-  const rawNfts = data?.nfts ?? [];
+  type RawNft = { tokenId: string; tokenUri?: string | null };
+  const rawNfts: RawNft[] = data?.nfts ?? [];
   const hasMore = rawNfts.length > PAGE_SIZE;
   const nfts = hasMore ? rawNfts.slice(0, PAGE_SIZE) : rawNfts;
   const totalCount = Number(data?.collection?.totalSupply ?? 0);
