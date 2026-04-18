@@ -120,7 +120,7 @@ function FilterContent({
           </button>
           <button
             onClick={() => {
-              setOnlyFavorites((v) => !v);
+              setOnlyFavorites(!onlyFavorites);
               setOnlyListed(false);
               setPage(1);
             }}
