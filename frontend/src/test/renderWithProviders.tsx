@@ -7,6 +7,7 @@ import { MockLink } from "@apollo/client/testing";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
+import { vi } from "vitest";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -118,7 +119,6 @@ export function resetWagmiMocks() {
  *   vi.mock("wagmi", makeWagmiMocks);
  */
 export function makeWagmiMocks() {
-  const { vi } = await import("vitest");
   const mutateAsync = vi.fn();
   const writeContract = { mutateAsync, isPending: false, reset: vi.fn() };
 
