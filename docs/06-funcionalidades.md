@@ -113,30 +113,30 @@ sequenceDiagram
     participant FE as Frontend
     participant MK as NFTMarketplace
     participant SEL as Vendedor
-    participant ROY as Receptor de Royalty
+    participant ROY as Royalty
     participant SG as Subgraph
+    participant NFT as NFTContract
 
-    U->>FE: Clica "Comprar" no asset page
-    FE->>MK: getListing(nftContract, tokenId)  [RPC — autoritativo]
-    MK-->>FE: Listing{price, seller, active}
+    U->>FE: Clica comprar
+    FE->>MK: getListing(nftContract, tokenId) RPC
+    MK-->>FE: Listing price seller active
 
-    U->>FE: Confirma preço
-    U->>MK: buyItem(nftContract, tokenId) {value: price}
+    U->>FE: Confirma preco
+    U->>MK: buyItem(nftContract, tokenId)
 
-    Note over MK: CHECKS: ativo, msg.value == price, não é seller
-    Note over MK: EFFECTS: listing.active = false; limpa ghost offer do comprador
-    Note over MK: INTERACTIONS (por último):
+    Note over MK: Checks ativo valor correto nao seller
+    Note over MK: Effects desativa listing
+    Note over MK: Interactions
 
-    MK->>MK: _calculateFees → marketFee + royalty (cap 10%)
-    MK->>SEL: _paySeller (push ETH, fallback pull)
-    MK->>ROY: _payRoyalty (push ETH, fallback pull)
-    MK->>NFT: safeTransferFrom(seller, comprador, tokenId)
+    MK->>MK: calcular taxas
+    MK->>SEL: pagar vendedor
+    MK->>ROY: pagar royalty
+    MK->>NFT: transferir NFT
 
-    MK-->>FE: emite ItemSold
-    FE-->>U: Compra confirmada ✓
+    MK-->>FE: ItemSold
+    FE-->>U: Compra confirmada
 
-    SG->>SG: handleItemSold → desativa Listing, atualiza NFT.owner
-    SG->>SG: atualiza MarketplaceStats, CollectionStat, DailySnapshot, ActivityEvent
+    SG->>SG: atualizar dados
 ```
 
 ## 6.5 Ciclo de Oferta
@@ -238,19 +238,20 @@ evitando que o clique de favoritar navegue para o asset.
 
 ```mermaid
 sequenceDiagram
-    participant FE as Frontend (useActivityFeed)
+    participant FE as Frontend useActivityFeed
     participant SG as Subgraph
     participant BC as Blockchain
+    participant U as Usuario
 
-    loop A cada 30 segundos (POLL_ACTIVITY_MS)
-        FE->>SG: GET_ACTIVITY_FEED (tipo, collection, page)
-        SG-->>FE: [{type, from, to, price, txHash, timestamp}]
-        FE->>FE: formata priceETH via formatEther
-        FE-->>U: atualiza tabela / cards de atividade
+    loop Poll a cada 30s
+        FE->>SG: getActivityFeed tipo collection page
+        SG-->>FE: lista de eventos
+        FE->>FE: formatar preco ETH
+        FE-->>U: atualizar UI
     end
 
-    Note over BC,SG: Cada evento on-chain vira ActivityEvent no subgraph
-    Note over FE: Desktop: tabela; Mobile: cards empilhados
+    Note over SG: Eventos on chain viram ActivityEvent
+    Note over FE: Desktop tabela Mobile cards
 ```
 
 Filtros disponíveis: tipo de evento (listing, sale, offer, mint, transfer),
