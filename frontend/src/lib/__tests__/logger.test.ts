@@ -4,7 +4,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const originalNodeEnv = process.env.NODE_ENV;
 
 afterEach(() => {
-  process.env.NODE_ENV = originalNodeEnv;
+  if (originalNodeEnv === undefined) {
+    vi.unstubAllEnvs();
+  } else {
+    vi.stubEnv("NODE_ENV", originalNodeEnv);
+  }
   vi.restoreAllMocks();
 });
 
@@ -13,7 +17,7 @@ describe("logger (development mode)", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     vi.resetModules();
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -47,7 +51,7 @@ describe("logger (production mode)", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
     vi.resetModules();
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});

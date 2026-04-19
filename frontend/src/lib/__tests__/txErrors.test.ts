@@ -132,7 +132,7 @@ describe("getTransactionErrorKind (viem instances)", () => {
   });
 
   it("detects InsufficientFundsError", () => {
-    const err = new InsufficientFundsError({ account: "0x0" as `0x${string}`, details: "" });
+    const err = new InsufficientFundsError();
     expect(getTransactionErrorKind(err)).toBe("insufficient_funds");
   });
 
@@ -153,7 +153,7 @@ describe("getTransactionErrorKind (viem instances)", () => {
     });
     const err = new ContractFunctionExecutionError(inner, {
       abi: [],
-      address: "0x0" as `0x${string}`,
+      contractAddress: "0x0000000000000000000000000000000000000000" as `0x${string}`,
       functionName: "doSomething",
     });
     expect(getTransactionErrorKind(err)).toBe("reverted");
@@ -195,7 +195,7 @@ describe("getTransactionErrorKind (viem instances)", () => {
     const err = new HttpRequestError({
       url: "http://localhost",
       status: 503,
-      body: "",
+      body: {},
       headers: new Headers(),
     });
     expect(getTransactionErrorKind(err)).toBe("network");
