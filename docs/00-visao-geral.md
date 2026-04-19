@@ -62,24 +62,26 @@ O projeto foi desenvolvido com fins **acadêmicos e de pesquisa**; por isso:
 
 ## 0.5 Visão Geral da Arquitetura
 
+
+
 ```mermaid
 graph TD
-    U((Usuário\nCarteira Web3)) --> FE[Frontend\nNext.js 16]
+    U((Usuário<br>Carteira Web3)) --> FE[Frontend<br>Next.js 16]
 
-    FE -->|GraphQL\nApollo Client 4| SG[The Graph Studio\nSubgraph / GraphQL API]
-    FE -->|JSON-RPC\nwagmi + viem| RPC[/api/rpc\nProxy Alchemy]
-    FE -->|IPFS upload\nPinata JWT| UP[/api/upload\nServer Route]
+    FE -->|GraphQL<br>Apollo Client 4| SG[The Graph Studio<br>Subgraph / GraphQL API]
+    FE -->|JSON-RPC<br>wagmi + viem| RPC[/api/rpc<br>Proxy Alchemy/]
+    FE -->|IPFS upload<br>Pinata JWT| UP[/api/upload<br>Server Route/]
 
-    RPC -->|HTTPS| AL[Alchemy\nSepolia RPC]
-    UP -->|REST| PI[Pinata\nIPFS]
-    AL --> BC[Ethereum\nSepolia]
+    RPC -->|HTTPS| AL[Alchemy<br>Sepolia RPC]
+    UP -->|REST| PI[Pinata<br>IPFS]
+    AL --> BC[Ethereum<br>Sepolia]
 
-    BC -->|Eventos| GN[graph-node\nThe Graph]
+    BC -->|Eventos| GN[graph-node<br>The Graph]
     GN --> SG
 
-    BC --> C1[NFTMarketplace\n0x3228...1C74]
-    BC --> C2[NFTCollectionFactory\n0xf17F...6c3]
-    BC --> C3[NFTCollection\ninstâncias dinâmicas]
+    BC --> C1[NFTMarketplace<br>0x3228...1C74]
+    BC --> C2[NFTCollectionFactory<br>0xf17F...6c3]
+    BC --> C3[NFTCollection<br>instâncias dinâmicas]
 ```
 
 Fluxo principal de dados:
