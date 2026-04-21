@@ -1,6 +1,6 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { useListNFT } from "./useListNFT";
+import { useListNFT } from "../marketplace/useListNFT";
 import * as wagmi from "wagmi";
 import * as viemActions from "viem/actions";
 import { MARKETPLACE_ADDRESS } from "@/constants/contracts";
@@ -51,16 +51,26 @@ describe("useListNFT", () => {
     const { result } = renderHook(() => useListNFT());
 
     await act(async () => {
-        await result.current.listNFT(mockNftContract, mockTokenId, mockPriceInEth);
+      await result.current.listNFT(
+        mockNftContract,
+        mockTokenId,
+        mockPriceInEth,
+      );
     });
 
     expect(mockReadContract).toHaveBeenCalledTimes(1);
     expect(mockMutateAsync).toHaveBeenCalledTimes(1);
-    expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-      functionName: "listItem",
-      args: [mockNftContract, BigInt(mockTokenId), parseEther(mockPriceInEth)],
-    }));
-    
+    expect(mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "listItem",
+        args: [
+          mockNftContract,
+          BigInt(mockTokenId),
+          parseEther(mockPriceInEth),
+        ],
+      }),
+    );
+
     // Check state transition ended in idle
     expect(result.current.phase).toBe("idle");
     expect(result.current.isPending).toBe(false);
@@ -75,7 +85,11 @@ describe("useListNFT", () => {
     const { result } = renderHook(() => useListNFT());
 
     const promise = act(async () => {
-      await result.current.listNFT(mockNftContract, mockTokenId, mockPriceInEth);
+      await result.current.listNFT(
+        mockNftContract,
+        mockTokenId,
+        mockPriceInEth,
+      );
     });
 
     // We can't easily wait for internal state transitions without intermediate hooks,
@@ -86,11 +100,14 @@ describe("useListNFT", () => {
     expect(mockMutateAsync).toHaveBeenCalledTimes(2);
     expect(mockMutateAsync).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ functionName: "setApprovalForAll", args: [MARKETPLACE_ADDRESS, true] })
+      expect.objectContaining({
+        functionName: "setApprovalForAll",
+        args: [MARKETPLACE_ADDRESS, true],
+      }),
     );
     expect(mockMutateAsync).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ functionName: "listItem" })
+      expect.objectContaining({ functionName: "listItem" }),
     );
     expect(result.current.phase).toBe("idle");
   });
@@ -99,19 +116,27 @@ describe("useListNFT", () => {
     mockReadContract.mockResolvedValue(true);
     // Make mutateAsync delay so the hook stays in pending state
     let resolveTx: (val: unknown) => void;
-    mockMutateAsync.mockReturnValue(new Promise((r) => { resolveTx = r; }));
+    mockMutateAsync.mockReturnValue(
+      new Promise((r) => {
+        resolveTx = r;
+      }),
+    );
 
     const { result } = renderHook(() => useListNFT());
 
     let promise1: Promise<void>;
     act(() => {
-      promise1 = result.current.listNFT(mockNftContract, mockTokenId, mockPriceInEth);
+      promise1 = result.current.listNFT(
+        mockNftContract,
+        mockTokenId,
+        mockPriceInEth,
+      );
     });
 
     await act(async () => {
-      await expect(result.current.listNFT(mockNftContract, mockTokenId, mockPriceInEth)).rejects.toThrow(
-        "Listing already in progress."
-      );
+      await expect(
+        result.current.listNFT(mockNftContract, mockTokenId, mockPriceInEth),
+      ).rejects.toThrow("Listing already in progress.");
     });
 
     resolveTx!("0xListHash"); // let the first one finish
@@ -126,9 +151,9 @@ describe("useListNFT", () => {
     const { result } = renderHook(() => useListNFT());
 
     await act(async () => {
-      await expect(result.current.listNFT(mockNftContract, mockTokenId, mockPriceInEth)).rejects.toThrow(
-        "No network connection."
-      );
+      await expect(
+        result.current.listNFT(mockNftContract, mockTokenId, mockPriceInEth),
+      ).rejects.toThrow("No network connection.");
     });
   });
 });
