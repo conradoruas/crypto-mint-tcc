@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { useIsFavorited, useFavorite, useUserFavorites } from "../user/useFavorites";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ describe("useUserFavorites", () => {
     const { result } = renderHook(() => useUserFavorites(USER_ADDR));
 
     // Wait for load to complete — no localStorage entries so it resolves quickly
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(result.current.favorites).toEqual([]),
     );
     expect(result.current.isLoading).toBe(false);
@@ -143,7 +143,7 @@ describe("useUserFavorites", () => {
   it("returns empty list when userAddress is undefined", async () => {
     const { result } = renderHook(() => useUserFavorites(undefined));
 
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(result.current.favorites).toEqual([]),
     );
     expect(result.current.isLoading).toBe(false);
@@ -166,7 +166,7 @@ describe("useUserFavorites", () => {
 
     const { result } = renderHook(() => useUserFavorites(USER_ADDR));
 
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(result.current.favorites).toHaveLength(1),
     );
 
@@ -184,7 +184,7 @@ describe("useUserFavorites", () => {
 
     const { result } = renderHook(() => useUserFavorites(USER_ADDR));
 
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(result.current.favorites).toHaveLength(1),
     );
 
@@ -195,7 +195,7 @@ describe("useUserFavorites", () => {
     const { result } = renderHook(() => useUserFavorites(USER_ADDR));
 
     // Initially empty
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(result.current.favorites).toEqual([]),
     );
 
@@ -213,7 +213,7 @@ describe("useUserFavorites", () => {
       );
     });
 
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(result.current.favorites).toHaveLength(1),
     );
     expect(result.current.favorites[0].name).toBe("New NFT");
