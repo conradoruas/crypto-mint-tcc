@@ -1,8 +1,6 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
-import { useConnection } from "wagmi";
 import { Navbar } from "@/components/navbar";
 import {
   ShieldCheck,
@@ -14,27 +12,14 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import type { NFTItem } from "@/types/nft";
-import {
-  useNFTListing,
-  useMyOffer,
-  useNFTOffers,
-  useListNFT,
-  useBuyNFT,
-  useCancelListing,
-  useMakeOffer,
-  useAcceptOffer,
-  useCancelOffer,
-} from "@/hooks/marketplace";
 import { OffersTable } from "@/components/marketplace/OffersTable";
-import { useIsFavorited, useFavorite } from "@/hooks/user";
 import { parseAddress } from "@/lib/schemas";
 import { shortAddr } from "@/lib/utils";
 import { PriceHistory } from "@/components/asset/PriceHistory";
 import { ListingPanel } from "@/components/asset/ListingPanel";
 import { OfferPanel } from "@/components/asset/OfferPanel";
 import { NFTCardSkeleton } from "@/components/ui";
-import { useAssetNft } from "./useAssetNft";
-import { useAssetPageActions } from "./useAssetPageActions";
+import { useAssetPageCoordinator } from "./useAssetPageCoordinator";
 
 function LoadingSkeleton() {
   return (
@@ -63,86 +48,33 @@ export default function AssetPageClient({
   const searchParams = useSearchParams();
   const tokenId = (Array.isArray(id) ? id[0] : id) ?? "";
   const nftContract = parseAddress(searchParams.get("contract"));
-
-  const { address } = useConnection();
-  const { nft, isLoadingNft } = useAssetNft(
-    tokenId,
-    nftContract ?? null,
-    initialNft,
-  );
-
   const {
+    address,
+    nft,
+    isLoadingNft,
     owner,
     isListed,
     price,
-    refetch: refetchListing,
-  } = useNFTListing(nftContract ?? "", tokenId);
-  const {
     hasActiveOffer,
-    offerAmount: myOfferAmount,
+    myOfferAmount,
     expiresAt,
-    refetch: refetchMyOffer,
-  } = useMyOffer(nftContract ?? "", tokenId);
-  const {
     offers,
-    isLoading: isLoadingOffers,
+    isLoadingOffers,
     topOffer,
-    refetch: refetchOffers,
-  } = useNFTOffers(nftContract ?? "", tokenId);
-
-  const { listNFT, isPending: isListing, phase: listPhase } = useListNFT();
-  const {
-    buyNFT,
-    isPending: isBuying,
-    isConfirming: isBuyConfirming,
-    isSuccess: isBought,
-    hash: buyHash,
-  } = useBuyNFT();
-  const { cancelListing, isPending: isCancelling, isSuccess: isCancelled } =
-    useCancelListing();
-  const {
-    makeOffer,
-    isPending: isMakingOffer,
-    isConfirming: isOfferConfirming,
-    isSuccess: isOfferMade,
-  } = useMakeOffer();
-  const { acceptOffer, isPending: isAccepting } = useAcceptOffer();
-  const {
-    cancelOffer,
-    isPending: isCancellingOffer,
-    isSuccess: isOfferCancelled,
-  } = useCancelOffer();
-
-  const { isFavorited } = useIsFavorited(nftContract ?? "", tokenId);
-  const { toggleFavorite } = useFavorite();
-
-  const isOwner =
-    address && owner && address.toLowerCase() === owner.toLowerCase();
-
-  const refetchAll = useCallback(() => {
-    refetchListing();
-    refetchMyOffer();
-    refetchOffers();
-  }, [refetchListing, refetchMyOffer, refetchOffers]);
-
-  const actions = useAssetPageActions({
-    nftName: nft?.name,
-    nftContract,
-    tokenId,
-    price,
-    buyHash,
-    isBought,
-    isOfferMade,
-    isOfferCancelled,
-    isCancelled,
-    refetchAll,
-    listNFT,
-    buyNFT,
-    cancelListing,
-    makeOffer,
-    acceptOffer,
-    cancelOffer,
-  });
+    isListing,
+    listPhase,
+    isBuying,
+    isBuyConfirming,
+    isCancelling,
+    isMakingOffer,
+    isOfferConfirming,
+    isAccepting,
+    isCancellingOffer,
+    isFavorited,
+    toggleFavorite,
+    isOwner,
+    actions,
+  } = useAssetPageCoordinator(tokenId, nftContract ?? null, initialNft);
 
   if (!nftContract) {
     return (

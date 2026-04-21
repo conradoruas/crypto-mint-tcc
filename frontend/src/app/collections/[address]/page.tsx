@@ -2,8 +2,6 @@
 
 import Image from "next/image";
 import { useParams } from "next/navigation";
-import { useState } from "react";
-import { useConnection, useReadContract } from "wagmi";
 import { Navbar } from "@/components/navbar";
 import {
   Loader2,
@@ -16,15 +14,12 @@ import {
   X,
   CheckCircle2,
 } from "lucide-react";
-import { useCollectionDetails, useCollectionNFTs } from "@/hooks/collections";
-import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import Footer from "@/components/Footer";
 import { CollectionNFTCard } from "@/components/marketplace/CollectionNFTCard";
-import { resolveIpfsUrl } from "@/lib/ipfs";
 import { shortAddr } from "@/lib/utils";
 import { MintModal } from "./MintModal";
 import { CollectionOwnerPanels } from "./CollectionOwnerPanels";
-import { useCollectionOwnerActions } from "./useCollectionOwnerActions";
+import { useCollectionPageCoordinator } from "./useCollectionPageCoordinator";
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -32,62 +27,30 @@ export default function CollectionPage() {
   const { address: collectionAddr } = useParams();
   const collectionAddress =
     (Array.isArray(collectionAddr) ? collectionAddr[0] : collectionAddr) ?? "";
-
-  const { address: userAddress, isConnected } = useConnection();
-  const [showMintModal, setShowMintModal] = useState(false);
-  const [mintSuccess, setMintSuccess] = useState<string | null>(null);
-
-  const details = useCollectionDetails(collectionAddress);
   const {
-    nfts,
-    isLoading: isLoadingNFTs,
-    isLoadingMore,
-    totalSupply,
-    hasMore,
-    loadMore,
-  } = useCollectionNFTs(collectionAddress);
-
-  const { data: urisLoadedData, refetch: refetchUrisLoaded } = useReadContract({
-    address: collectionAddress as `0x${string}`,
-    abi: NFT_COLLECTION_ABI,
-    functionName: "urisLoaded",
-    query: { enabled: !!collectionAddress },
-  });
-  const [didLoadUrisLocally, setDidLoadUrisLocally] = useState(false);
-  const urisLoaded = (urisLoadedData as boolean | undefined) || didLoadUrisLocally;
-
-  const { data: mintSeedCommittedData, refetch: refetchMintSeedCommitted } =
-    useReadContract({
-      address: collectionAddress as `0x${string}`,
-      abi: NFT_COLLECTION_ABI,
-      functionName: "mintSeedCommitted",
-      query: { enabled: !!collectionAddress },
-    });
-  const mintSeedCommitted = Boolean(mintSeedCommittedData);
-
-  const ownerActions = useCollectionOwnerActions(
-    collectionAddress as `0x${string}`,
-    userAddress,
-    refetchMintSeedCommitted,
-  );
-
-  const isOwner =
-    userAddress &&
-    details.owner &&
-    userAddress.toLowerCase() === details.owner.toLowerCase();
-  const supplyPercent =
-    details.maxSupply && details.maxSupply > 0
-      ? Number((BigInt(totalSupply) * BigInt(100)) / details.maxSupply)
-      : 0;
-  const isSoldOut =
-    details.maxSupply && BigInt(totalSupply) >= details.maxSupply;
-
-  const bannerImage = details.image ? resolveIpfsUrl(details.image) : null;
-
-  const handleLoadSuccess = () => {
-    setDidLoadUrisLocally(true);
-    refetchUrisLoaded();
-  };
+    isConnected,
+    showMintModal,
+    setShowMintModal,
+    mintSuccess,
+    setMintSuccess,
+    details,
+    nftState: {
+      nfts,
+      isLoading: isLoadingNFTs,
+      isLoadingMore,
+      totalSupply,
+      hasMore,
+      loadMore,
+    },
+    urisLoaded,
+    mintSeedCommitted,
+    ownerActions,
+    isOwner,
+    supplyPercent,
+    isSoldOut,
+    bannerImage,
+    handleLoadSuccess,
+  } = useCollectionPageCoordinator(collectionAddress);
 
   return (
     <div className="bg-background min-h-screen text-on-surface">

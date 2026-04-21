@@ -9,12 +9,19 @@ import {
   useState,
   type ReactNode,
 } from "react";
-
-type ThemeMode = "light" | "dark";
+import {
+  applyTheme,
+  isThemeMode,
+  persistTheme,
+  readStoredTheme,
+  type ThemeMode,
+  THEME_STORAGE_KEY,
+} from "@/lib/theme";
 
 type ThemeProviderProps = {
   children: ReactNode;
   defaultTheme?: ThemeMode;
+  initialTheme?: ThemeMode;
 };
 
 type ThemeContextValue = {
@@ -22,36 +29,26 @@ type ThemeContextValue = {
   setTheme: (theme: ThemeMode) => void;
 };
 
-const THEME_STORAGE_KEY = "cryptomint-theme";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
-
-function isThemeMode(value: string | null): value is ThemeMode {
-  return value === "light" || value === "dark";
-}
-
-function readStoredTheme(defaultTheme: ThemeMode) {
-  if (typeof window === "undefined") {
-    return defaultTheme;
-  }
-
-  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return isThemeMode(storedTheme) ? storedTheme : defaultTheme;
-}
-
-function applyTheme(theme: ThemeMode) {
-  document.documentElement.classList.toggle("dark", theme === "dark");
-}
 
 export function ThemeProvider({
   children,
   defaultTheme = "dark",
+  initialTheme,
 }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<ThemeMode>(() =>
-    readStoredTheme(defaultTheme),
+    readStoredTheme(initialTheme ?? defaultTheme),
   );
 
   useLayoutEffect(() => {
     applyTheme(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (!isThemeMode(storedTheme) || storedTheme !== theme) {
+      persistTheme(theme);
+    }
   }, [theme]);
 
   useEffect(() => {
@@ -69,7 +66,7 @@ export function ThemeProvider({
 
   const setTheme = (nextTheme: ThemeMode) => {
     setThemeState(nextTheme);
-    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    persistTheme(nextTheme);
     applyTheme(nextTheme);
   };
 

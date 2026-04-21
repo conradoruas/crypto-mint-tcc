@@ -104,12 +104,7 @@ export function usePublishCollectionUris() {
         let lastHash: `0x${string}` | undefined;
         for (let index = 0; index < uris.length; index += chunkLoadSize) {
           const chunk = uris.slice(index, index + chunkLoadSize);
-          const functionName =
-            index === 0 && chunk.length === uris.length
-              ? "loadTokenURIs"
-              : index === 0
-                ? "loadTokenURIs"
-                : "appendTokenURIs";
+          const functionName = index === 0 ? "loadTokenURIs" : "appendTokenURIs";
 
           const gas = await estimateContractGasWithBuffer(publicClient, {
             account: address,
