@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useIsFavorited, useFavorite, useUserFavorites } from "../user/useFavorites";
+import { renderHookWithProviders } from "@/test/renderWithProviders";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -131,7 +132,7 @@ describe("useFavorite", () => {
 
 describe("useUserFavorites", () => {
   it("returns empty list when user has no favorites", async () => {
-    const { result } = renderHook(() => useUserFavorites(USER_ADDR));
+    const { result } = renderHookWithProviders(() => useUserFavorites(USER_ADDR));
 
     // Wait for load to complete — no localStorage entries so it resolves quickly
     await waitFor(() =>
@@ -141,7 +142,9 @@ describe("useUserFavorites", () => {
   });
 
   it("returns empty list when userAddress is undefined", async () => {
-    const { result } = renderHook(() => useUserFavorites(undefined));
+    const { result } = renderHookWithProviders(() =>
+      useUserFavorites(undefined),
+    );
 
     await waitFor(() =>
       expect(result.current.favorites).toEqual([]),
@@ -164,7 +167,9 @@ describe("useUserFavorites", () => {
       JSON.stringify([{ nftContract: NFT_A, tokenId: "1" }]),
     );
 
-    const { result } = renderHook(() => useUserFavorites(USER_ADDR));
+    const { result } = renderHookWithProviders(() =>
+      useUserFavorites(USER_ADDR),
+    );
 
     await waitFor(() =>
       expect(result.current.favorites).toHaveLength(1),
@@ -182,7 +187,9 @@ describe("useUserFavorites", () => {
       JSON.stringify([{ nftContract: NFT_A, tokenId: "42" }]),
     );
 
-    const { result } = renderHook(() => useUserFavorites(USER_ADDR));
+    const { result } = renderHookWithProviders(() =>
+      useUserFavorites(USER_ADDR),
+    );
 
     await waitFor(() =>
       expect(result.current.favorites).toHaveLength(1),
@@ -192,7 +199,9 @@ describe("useUserFavorites", () => {
   });
 
   it("re-syncs when localStorage changes via storage event", async () => {
-    const { result } = renderHook(() => useUserFavorites(USER_ADDR));
+    const { result } = renderHookWithProviders(() =>
+      useUserFavorites(USER_ADDR),
+    );
 
     // Initially empty
     await waitFor(() =>

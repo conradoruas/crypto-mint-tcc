@@ -2,36 +2,19 @@
 
 import {
   useCallback,
-  useEffect,
-  useState,
+  useMemo,
   useSyncExternalStore,
 } from "react";
 import { useConnection } from "wagmi";
 import { fetchBatchNFTMetadata as fetchAlchemyMeta } from "@/lib/nftMetadata";
 import type { CollectionNFTItem, FavoriteRef } from "@/types/nft";
-
-function storageKey(address: string) {
-  return `nft_favorites_${address.toLowerCase()}`;
-}
-
-function readFavorites(address: string): FavoriteRef[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(storageKey(address));
-    return raw ? (JSON.parse(raw) as FavoriteRef[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeFavorites(address: string, favs: FavoriteRef[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(storageKey(address), JSON.stringify(favs));
-  // Notifica outras instâncias do hook na mesma aba
-  window.dispatchEvent(
-    new StorageEvent("storage", { key: storageKey(address) }),
-  );
-}
+import { useQuery } from "@tanstack/react-query";
+import {
+  favoritesStorageKey,
+  readFavoriteRefs,
+  subscribeToFavorites,
+  toggleFavoriteRef,
+} from "./favoritesStore";
 
 // ─────────────────────────────────────────────
 // useIsFavorited
@@ -40,15 +23,15 @@ function writeFavorites(address: string, favs: FavoriteRef[]) {
 export function useIsFavorited(nftContract: string, tokenId: string) {
   const { address } = useConnection();
 
-  const subscribe = useCallback((onStoreChange: () => void) => {
-    window.addEventListener("storage", onStoreChange);
-    return () => window.removeEventListener("storage", onStoreChange);
-  }, []);
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => subscribeToFavorites(address, onStoreChange),
+    [address],
+  );
 
   const getSnapshot = useCallback(() => {
     if (!address) return false;
 
-    const favs = readFavorites(address);
+    const favs = readFavoriteRefs(address);
     return favs.some(
       (f) =>
         f.nftContract.toLowerCase() === nftContract.toLowerCase() &&
@@ -58,9 +41,7 @@ export function useIsFavorited(nftContract: string, tokenId: string) {
 
   const isFavorited = useSyncExternalStore(subscribe, getSnapshot, () => false);
 
-  const refetch = useCallback(() => {
-    window.dispatchEvent(new Event("storage"));
-  }, []);
+  const refetch = useCallback(() => {}, []);
 
   return { isFavorited, isLoading: false, refetch };
 }
@@ -75,18 +56,7 @@ export function useFavorite() {
   const toggleFavorite = useCallback(
     (nftContract: string, tokenId: string) => {
       if (!address) return;
-      const favs = readFavorites(address);
-      const idx = favs.findIndex(
-        (f) =>
-          f.nftContract.toLowerCase() === nftContract.toLowerCase() &&
-          f.tokenId === tokenId,
-      );
-      if (idx >= 0) {
-        favs.splice(idx, 1);
-      } else {
-        favs.push({ nftContract, tokenId });
-      }
-      writeFavorites(address, favs);
+      toggleFavoriteRef(address, nftContract, tokenId);
     },
     [address],
   );
@@ -99,61 +69,57 @@ export function useFavorite() {
 // ─────────────────────────────────────────────
 
 export function useUserFavorites(userAddress: string | undefined) {
-  const [favorites, setFavorites] = useState<CollectionNFTItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const subscribe = useCallback(
+    (onStoreChange: () => void) =>
+      subscribeToFavorites(userAddress, onStoreChange),
+    [userAddress],
+  );
 
-  const load = useCallback(async () => {
-    if (!userAddress) {
-      setFavorites([]);
-      return;
-    }
-    const refs = readFavorites(userAddress);
-    if (refs.length === 0) {
-      setFavorites([]);
-      return;
-    }
+  const favoriteRefsRaw = useSyncExternalStore(
+    subscribe,
+    () => {
+      if (typeof window === "undefined" || !userAddress) return "";
+      return localStorage.getItem(favoritesStorageKey(userAddress)) ?? "";
+    },
+    () => "",
+  );
 
-    setIsLoading(true);
-    const tokens = refs.map((r) => ({
-      contractAddress: r.nftContract,
-      tokenId: r.tokenId,
-    }));
-    const metaMap = await fetchAlchemyMeta(tokens);
-    const items: CollectionNFTItem[] = refs.map((ref) => {
-      const key = `${ref.nftContract.toLowerCase()}-${ref.tokenId}`;
-      const meta = metaMap.get(key);
-      return {
+  const favoriteRefs = useMemo<FavoriteRef[]>(() => {
+    if (!userAddress || favoriteRefsRaw === "") return [];
+    return readFavoriteRefs(userAddress);
+  }, [userAddress, favoriteRefsRaw]);
+  const hasFavorites = favoriteRefs.length > 0;
+
+  const { data: favorites = [], isLoading } = useQuery<CollectionNFTItem[]>({
+    queryKey: [
+      "user-favorites",
+      userAddress,
+      favoriteRefs.map((favorite) => `${favorite.nftContract}-${favorite.tokenId}`),
+    ],
+    queryFn: async () => {
+      if (!userAddress || favoriteRefs.length === 0) return [];
+
+      const tokens = favoriteRefs.map((ref) => ({
+        contractAddress: ref.nftContract,
         tokenId: ref.tokenId,
-        name: meta?.name ?? `NFT #${ref.tokenId}`,
-        description: "",
-        image: meta?.image ?? "",
-        nftContract: ref.nftContract,
-      };
-    });
-    setFavorites(items);
-    setIsLoading(false);
-  }, [userAddress]);
+      }));
+      const metaMap = await fetchAlchemyMeta(tokens);
 
-  useEffect(() => {
-    let ignore = false;
-    void Promise.resolve().then(() => {
-      if (!ignore) load();
-    });
-    return () => {
-      ignore = true;
-    };
-  }, [load]);
+      return favoriteRefs.map((ref) => {
+        const key = `${ref.nftContract.toLowerCase()}-${ref.tokenId}`;
+        const meta = metaMap.get(key);
+        return {
+          tokenId: ref.tokenId,
+          name: meta?.name ?? `NFT #${ref.tokenId}`,
+          description: "",
+          image: meta?.image ?? "",
+          nftContract: ref.nftContract,
+        };
+      });
+    },
+    enabled: !!userAddress && hasFavorites,
+    staleTime: 60_000,
+  });
 
-  // Re-sincroniza quando localStorage muda (outra aba ou toggle)
-  useEffect(() => {
-    if (!userAddress) return;
-    const key = storageKey(userAddress);
-    const handler = (e: StorageEvent) => {
-      if (e.key === key) load();
-    };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, [userAddress, load]);
-
-  return { favorites, isLoading };
+  return { favorites, isLoading: hasFavorites ? isLoading : false };
 }

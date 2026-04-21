@@ -16,13 +16,15 @@ import { useQuery } from "@tanstack/react-query";
 
 const EVENT_CONFIG = getEventConfig(12);
 
-const BELL_STORAGE_KEY = "bell_last_seen_ts";
+function bellStorageKey(address: string) {
+  return `bell_last_seen_ts_${address.toLowerCase()}`;
+}
 
 export function BellDropdown({ address }: { address: string }) {
   const [open, setOpen] = useState(false);
   const [lastSeenTs, setLastSeenTs] = useState<number>(() => {
     if (typeof window === "undefined") return 0;
-    return parseInt(localStorage.getItem(BELL_STORAGE_KEY) ?? "0", 10);
+    return parseInt(localStorage.getItem(bellStorageKey(address)) ?? "0", 10);
   });
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, () => setOpen(false));
@@ -69,7 +71,7 @@ export function BellDropdown({ address }: { address: string }) {
     setOpen((v) => {
       if (!v) {
         // Mark as seen when opening
-        localStorage.setItem(BELL_STORAGE_KEY, String(nowTs));
+        localStorage.setItem(bellStorageKey(address), String(nowTs));
         setLastSeenTs(nowTs);
       }
       return !v;

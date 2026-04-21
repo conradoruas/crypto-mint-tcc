@@ -35,7 +35,6 @@ import {
   addressSchema,
 } from "@/lib/schemas";
 import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
-import { resolveIpfsUrl } from "@/lib/ipfs";
 import { shortAddr } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { formatTransactionError } from "@/lib/txErrors";
@@ -44,6 +43,7 @@ import { PriceHistory } from "@/components/asset/PriceHistory";
 import { ListingPanel } from "@/components/asset/ListingPanel";
 import { OfferPanel } from "@/components/asset/OfferPanel";
 import { NFTCardSkeleton } from "@/components/ui";
+import { useAssetNft } from "./useAssetNft";
 
 function LoadingSkeleton() {
   return (
@@ -74,8 +74,11 @@ export default function AssetPageClient({
   const nftContract = parseAddress(searchParams.get("contract"));
 
   const { address } = useConnection();
-  const [nft, setNft] = useState<NFTItem | null>(initialNft);
-  const [isLoadingNft, setIsLoadingNft] = useState(initialNft == null);
+  const { nft, isLoadingNft } = useAssetNft(
+    tokenId,
+    nftContract ?? null,
+    initialNft,
+  );
   const [listPrice, setListPrice] = useState("");
   const [offerAmount, setOfferAmount] = useState("");
   const [showListForm, setShowListForm] = useState(false);
@@ -137,50 +140,6 @@ export default function AssetPageClient({
     refetchMyOffer();
     refetchOffers();
   }, [refetchListing, refetchMyOffer, refetchOffers]);
-
-  // Skip the client-side fetch when the Server Component already provided initialNft.
-  const skipFetch = initialNft != null;
-
-  useEffect(() => {
-    if (skipFetch) return;
-    if (!nftContract) {
-      setIsLoadingNft(false);
-      return;
-    }
-    let cancelled = false;
-    const controller = new AbortController();
-    const { signal } = controller;
-    const fetchNFT = async () => {
-      try {
-        const res = await fetch(
-          `/api/alchemy/getNFTMetadata?contractAddress=${nftContract}&tokenId=${tokenId}&refreshCache=false`,
-          { signal },
-        );
-        const data = await res.json();
-        let image = data.image?.cachedUrl ?? data.image?.originalUrl ?? "";
-        if (!image && data.tokenUri) {
-          const metaRes = await fetch(resolveIpfsUrl(data.tokenUri), { signal });
-          const meta = await metaRes.json();
-          image = resolveIpfsUrl(meta.image ?? "");
-        }
-        if (cancelled) return;
-        setNft({
-          tokenId: data.tokenId,
-          name: data.name ?? `NFT #${tokenId}`,
-          description: data.description ?? "",
-          image,
-          nftContract,
-        });
-      } catch (error) {
-        if (cancelled) return;
-        logger.error("Error fetching NFT", error);
-      } finally {
-        if (!cancelled) setIsLoadingNft(false);
-      }
-    };
-    fetchNFT();
-    return () => { cancelled = true; controller.abort(); };
-  }, [tokenId, nftContract, skipFetch]);
 
   // Consolidate all transaction-success side-effects into a single effect.
   // Each flag is stable across renders and only transitions once per mutation.

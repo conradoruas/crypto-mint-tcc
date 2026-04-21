@@ -34,13 +34,16 @@ import {
 import Footer from "@/components/Footer";
 import { createCollectionSchema, getZodErrors } from "@/lib/schemas";
 import type { CreateCollectionErrors } from "@/lib/schemas";
-import { keccak256 } from "viem";
+import { keccak256, zeroAddress } from "viem";
 import { formatTransactionError } from "@/lib/txErrors";
 import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
-import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
-import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
 import pLimit from "p-limit";
 import { useCollectionForm, type NFTDraft } from "./useCollectionForm";
+import {
+  createUploadAuthHeaders,
+  uploadImageFile,
+  uploadNftMetadata,
+} from "@/lib/uploadClient";
 
 interface BulkMetadataItem {
   name?: string;
@@ -70,28 +73,12 @@ export default function CreateCollectionPage() {
   const { signMessageAsync } = useSignMessage();
 
   const getAuthHeaders = useCallback(
-    (pathname: string) => {
-      if (!address) throw new Error("Wallet required");
-      return buildUploadAuthHeaders(signMessageAsync, address, pathname);
-    },
+    createUploadAuthHeaders(signMessageAsync, address),
     [signMessageAsync, address],
   );
 
   const uploadImage = useCallback(
-    async (file: File): Promise<string> => {
-      const formData = new FormData();
-      formData.append("file", file);
-      const headers = await getAuthHeaders(UPLOAD_API_PATHS.image);
-      const res = await fetch("/api/upload-image", {
-        method: "POST",
-        body: formData,
-        headers,
-      });
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      const data = await res.json();
-      if (!data.uri) throw new Error("Invalid URI");
-      return data.uri;
-    },
+    async (file: File): Promise<string> => uploadImageFile(file, getAuthHeaders),
     [getAuthHeaders],
   );
 
@@ -100,26 +87,8 @@ export default function CreateCollectionPage() {
       name: string,
       description: string,
       imageUri: string,
-    ): Promise<string> => {
-      const headers = {
-        "Content-Type": "application/json",
-        ...(await getAuthHeaders(UPLOAD_API_PATHS.profile)),
-      };
-      const res = await fetch("/api/upload-profile", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          name,
-          description: description || "",
-          image: imageUri,
-          address: `nft-${Date.now()}`,
-        }),
-      });
-      if (!res.ok) throw new Error(`Metadata upload failed: ${res.status}`);
-      const data = await res.json();
-      if (!data.uri) throw new Error("Invalid URI");
-      return data.uri;
-    },
+    ): Promise<string> =>
+      uploadNftMetadata({ name, description, imageUri }, getAuthHeaders),
     [getAuthHeaders],
   );
 
@@ -166,11 +135,14 @@ export default function CreateCollectionPage() {
   const [isCommittingSeed, setIsCommittingSeed] = useState(false);
 
   const { data: creatorCollectionIds } = useReadContract({
-    address: FACTORY_ADDRESS,
+    address: FACTORY_ADDRESS ?? zeroAddress,
     abi: NFT_COLLECTION_FACTORY_ABI,
     functionName: "getCreatorCollections",
     args: [address as `0x${string}`],
-    query: { enabled: !!collectionCreated && !!address, refetchInterval: 2000 },
+    query: {
+      enabled: !!FACTORY_ADDRESS && !!collectionCreated && !!address,
+      refetchInterval: 2000,
+    },
   });
 
   const lastIndex = creatorCollectionIds
@@ -180,11 +152,11 @@ export default function CreateCollectionPage() {
     : undefined;
 
   const { data: lastCollectionData } = useReadContract({
-    address: FACTORY_ADDRESS,
+    address: FACTORY_ADDRESS ?? zeroAddress,
     abi: NFT_COLLECTION_FACTORY_ABI,
     functionName: "getCollection",
     args: [lastIndex ?? BigInt(0)],
-    query: { enabled: lastIndex !== undefined },
+    query: { enabled: !!FACTORY_ADDRESS && lastIndex !== undefined },
   });
 
   const deployedAddress =
