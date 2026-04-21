@@ -50,7 +50,7 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
 
   const rpcAddress = addr ?? zeroAddress;
 
-  const { data: rpcResults } = useReadContracts({
+  const { data: rpcResults, isLoading: rpcLoading } = useReadContracts({
     contracts: [
       { address: rpcAddress, abi: NFT_COLLECTION_ABI, functionName: "name" },
       { address: rpcAddress, abi: NFT_COLLECTION_ABI, functionName: "symbol" },
@@ -64,7 +64,7 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
   });
 
   // Owner is always fetched via RPC (not indexed in subgraph)
-  const { data: owner } = useReadContract({
+  const { data: owner, isLoading: ownerLoading } = useReadContract({
     address: rpcAddress,
     abi: NFT_COLLECTION_ABI,
     functionName: "owner",
@@ -85,7 +85,7 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
         maxSupply: BigInt(gqlCol.maxSupply ?? 0),
         totalSupply: BigInt(gqlCol.totalSupply ?? 0),
         owner: parseAddress(owner as string | undefined),
-        isLoading: gqlLoading,
+        isLoading: gqlLoading || ownerLoading,
       };
     }
 
@@ -107,7 +107,9 @@ export function useCollectionDetails(collectionAddress: string | undefined) {
       maxSupply: rpcMaxSupply,
       totalSupply: rpcTotalSupply,
       owner: parseAddress(owner as string | undefined),
-      isLoading: false,
+      isLoading:
+        enabled &&
+        (rpcLoading || ownerLoading || !rpcResults || owner === undefined),
     };
-  }, [gqlCol, gqlLoading, owner, rpcResults]);
+  }, [enabled, gqlCol, gqlLoading, owner, ownerLoading, rpcLoading, rpcResults]);
 }
