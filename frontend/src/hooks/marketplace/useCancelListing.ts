@@ -13,6 +13,9 @@ export function useCancelListing() {
 
   const cancelListing = useCallback(
     async (nftContract: `0x${string}`, tokenId: string) => {
+      if (!MARKETPLACE_ADDRESS) {
+        throw new Error("Marketplace contract is not configured.");
+      }
       await mutate({
         address: MARKETPLACE_ADDRESS,
         abi: NFT_MARKETPLACE_ABI,

@@ -7,28 +7,16 @@
  * and prevents typos from silently propagating.
  */
 import type { Address } from "viem";
-import { parseAddress } from "@/lib/schemas";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
+import {
+  FACTORY_ADDRESS as FACTORY_ADDRESS_ENV,
+  MARKETPLACE_ADDRESS as MARKETPLACE_ADDRESS_ENV,
+} from "@/lib/publicEnv";
 
-// ── Addresses ────────────────────────────────────────────────────────────────
-
-function requireAddress(envVar: string | undefined, name: string): Address {
-  const addr = parseAddress(envVar);
-  if (!addr) throw new Error(`[contracts] Missing or invalid address env var: ${name}`);
-  return addr;
-}
-
-export const MARKETPLACE_ADDRESS = requireAddress(
-  process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS,
-  "NEXT_PUBLIC_MARKETPLACE_ADDRESS",
-);
-
-export const FACTORY_ADDRESS = requireAddress(
-  process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS,
-  "NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS",
-);
+export const MARKETPLACE_ADDRESS: Address | undefined = MARKETPLACE_ADDRESS_ENV;
+export const FACTORY_ADDRESS: Address | undefined = FACTORY_ADDRESS_ENV;
 
 // ── Re-exports for convenience ───────────────────────────────────────────────
 

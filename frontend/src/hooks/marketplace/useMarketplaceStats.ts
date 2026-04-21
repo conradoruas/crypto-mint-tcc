@@ -5,6 +5,7 @@ import { useQuery } from "@apollo/client/react";
 import { GET_MARKETPLACE_STATS } from "@/lib/graphql/queries";
 import { POLL_STATS_MS } from "@/constants/polling";
 import type { MarketplaceStats } from "@/types/marketplace";
+import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 export type { MarketplaceStats };
 
@@ -21,7 +22,7 @@ type GqlStatsData = {
 export function useMarketplaceStats(): MarketplaceStats {
   const { data: gqlData, loading: gqlLoading } = useQuery<GqlStatsData>(
     GET_MARKETPLACE_STATS,
-    { pollInterval: POLL_STATS_MS },
+    { skip: !SUBGRAPH_ENABLED, pollInterval: POLL_STATS_MS },
   );
 
   const s = gqlData?.marketplaceStats;

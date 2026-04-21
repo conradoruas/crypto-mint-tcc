@@ -16,10 +16,10 @@ import { parseAddress } from "@/lib/schemas";
  */
 export function useNFTListing(nftContract: string, tokenId: string) {
   const nftAddr = parseAddress(nftContract);
-  const enabled = !!nftAddr && !!tokenId;
+  const enabled = !!MARKETPLACE_ADDRESS && !!nftAddr && !!tokenId;
 
   const { data: listing, refetch: refetchListing } = useReadContract({
-    address: MARKETPLACE_ADDRESS,
+    address: MARKETPLACE_ADDRESS ?? zeroAddress,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getListing",
     args: [nftAddr ?? zeroAddress, BigInt(tokenId || "0")],

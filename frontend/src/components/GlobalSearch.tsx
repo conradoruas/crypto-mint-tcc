@@ -1,5 +1,5 @@
 "use client";
-import { SUBGRAPH_ENABLED } from "@/lib/env";
+import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";

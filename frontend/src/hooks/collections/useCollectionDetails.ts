@@ -1,5 +1,5 @@
 "use client";
-import { SUBGRAPH_ENABLED } from "@/lib/env";
+import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 import { useReadContract, useReadContracts } from "wagmi";
 import { formatEther, zeroAddress } from "viem";

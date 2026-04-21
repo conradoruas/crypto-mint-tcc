@@ -1,5 +1,5 @@
 "use client";
-import { SUBGRAPH_ENABLED } from "@/lib/env";
+import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CollectionNFTItem } from "@/types/nft";

@@ -18,6 +18,9 @@ export function useAcceptOffer() {
       tokenId: string,
       buyerAddress: `0x${string}`,
     ) => {
+      if (!MARKETPLACE_ADDRESS) {
+        throw new Error("Marketplace contract is not configured.");
+      }
       await execute({
         nftContract,
         approveCheckAbi: NFT_COLLECTION_ABI,

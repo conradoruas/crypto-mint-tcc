@@ -1,5 +1,5 @@
 "use client";
-import { SUBGRAPH_ENABLED } from "@/lib/env";
+import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 import { useReadContract, useReadContracts, useConnection } from "wagmi";
 import { formatEther, zeroAddress } from "viem";
@@ -105,11 +105,11 @@ export function useMyOffer(nftContract: string, tokenId: string) {
   const { address } = useConnection();
   const nftAddr = parseAddress(nftContract);
   const { data: offer, refetch } = useReadContract({
-    address: MARKETPLACE_ADDRESS,
+    address: MARKETPLACE_ADDRESS ?? zeroAddress,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOffer",
     args: [nftAddr ?? zeroAddress, BigInt(tokenId || "0"), address ?? zeroAddress],
-    query: { enabled: !!address && !!nftAddr && !!tokenId },
+    query: { enabled: !!MARKETPLACE_ADDRESS && !!address && !!nftAddr && !!tokenId },
   });
 
   const offerData = offer as OfferData | undefined;
@@ -137,7 +137,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   const userAddress = address?.toLowerCase();
 
   const nftAddr = parseAddress(nftContract);
-  const enabled = !!nftAddr && !!tokenId;
+  const enabled = !!MARKETPLACE_ADDRESS && !!nftAddr && !!tokenId;
   const tokenIdBn = BigInt(tokenId || "0");
 
   const nowBucketed = useNowBucketed();
@@ -170,7 +170,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   const rpcEnabled = enabled && !SUBGRAPH_ENABLED;
 
   const { data: buyersRaw, refetch: refetchBuyers } = useReadContract({
-    address: MARKETPLACE_ADDRESS,
+    address: MARKETPLACE_ADDRESS ?? zeroAddress,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getOfferBuyers",
     args: [nftAddr ?? zeroAddress, tokenIdBn],
@@ -193,7 +193,7 @@ export function useNFTOffers(nftContract: string, tokenId: string) {
   const offerReads = useMemo(
     () =>
       buyerAddresses.map((buyer) => ({
-        address: MARKETPLACE_ADDRESS,
+        address: MARKETPLACE_ADDRESS ?? zeroAddress,
         abi: NFT_MARKETPLACE_ABI,
         functionName: "getOffer" as const,
         args: [nftAddr ?? zeroAddress, tokenIdBn, buyer] as const,

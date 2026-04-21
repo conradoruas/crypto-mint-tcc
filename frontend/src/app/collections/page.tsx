@@ -1,5 +1,5 @@
 "use client";
-import { SUBGRAPH_ENABLED } from "@/lib/env";
+import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 import { Navbar } from "@/components/navbar";
 import { useCollections } from "@/hooks/collections";

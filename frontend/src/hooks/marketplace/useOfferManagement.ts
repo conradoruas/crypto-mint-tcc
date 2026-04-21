@@ -18,6 +18,9 @@ export function useMakeOffer() {
       tokenId: string,
       amountInEth: string,
     ) => {
+      if (!MARKETPLACE_ADDRESS) {
+        throw new Error("Marketplace contract is not configured.");
+      }
       await mutate({
         address: MARKETPLACE_ADDRESS,
         abi: NFT_MARKETPLACE_ABI,
@@ -41,6 +44,9 @@ export function useCancelOffer() {
 
   const cancelOffer = useCallback(
     async (nftContract: `0x${string}`, tokenId: string) => {
+      if (!MARKETPLACE_ADDRESS) {
+        throw new Error("Marketplace contract is not configured.");
+      }
       await mutate({
         address: MARKETPLACE_ADDRESS,
         abi: NFT_MARKETPLACE_ABI,
@@ -67,6 +73,9 @@ export function useReclaimExpiredOffer() {
       tokenId: string,
       buyerAddress: `0x${string}`,
     ) => {
+      if (!MARKETPLACE_ADDRESS) {
+        throw new Error("Marketplace contract is not configured.");
+      }
       await mutate({
         address: MARKETPLACE_ADDRESS,
         abi: NFT_MARKETPLACE_ABI,

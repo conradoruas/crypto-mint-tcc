@@ -5,7 +5,7 @@ import { ApolloClient, InMemoryCache } from "@apollo/client";
 import { ApolloProvider } from "@apollo/client/react";
 import { MockLink } from "@apollo/client/testing";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider } from "next-themes";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "sonner";
 import { vi } from "vitest";
 
@@ -42,7 +42,7 @@ function buildWrapper(options: ProvidersOptions = {}) {
 
   function Wrapper({ children }: { children: ReactNode }) {
     return (
-      <ThemeProvider attribute="class" defaultTheme="dark">
+      <ThemeProvider defaultTheme="dark">
         <QueryClientProvider client={qc}>
           <ApolloProvider client={apolloClient}>
             {children}
@@ -126,7 +126,9 @@ export function makeWagmiMocks() {
     useAccount: vi.fn(() => ({
       address: _walletConfig.address,
       isConnected: _walletConfig.isConnected ?? !!_walletConfig.address,
-      status: _walletConfig.status ?? (_walletConfig.address ? "connected" : "disconnected"),
+      status:
+        _walletConfig.status ??
+        (_walletConfig.address ? "connected" : "disconnected"),
     })),
     useConnection: vi.fn(() => ({
       address: _walletConfig.address,

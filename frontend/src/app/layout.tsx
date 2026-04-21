@@ -6,9 +6,6 @@ import { Web3Provider } from "@/components/Web3Provider";
 import { ApolloProvider } from "@/components/ApolloProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ClientToaster } from "@/components/ClientToaster";
-// Validate required env vars at server startup — throws with a clear message
-// if any are missing rather than failing silently later.
-import "@/lib/env";
 
 import "./globals.css";
 
@@ -44,7 +41,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="antialiased min-h-screen bg-background text-on-surface">
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <ThemeProvider defaultTheme="dark">
           <ApolloProvider>
             <Web3Provider>
               <ErrorBoundary>

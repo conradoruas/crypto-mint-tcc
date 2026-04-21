@@ -18,6 +18,9 @@ export function useBuyNFT() {
       tokenId: string,
       priceInEth: string,
     ) => {
+      if (!MARKETPLACE_ADDRESS) {
+        throw new Error("Marketplace contract is not configured.");
+      }
       await mutate({
         address: MARKETPLACE_ADDRESS,
         abi: NFT_MARKETPLACE_ABI,

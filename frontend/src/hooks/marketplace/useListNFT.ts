@@ -15,6 +15,9 @@ export function useListNFT() {
 
   const listNFT = useCallback(
     async (nftContract: `0x${string}`, tokenId: string, priceInEth: string) => {
+      if (!MARKETPLACE_ADDRESS) {
+        throw new Error("Marketplace contract is not configured.");
+      }
       await execute({
         nftContract,
         approveCheckAbi: NFT_COLLECTION_ABI,

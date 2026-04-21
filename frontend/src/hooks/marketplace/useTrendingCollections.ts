@@ -1,5 +1,5 @@
 "use client";
-import { SUBGRAPH_ENABLED } from "@/lib/env";
+import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 import { useMemo } from "react";
 import { formatEther } from "viem";
@@ -158,4 +158,3 @@ export function useTrendingCollections(limit = 10) {
 
   return { trending, isLoading: gqlLoading };
 }
-
