@@ -28,7 +28,10 @@ export default function EditProfilePage() {
   const { mutateAsync } = useSignMessage();
 
   const getAuthHeaders = useCallback(
-    createUploadAuthHeaders(mutateAsync, address),
+    async (pathname: string) => {
+      if (!address) throw new Error("Wallet required");
+      return createUploadAuthHeaders(mutateAsync, address)(pathname);
+    },
     [mutateAsync, address],
   );
   const router = useRouter();
