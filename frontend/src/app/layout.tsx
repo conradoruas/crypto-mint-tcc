@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Space_Grotesk, Manrope } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
@@ -6,9 +7,7 @@ import { Web3Provider } from "@/components/Web3Provider";
 import { ApolloProvider } from "@/components/ApolloProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ClientToaster } from "@/components/ClientToaster";
-// Validate required env vars at server startup — throws with a clear message
-// if any are missing rather than failing silently later.
-import "@/lib/env";
+import { isThemeMode, THEME_COOKIE_NAME } from "@/lib/theme";
 
 import "./globals.css";
 
@@ -32,19 +31,24 @@ export const metadata: Metadata = {
     "Marketplace descentralizado para criação e negociação de NFTs — TCC 2026",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const cookieStore = await cookies();
+  const cookieTheme = cookieStore.get(THEME_COOKIE_NAME)?.value;
+  const initialTheme = isThemeMode(cookieTheme) ? cookieTheme : "dark";
+
   return (
     <html
       lang="pt-br"
-      className={`${spaceGrotesk.variable} ${manrope.variable}`}
+      className={`${spaceGrotesk.variable} ${manrope.variable}${initialTheme === "dark" ? " dark" : ""}`}
+      data-theme={initialTheme}
       suppressHydrationWarning
     >
       <body className="antialiased min-h-screen bg-background text-on-surface">
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <ThemeProvider defaultTheme="dark" initialTheme={initialTheme}>
           <ApolloProvider>
             <Web3Provider>
               <ErrorBoundary>

@@ -11,6 +11,7 @@ function buildCacheConfig() {
           collections: { merge: false },
           activityEvents: { merge: false },
           nfts: { merge: false },
+          offers: { merge: false },
         },
       },
     },

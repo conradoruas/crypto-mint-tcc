@@ -49,7 +49,8 @@ export type CollectionFormAction =
   | { type: "SET_NFTS"; nfts: NFTDraft[] }
   | { type: "ADD_NFT" }
   | { type: "REMOVE_NFT"; id: number }
-  | { type: "UPDATE_NFT"; id: number; field: keyof NFTDraft; value: string | File | null }
+  | { type: "UPDATE_NFT"; id: number; field: keyof Omit<NFTDraft, "previewUrl">; value: string | File | null }
+  | { type: "SET_NFT_FILE"; id: number; file: File | null; previewUrl: string }
   | { type: "SET_PAGE"; page: number }
   | { type: "SET_UPLOADING_COVER"; value: boolean }
   | { type: "SET_UPLOADING_NFTS"; value: boolean }
@@ -118,11 +119,17 @@ export function collectionFormReducer(
         ...state,
         nfts: state.nfts.map((n) => {
           if (n.id !== action.id) return n;
-          if (action.field === "file" && action.value instanceof File) {
-            return { ...n, file: action.value, previewUrl: URL.createObjectURL(action.value) };
-          }
           return { ...n, [action.field]: action.value };
         }),
+      };
+    case "SET_NFT_FILE":
+      return {
+        ...state,
+        nfts: state.nfts.map((n) =>
+          n.id === action.id
+            ? { ...n, file: action.file, previewUrl: action.previewUrl }
+            : n,
+        ),
       };
     case "SET_PAGE":
       return { ...state, currentPage: action.page };

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { ALCHEMY_API_KEY as ALCHEMY_KEY } from "@/lib/env";
 import { logger } from "@/lib/logger";
 

@@ -2,17 +2,6 @@
 
 import Image from "next/image";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { formatEther } from "viem";
-import {
-  useBalance,
-  useConnection,
-  useReadContract,
-  useSignMessage,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-  usePublicClient,
-} from "wagmi";
 import { Navbar } from "@/components/navbar";
 import {
   Loader2,
@@ -24,465 +13,13 @@ import {
   AlertTriangle,
   X,
   CheckCircle2,
-  Upload,
-  Wallet,
 } from "lucide-react";
-import {
-  useCollectionDetails,
-  useCollectionNFTs,
-  useMintToCollection,
-} from "@/hooks/collections";
-import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import Footer from "@/components/Footer";
 import { CollectionNFTCard } from "@/components/marketplace/CollectionNFTCard";
-import { resolveIpfsUrl } from "@/lib/ipfs";
 import { shortAddr } from "@/lib/utils";
-import { formatTransactionError } from "@/lib/txErrors";
-import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
-import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
-import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
-import { generateAndStoreMintSeed } from "@/lib/mintSeed";
-
-// ─── Load NFTs panel (owner only, shown when urisLoaded === false) ────────────
-
-interface NFTLoadDraft {
-  name: string;
-  description: string;
-  file: File | null;
-  previewUrl: string;
-}
-
-function LoadNFTsPanel({
-  collectionAddress,
-  maxSupply,
-  onSuccess,
-}: {
-  collectionAddress: `0x${string}`;
-  maxSupply: number;
-  onSuccess: () => void;
-}) {
-  // Inicializa o array com o número exato de slots (maxSupply)
-  const [nftDrafts, setNftDrafts] = useState<NFTLoadDraft[]>(
-    Array(maxSupply)
-      .fill(null)
-      .map(() => ({
-        name: "",
-        description: "",
-        file: null,
-        previewUrl: "",
-      })),
-  );
-
-  const [isUploading, setIsUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-
-  const { address } = useConnection();
-  const publicClient = usePublicClient();
-  const { signMessageAsync } = useSignMessage();
-
-  const getAuthHeaders = useCallback(
-    (pathname: string) => {
-      if (!address) throw new Error("Carteira necessária");
-      return buildUploadAuthHeaders(signMessageAsync, address, pathname);
-    },
-    [signMessageAsync, address],
-  );
-
-  const uploadImage = useCallback(
-    async (file: File): Promise<string> => {
-      const formData = new FormData();
-      formData.append("file", file);
-      const headers = await getAuthHeaders(UPLOAD_API_PATHS.image);
-      const res = await fetch("/api/upload-image", {
-        method: "POST",
-        body: formData,
-        headers,
-      });
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      const data = await res.json();
-      if (!data.uri) throw new Error("Invalid URI");
-      return data.uri;
-    },
-    [getAuthHeaders],
-  );
-
-  const uploadMetadata = useCallback(
-    async (
-      name: string,
-      description: string,
-      imageUri: string,
-    ): Promise<string> => {
-      const headers = {
-        "Content-Type": "application/json",
-        ...(await getAuthHeaders(UPLOAD_API_PATHS.profile)),
-      };
-      const res = await fetch("/api/upload-profile", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          name,
-          description: description || "",
-          image: imageUri,
-          address: `nft-${Date.now()}`,
-        }),
-      });
-      if (!res.ok) throw new Error(`Metadata upload failed: ${res.status}`);
-      const data = await res.json();
-      if (!data.uri) throw new Error("Invalid URI");
-      return data.uri;
-    },
-    [getAuthHeaders],
-  );
-
-  const { mutateAsync, isPending } = useWriteContract();
-  const [loadHash, setLoadHash] = useState<`0x${string}` | undefined>();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: loadHash,
-  });
-
-  useEffect(() => {
-    if (isSuccess) onSuccess();
-  }, [isSuccess, onSuccess]);
-
-  const updateNFT = (
-    index: number,
-    field: keyof NFTLoadDraft,
-    value: string | File,
-  ) => {
-    setNftDrafts((prev) =>
-      prev.map((nft, i) => {
-        if (i !== index) return nft;
-        if (field === "file" && value instanceof File) {
-          return {
-            ...nft,
-            file: value,
-            previewUrl: URL.createObjectURL(value),
-          };
-        }
-        return { ...nft, [field]: value };
-      }),
-    );
-  };
-
-  const handleLoad = async () => {
-    // Validação: Todos precisam de nome e arquivo
-    const isInvalid = nftDrafts.some((n) => !n.name || !n.file);
-    if (isInvalid) {
-      setError("Todos os NFTs precisam de um nome e uma imagem.");
-      return;
-    }
-
-    setError(null);
-    setIsUploading(true);
-    try {
-      const uris: string[] = [];
-      for (let i = 0; i < nftDrafts.length; i++) {
-        setProgress(Math.round((i / nftDrafts.length) * 90));
-        const nft = nftDrafts[i];
-
-        // 1. Upload da Imagem
-        const imageUri = await uploadImage(nft.file!);
-        // 2. Upload do Metadado (agora com descrição)
-        const metaUri = await uploadMetadata(
-          nft.name,
-          nft.description,
-          imageUri,
-        );
-
-        uris.push(metaUri);
-      }
-
-      setProgress(95);
-      setIsUploading(false);
-
-      if (!address || !publicClient) {
-        throw new Error("Carteira necessária");
-      }
-      const gas = await estimateContractGasWithBuffer(publicClient, {
-        account: address,
-        address: collectionAddress,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "loadTokenURIs",
-        args: [uris],
-      });
-      const tx = await mutateAsync({
-        address: collectionAddress,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "loadTokenURIs",
-        args: [uris],
-        gas,
-      });
-      setLoadHash(tx);
-      setProgress(100);
-    } catch (e) {
-      setError(
-        formatTransactionError(
-          e,
-          "Could not load NFTs on-chain. Try again.",
-        ),
-      );
-      setIsUploading(false);
-    }
-  };
-
-  const busy = isUploading || isPending || isConfirming;
-  const inputClass =
-    "w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-3 py-2 rounded-sm text-xs focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40";
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 mb-10">
-      <div className="bg-surface-container-low border border-secondary/30 p-8 shadow-sm">
-        <div className="flex items-start gap-4 mb-8">
-          <AlertTriangle size={20} className="text-secondary shrink-0 mt-1" />
-          <div>
-            <h3 className="font-headline font-bold text-lg text-on-surface uppercase tracking-tight">
-              Configuração Final da Coleção
-            </h3>
-            <p className="text-sm text-on-surface-variant">
-              Preencha os detalhes dos {maxSupply} NFTs para habilitar o minting
-              na blockchain.
-            </p>
-          </div>
-        </div>
-
-        {/* NFT Form Grid */}
-        <div className="space-y-4 mb-8">
-          {nftDrafts.map((nft, index) => (
-            <div
-              key={index}
-              className="p-4 bg-surface-container border border-outline-variant/10 flex flex-col md:flex-row gap-4 items-start"
-            >
-              {/* Image Upload Area */}
-              <div className="shrink-0">
-                <input
-                  type="file"
-                  id={`nft-load-file-${index}`}
-                  className="hidden"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) updateNFT(index, "file", file);
-                  }}
-                  disabled={busy}
-                />
-                <label
-                  htmlFor={`nft-load-file-${index}`}
-                  className={`w-24 h-24 flex items-center justify-center cursor-pointer overflow-hidden border ${
-                    nft.file
-                      ? "border-primary/40"
-                      : "border-dashed border-outline-variant/20 hover:border-secondary/40"
-                  } transition-all`}
-                >
-                  {nft.previewUrl ? (
-                    <div className="relative w-full h-full">
-                      <Image
-                        src={nft.previewUrl}
-                        alt="NFT Preview"
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
-                    </div>
-                  ) : (
-                    <div className="text-center p-2">
-                      <Upload
-                        size={16}
-                        className="mx-auto mb-1 text-on-surface-variant/30"
-                      />
-                      <span className="text-[8px] uppercase font-bold text-on-surface-variant/50">
-                        Imagem *
-                      </span>
-                    </div>
-                  )}
-                </label>
-              </div>
-
-              {/* Text Inputs Area */}
-              <div className="flex-1 w-full space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-headline font-bold text-secondary uppercase tracking-widest bg-secondary/10 px-2 py-1">
-                    #{String(index + 1).padStart(3, "0")}
-                  </span>
-                  <input
-                    type="text"
-                    value={nft.name}
-                    onChange={(e) => updateNFT(index, "name", e.target.value)}
-                    className={inputClass}
-                    placeholder="Nome do NFT *"
-                    disabled={busy}
-                  />
-                </div>
-                <textarea
-                  value={nft.description}
-                  onChange={(e) =>
-                    updateNFT(index, "description", e.target.value)
-                  }
-                  className={`${inputClass} h-16 resize-none`}
-                  placeholder="Descrição (opcional)"
-                  disabled={busy}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Status e Ações */}
-        {busy && (
-          <div className="mb-6">
-            <div className="flex justify-between text-[10px] text-on-surface-variant mb-2 uppercase tracking-widest">
-              <span>
-                {isUploading
-                  ? `IPFS: ${progress}%`
-                  : isPending
-                    ? "Carteira..."
-                    : "Blockchain..."}
-              </span>
-              <span>{progress}%</span>
-            </div>
-            <div className="h-1 bg-surface-container-high overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-500"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="text-xs p-4 mb-6 bg-error/5 border border-error/20 text-error flex items-center gap-2">
-            <AlertTriangle size={14} /> {error}
-          </div>
-        )}
-
-        <button
-          onClick={handleLoad}
-          disabled={busy}
-          className="w-full font-headline font-bold py-4 flex items-center justify-center gap-3 text-sm uppercase tracking-widest transition-all bg-secondary text-on-secondary hover:brightness-110 disabled:opacity-50"
-        >
-          {busy ? (
-            <Loader2 className="animate-spin" size={18} />
-          ) : (
-            <Upload size={18} />
-          )}
-          {busy ? "Processando..." : `Finalizar e Carregar ${maxSupply} NFTs`}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Mint modal ───────────────────────────────────────────────────────────────
-
-function MintModal({
-  collectionAddress,
-  mintPriceEth,
-  urisLoaded,
-  onClose,
-  onSuccess,
-}: {
-  collectionAddress: `0x${string}`;
-  mintPriceEth: string;
-  urisLoaded: boolean;
-  onClose: () => void;
-  onSuccess: (hash: string) => void;
-}) {
-  const { address } = useConnection();
-  const [error, setError] = useState<string | null>(null);
-  const { mint, isPending, isConfirming, isSuccess, hash } =
-    useMintToCollection();
-
-  useEffect(() => {
-    if (isSuccess && hash) onSuccess(hash);
-  }, [isSuccess, hash, onSuccess]);
-
-  const handleMint = async () => {
-    setError(null);
-    if (!address) {
-      setError("Carteira não conectada.");
-      return;
-    }
-    if (!urisLoaded) {
-      setError("Coleção ainda não preparada pelo criador.");
-      return;
-    }
-    try {
-      await mint(collectionAddress, mintPriceEth, address);
-    } catch (e) {
-      setError(formatTransactionError(e, "Could not mint. Try again."));
-    }
-  };
-
-  const busy = isPending || isConfirming;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="w-full max-w-sm bg-surface-container border border-outline-variant/30 p-8 text-center">
-        <h2 className="font-headline text-2xl font-bold text-on-surface mb-2">
-          Mintar NFT
-        </h2>
-        <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
-          Você receberá um NFT{" "}
-          <strong className="text-on-surface">aleatório</strong> desta coleção.
-        </p>
-
-        <div className="bg-surface-container-high border border-outline-variant/20 p-5 mb-6">
-          <p className="text-[10px] font-headline uppercase tracking-widest text-on-surface-variant mb-1">
-            Preço de mint
-          </p>
-          <p className="font-headline text-3xl font-bold text-primary">
-            {mintPriceEth} ETH
-          </p>
-        </div>
-
-        {!urisLoaded && (
-          <div className="flex items-start gap-2 p-3 mb-4 text-left bg-secondary/5 border border-secondary/20">
-            <AlertTriangle
-              size={13}
-              className="text-secondary shrink-0 mt-0.5"
-            />
-            <p className="text-xs text-secondary">
-              O criador ainda não finalizou o carregamento dos NFTs.
-            </p>
-          </div>
-        )}
-
-        {error && (
-          <div className="text-sm p-3 mb-4 bg-error/5 border border-error/30 text-error">
-            {error}
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            disabled={busy}
-            className="flex-1 font-bold py-3 border border-outline-variant/30 text-on-surface-variant hover:border-outline-variant hover:text-on-surface transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleMint}
-            disabled={busy || !urisLoaded}
-            className="flex-1 font-bold py-3 flex items-center justify-center gap-2 transition-all bg-primary text-on-primary hover:bg-primary-dim disabled:bg-surface-container-high disabled:text-on-surface-variant/40 disabled:cursor-not-allowed"
-          >
-            {busy ? (
-              <>
-                <Loader2 className="animate-spin" size={14} />
-                {isPending ? "Aguardando..." : "Confirmando..."}
-              </>
-            ) : (
-              <>
-                <Plus size={14} />
-                Mintar
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { MintModal } from "./MintModal";
+import { CollectionOwnerPanels } from "./CollectionOwnerPanels";
+import { useCollectionPageCoordinator } from "./useCollectionPageCoordinator";
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -490,149 +27,30 @@ export default function CollectionPage() {
   const { address: collectionAddr } = useParams();
   const collectionAddress =
     (Array.isArray(collectionAddr) ? collectionAddr[0] : collectionAddr) ?? "";
-
-  const { address: userAddress, isConnected } = useConnection();
-  const publicClientMain = usePublicClient();
-  const [showMintModal, setShowMintModal] = useState(false);
-  const [mintSuccess, setMintSuccess] = useState<string | null>(null);
-  const [loadSuccess, setLoadSuccess] = useState(false);
-  const [withdrawError, setWithdrawError] = useState<string | null>(null);
-  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
-  const [withdrawHash, setWithdrawHash] = useState<`0x${string}` | undefined>();
-
-  const details = useCollectionDetails(collectionAddress);
   const {
-    nfts,
-    isLoading: isLoadingNFTs,
-    isLoadingMore,
-    totalSupply,
-    hasMore,
-    loadMore,
-  } = useCollectionNFTs(collectionAddress);
-
-  const { data: urisLoadedData, refetch: refetchUrisLoaded } = useReadContract({
-    address: collectionAddress as `0x${string}`,
-    abi: NFT_COLLECTION_ABI,
-    functionName: "urisLoaded",
-    query: { enabled: !!collectionAddress },
-  });
-  const urisLoaded = (urisLoadedData as boolean | undefined) || loadSuccess;
-
-  const { data: mintSeedCommittedData, refetch: refetchMintSeedCommitted } =
-    useReadContract({
-      address: collectionAddress as `0x${string}`,
-      abi: NFT_COLLECTION_ABI,
-      functionName: "mintSeedCommitted",
-      query: { enabled: !!collectionAddress },
-    });
-  const mintSeedCommitted = Boolean(mintSeedCommittedData);
-
-  const {
-    mutateAsync: commitSeedWrite,
-    isPending: isCommitSeedPending,
-  } = useWriteContract();
-  const [commitSeedHash, setCommitSeedHash] = useState<
-    `0x${string}` | undefined
-  >();
-  const [commitSeedError, setCommitSeedError] = useState<string | null>(null);
-  const {
-    isLoading: isCommitSeedConfirming,
-    isSuccess: isCommitSeedConfirmed,
-  } = useWaitForTransactionReceipt({ hash: commitSeedHash });
-
-  useEffect(() => {
-    if (isCommitSeedConfirmed) refetchMintSeedCommitted();
-  }, [isCommitSeedConfirmed, refetchMintSeedCommitted]);
-
-  const handleCommitMintSeed = async () => {
-    setCommitSeedError(null);
-    try {
-      if (!userAddress || !publicClientMain) {
-        throw new Error("Connect your wallet.");
-      }
-      const { commitment } = generateAndStoreMintSeed(collectionAddress);
-      const gas = await estimateContractGasWithBuffer(publicClientMain, {
-        account: userAddress,
-        address: collectionAddress as `0x${string}`,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "commitMintSeed",
-        args: [commitment],
-      });
-      const tx = await commitSeedWrite({
-        address: collectionAddress as `0x${string}`,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "commitMintSeed",
-        args: [commitment],
-        gas,
-      });
-      setCommitSeedHash(tx);
-    } catch (e) {
-      setCommitSeedError(
-        formatTransactionError(e, "Could not enable minting. Try again."),
-      );
-    }
-  };
-
-  const { data: contractBalance, refetch: refetchBalance } = useBalance({
-    address: collectionAddress as `0x${string}`,
-    query: { enabled: !!collectionAddress },
-  });
-
-  const { mutateAsync: withdrawWrite, isPending: isWithdrawPending } =
-    useWriteContract();
-  const { isLoading: isWithdrawConfirming, isSuccess: isWithdrawConfirmed } =
-    useWaitForTransactionReceipt({ hash: withdrawHash });
-
-  useEffect(() => {
-    if (isWithdrawConfirmed) {
-      setWithdrawSuccess(true);
-      refetchBalance();
-    }
-  }, [isWithdrawConfirmed, refetchBalance]);
-
-  const handleWithdraw = async () => {
-    setWithdrawError(null);
-    try {
-      if (!userAddress || !publicClientMain) {
-        throw new Error("Connect your wallet.");
-      }
-      const gas = await estimateContractGasWithBuffer(publicClientMain, {
-        account: userAddress,
-        address: collectionAddress as `0x${string}`,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "withdraw",
-      });
-      const tx = await withdrawWrite({
-        address: collectionAddress as `0x${string}`,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "withdraw",
-        gas,
-      });
-      setWithdrawHash(tx);
-    } catch (e) {
-      setWithdrawError(
-        formatTransactionError(e, "Could not withdraw funds. Try again."),
-      );
-    }
-  };
-
-  const isOwner =
-    userAddress &&
-    details.owner &&
-    userAddress.toLowerCase() === details.owner.toLowerCase();
-  const supplyPercent =
-    details.maxSupply && details.maxSupply > 0
-      ? Number((BigInt(totalSupply) * BigInt(100)) / details.maxSupply)
-      : 0;
-  const isSoldOut =
-    details.maxSupply && BigInt(totalSupply) >= details.maxSupply;
-
-  const bannerImage = details.image ? resolveIpfsUrl(details.image) : null;
-
-  const handleLoadSuccess = () => {
-    setLoadSuccess(true);
-    refetchUrisLoaded();
-  };
+    isConnected,
+    showMintModal,
+    setShowMintModal,
+    mintSuccess,
+    setMintSuccess,
+    details,
+    nftState: {
+      nfts,
+      isLoading: isLoadingNFTs,
+      isLoadingMore,
+      totalSupply,
+      hasMore,
+      loadMore,
+    },
+    urisLoaded,
+    mintSeedCommitted,
+    ownerActions,
+    isOwner,
+    supplyPercent,
+    isSoldOut,
+    bannerImage,
+    handleLoadSuccess,
+  } = useCollectionPageCoordinator(collectionAddress);
 
   return (
     <div className="bg-background min-h-screen text-on-surface">
@@ -705,26 +123,6 @@ export default function CollectionPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-3 shrink-0">
-                  {isOwner &&
-                    contractBalance &&
-                    contractBalance.value > BigInt(0) && (
-                      <button
-                        onClick={handleWithdraw}
-                        disabled={isWithdrawPending || isWithdrawConfirming}
-                        className="flex items-center gap-2 font-bold px-6 py-3 bg-surface-container border border-secondary/30 text-secondary hover:border-secondary hover:bg-secondary/10 transition-colors whitespace-nowrap disabled:opacity-50"
-                      >
-                        {isWithdrawPending || isWithdrawConfirming ? (
-                          <Loader2 className="animate-spin" size={16} />
-                        ) : (
-                          <Wallet size={16} />
-                        )}
-                        Withdraw{" "}
-                        {parseFloat(formatEther(contractBalance.value)).toFixed(
-                          4,
-                        )}{" "}
-                        ETH
-                      </button>
-                    )}
                   {isConnected &&
                     !isSoldOut &&
                     urisLoaded &&
@@ -806,56 +204,22 @@ export default function CollectionPage() {
         </div>
       </div>
 
-      {/* Load NFTs panel — owner only, while urisLoaded is false */}
-      {isOwner && !urisLoaded && details.maxSupply && details.maxSupply > 0 && (
-        <LoadNFTsPanel
-          collectionAddress={collectionAddress as `0x${string}`}
-          maxSupply={Number(details.maxSupply)}
-          onSuccess={handleLoadSuccess}
-        />
-      )}
-
-      {/* Commit mint seed panel — owner only, once URIs are loaded but seed not committed */}
-      {isOwner && urisLoaded && !mintSeedCommitted && (
-        <div className="max-w-7xl mx-auto px-4 mb-10">
-          <div className="bg-surface-container-low border border-secondary/30 p-8 shadow-sm">
-            <div className="flex items-start gap-4 mb-4">
-              <AlertTriangle size={20} className="text-secondary shrink-0 mt-1" />
-              <div>
-                <h3 className="font-headline font-bold text-lg text-on-surface uppercase tracking-tight">
-                  Habilitar Minting
-                </h3>
-                <p className="text-sm text-on-surface-variant mt-1">
-                  Commite o mint seed para ativar o minting desta coleção. O
-                  seed é gerado localmente, salvo no seu navegador e commitado
-                  como hash on-chain. Guarde este navegador para fazer o
-                  reveal depois que a coleção esgotar.
-                </p>
-              </div>
-            </div>
-            {commitSeedError && (
-              <p className="text-xs text-error mb-3">{commitSeedError}</p>
-            )}
-            <button
-              onClick={handleCommitMintSeed}
-              disabled={isCommitSeedPending || isCommitSeedConfirming}
-              className="flex items-center gap-2 font-bold px-6 py-3 bg-primary text-on-primary hover:bg-primary-dim transition-colors disabled:opacity-50"
-            >
-              {isCommitSeedPending || isCommitSeedConfirming ? (
-                <>
-                  <Loader2 className="animate-spin" size={16} />
-                  {isCommitSeedPending ? "Aguardando..." : "Confirmando..."}
-                </>
-              ) : (
-                <>
-                  <ShieldCheck size={16} />
-                  Commitar mint seed
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
+      <CollectionOwnerPanels
+        isOwner={!!isOwner}
+        urisLoaded={urisLoaded}
+        mintSeedCommitted={mintSeedCommitted}
+        maxSupply={details.maxSupply}
+        collectionAddress={collectionAddress as `0x${string}`}
+        contractBalanceEth={ownerActions.contractBalanceEth}
+        onWithdraw={ownerActions.handleWithdraw}
+        isWithdrawPending={ownerActions.isWithdrawPending}
+        isWithdrawConfirming={ownerActions.isWithdrawConfirming}
+        onLoadSuccess={handleLoadSuccess}
+        commitSeedError={ownerActions.commitSeedError}
+        onCommitMintSeed={ownerActions.handleCommitMintSeed}
+        isCommitSeedPending={ownerActions.isCommitSeedPending}
+        isCommitSeedConfirming={ownerActions.isCommitSeedConfirming}
+      />
 
       {/* NFT Grid */}
       <div className="max-w-7xl mx-auto px-4 pb-16">
@@ -971,16 +335,16 @@ export default function CollectionPage() {
       )}
 
       {/* Success toast — withdraw */}
-      {withdrawSuccess && (
+      {ownerActions.withdrawSuccess && (
         <div className="fixed bottom-6 right-6 flex items-center gap-3 p-4 z-40 shadow-xl bg-surface-container border border-secondary/30">
           <CheckCircle2 size={18} className="text-secondary shrink-0" />
           <div>
             <p className="font-headline font-bold text-sm text-on-surface">
               Royalties retirados!
             </p>
-            {withdrawHash && (
+            {ownerActions.withdrawHash && (
               <a
-                href={`https://sepolia.etherscan.io/tx/${withdrawHash}`}
+                href={`https://sepolia.etherscan.io/tx/${ownerActions.withdrawHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-secondary underline"
@@ -990,7 +354,7 @@ export default function CollectionPage() {
             )}
           </div>
           <button
-            onClick={() => setWithdrawSuccess(false)}
+            onClick={() => ownerActions.setWithdrawSuccess(false)}
             className="ml-2 text-on-surface-variant hover:text-on-surface transition-colors"
           >
             <X size={14} />
@@ -999,12 +363,12 @@ export default function CollectionPage() {
       )}
 
       {/* Error toast — withdraw */}
-      {withdrawError && (
+      {ownerActions.withdrawError && (
         <div className="fixed bottom-6 right-6 flex items-center gap-3 p-4 z-40 shadow-xl bg-surface-container border border-error/30">
           <AlertTriangle size={18} className="text-error shrink-0" />
-          <p className="text-sm text-error">{withdrawError}</p>
+          <p className="text-sm text-error">{ownerActions.withdrawError}</p>
           <button
-            onClick={() => setWithdrawError(null)}
+            onClick={() => ownerActions.setWithdrawError(null)}
             className="ml-2 text-on-surface-variant hover:text-on-surface transition-colors"
           >
             <X size={14} />

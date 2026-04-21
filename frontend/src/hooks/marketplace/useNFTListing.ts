@@ -1,7 +1,7 @@
 "use client";
 
 import { useReadContract } from "wagmi";
-import { formatEther } from "viem";
+import { formatEther, zeroAddress } from "viem";
 import { useCallback } from "react";
 import {
   MARKETPLACE_ADDRESS,
@@ -16,19 +16,19 @@ import { parseAddress } from "@/lib/schemas";
  */
 export function useNFTListing(nftContract: string, tokenId: string) {
   const nftAddr = parseAddress(nftContract);
-  const enabled = !!nftAddr && !!tokenId;
+  const enabled = !!MARKETPLACE_ADDRESS && !!nftAddr && !!tokenId;
 
   const { data: listing, refetch: refetchListing } = useReadContract({
-    address: MARKETPLACE_ADDRESS,
+    address: MARKETPLACE_ADDRESS ?? zeroAddress,
     abi: NFT_MARKETPLACE_ABI,
     functionName: "getListing",
-    args: [nftAddr!, BigInt(tokenId || "0")],
+    args: [nftAddr ?? zeroAddress, BigInt(tokenId || "0")],
     query: { enabled },
   });
 
   // ownerOf comes from the COLLECTION contract, not the marketplace
   const { data: owner, refetch: refetchOwner } = useReadContract({
-    address: nftAddr!,
+    address: nftAddr ?? zeroAddress,
     abi: NFT_COLLECTION_ABI,
     functionName: "ownerOf",
     args: [BigInt(tokenId || "0")],

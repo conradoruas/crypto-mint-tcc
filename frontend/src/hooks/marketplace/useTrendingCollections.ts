@@ -1,4 +1,5 @@
 "use client";
+import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 import { useMemo } from "react";
 import { formatEther } from "viem";
@@ -15,7 +16,6 @@ import type { TrendingCollection } from "@/types/collection";
 
 export type { TrendingCollection };
 
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 // ─── GraphQL response types ───
 
@@ -158,4 +158,3 @@ export function useTrendingCollections(limit = 10) {
 
   return { trending, isLoading: gqlLoading };
 }
-

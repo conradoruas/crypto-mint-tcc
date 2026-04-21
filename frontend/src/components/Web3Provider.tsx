@@ -4,18 +4,10 @@ import { WagmiProvider, createConfig, http } from "wagmi";
 import { sepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectKitProvider, getDefaultConfig } from "connectkit";
-import { ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
+import { WALLETCONNECT_PROJECT_ID } from "@/lib/publicEnv";
 
-const walletConnectProjectId =
-  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "";
-
-if (process.env.NODE_ENV !== "production" && !walletConnectProjectId) {
-  // eslint-disable-next-line no-console
-  console.warn(
-    "[Web3Provider] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set — " +
-      "WalletConnect will be disabled. Set it in .env.local to enable mobile wallet support.",
-  );
-}
+const walletConnectProjectId = WALLETCONNECT_PROJECT_ID ?? "";
 
 const config = createConfig(
   getDefaultConfig({

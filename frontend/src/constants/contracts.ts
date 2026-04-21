@@ -6,22 +6,17 @@
  * This gives a single source of truth, makes testing easier (mock one file),
  * and prevents typos from silently propagating.
  */
-import { parseAddress } from "@/lib/schemas";
+import type { Address } from "viem";
 import { NFT_MARKETPLACE_ABI } from "@/abi/NFTMarketplace";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { NFT_COLLECTION_FACTORY_ABI } from "@/abi/NFTCollectionFactory";
+import {
+  FACTORY_ADDRESS as FACTORY_ADDRESS_ENV,
+  MARKETPLACE_ADDRESS as MARKETPLACE_ADDRESS_ENV,
+} from "@/lib/publicEnv";
 
-// ── Addresses ────────────────────────────────────────────────────────────────
-// Both vars are validated at startup by env.ts (throws if missing/invalid),
-// so the non-null assertions here are safe at runtime.
-
-export const MARKETPLACE_ADDRESS = parseAddress(
-  process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS,
-)!;
-
-export const FACTORY_ADDRESS = parseAddress(
-  process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS,
-)!;
+export const MARKETPLACE_ADDRESS: Address | undefined = MARKETPLACE_ADDRESS_ENV;
+export const FACTORY_ADDRESS: Address | undefined = FACTORY_ADDRESS_ENV;
 
 // ── Re-exports for convenience ───────────────────────────────────────────────
 

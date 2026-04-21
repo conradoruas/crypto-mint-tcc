@@ -1,4 +1,5 @@
 "use client";
+import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 import { useReadContract, useReadContracts, useConnection } from "wagmi";
 import { useMemo } from "react";
@@ -16,7 +17,6 @@ import type { CollectionInfo } from "@/types/collection";
 export type { CollectionInfo };
 import { parseAddress } from "@/lib/schemas";
 
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 /**
  * Hook to fetch collections created via the factory, with Subgraph/RPC fallback.

@@ -145,6 +145,12 @@ export async function runUploadGate(
   return auth;
 }
 
+/** For tests only — resets rate-limit buckets between test cases. */
+export function _resetBucketsForTests() {
+  ipBuckets.clear();
+  addrBuckets.clear();
+}
+
 export async function verifyUploadAuth(
   req: NextRequest,
   pathname: string,

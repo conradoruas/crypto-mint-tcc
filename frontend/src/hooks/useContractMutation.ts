@@ -1,14 +1,3 @@
-/**
- * useContractMutation — reusable hook for single-step contract writes.
- *
- * Eliminates the repeated pattern of:
- *   1. usePublicClient + useConnection + useWriteContract + useWaitForTransactionReceipt
- *   2. Guard for !publicClient || !address
- *   3. estimateContractGasWithBuffer → mutateAsync → track hash
- *
- * Every marketplace mutation hook (buy, cancel listing, make/cancel offer, reclaim)
- * can now be expressed as a thin wrapper around this hook.
- */
 "use client";
 
 import {
@@ -18,40 +7,44 @@ import {
   usePublicClient,
 } from "wagmi";
 import { useCallback } from "react";
+import type { Abi, Address, ContractFunctionArgs, ContractFunctionName } from "viem";
 import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
-import type { Abi, Address } from "viem";
 
-export interface ContractCallParams {
+export interface ContractCallParams<
+  TAbi extends Abi = Abi,
+  TFunc extends ContractFunctionName<TAbi, "nonpayable" | "payable"> = ContractFunctionName<
+    TAbi,
+    "nonpayable" | "payable"
+  >,
+> {
   /** Contract address to call */
   address: Address;
-  /** Contract ABI */
-  abi: Abi;
-  /** Function name on the ABI */
-  functionName: string;
-  /** Positional arguments for the function call */
-  args: readonly unknown[];
+  /** Contract ABI — must be a const-asserted value for type inference to work */
+  abi: TAbi;
+  /** Function name on the ABI (type-checked against the ABI) */
+  functionName: TFunc;
+  /** Positional arguments (types inferred from ABI) */
+  args?: ContractFunctionArgs<TAbi, "nonpayable" | "payable", TFunc>;
   /** ETH value to send (for payable functions) */
   value?: bigint;
 }
 
 /**
- * Returns a `mutate` function that:
- *  1. Estimates gas with a safety buffer
- *  2. Sends the transaction via the connected wallet
- *  3. Tracks `isPending`, `isConfirming`, `isSuccess`, and `hash`
+ * Reusable hook for single-step contract writes.
+ *
+ * The `mutate` function is generic — passing a const-asserted ABI gives
+ * compile-time argument checking:
  *
  * @example
  * ```ts
- * const { mutate, isPending, isConfirming, isSuccess, hash } = useContractMutation();
- *
- * const buy = (contract, tokenId, price) =>
- *   mutate({
- *     address: MARKETPLACE_ADDRESS,
- *     abi: NFT_MARKETPLACE_ABI,
- *     functionName: "buyItem",
- *     args: [contract, BigInt(tokenId)],
- *     value: parseEther(price),
- *   });
+ * const { mutate } = useContractMutation();
+ * await mutate({
+ *   address: MARKETPLACE_ADDRESS,
+ *   abi: NFT_MARKETPLACE_ABI,   // must be `as const`
+ *   functionName: "buyItem",     // type-checked
+ *   args: [contract, BigInt(tokenId)], // tuple type inferred from ABI
+ *   value: parseEther(price),
+ * });
  * ```
  */
 export function useContractMutation() {
@@ -68,26 +61,33 @@ export function useContractMutation() {
   });
 
   const mutate = useCallback(
-    async (params: ContractCallParams) => {
+    async <
+      TAbi extends Abi,
+      TFunc extends ContractFunctionName<TAbi, "nonpayable" | "payable">,
+    >(
+      params: ContractCallParams<TAbi, TFunc>,
+    ) => {
       if (!publicClient || !address) {
         throw new Error("No network connection.");
       }
       const gas = await estimateContractGasWithBuffer(publicClient, {
         account: address,
         address: params.address,
-        abi: params.abi,
+        abi: params.abi as Abi,
         functionName: params.functionName,
-        args: params.args,
+        args: params.args as readonly unknown[],
         ...(params.value !== undefined ? { value: params.value } : {}),
       });
+      // wagmi's mutateAsync has overloaded generics that don't accept unresolved
+      // type parameters — cast through Parameters to preserve runtime correctness.
       await mutateAsync({
         address: params.address,
-        abi: params.abi,
+        abi: params.abi as Abi,
         functionName: params.functionName,
-        args: params.args,
+        args: params.args as readonly unknown[],
         ...(params.value !== undefined ? { value: params.value } : {}),
         gas,
-      });
+      } as Parameters<typeof mutateAsync>[0]);
     },
     [publicClient, address, mutateAsync],
   );

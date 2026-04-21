@@ -33,7 +33,7 @@ export function useCreateCollection() {
     maxSupply: number;
     mintPrice: string;
   }) => {
-    if (!publicClient || !address) {
+    if (!publicClient || !address || !FACTORY_ADDRESS) {
       throw new Error("Wallet not connected");
     }
     const gas = await estimateContractGasWithBuffer(publicClient, {

@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchAlchemyMeta, fetchAlchemyMetaForEvents } from "../alchemyMeta";
+import {
+  fetchBatchNFTMetadata as fetchAlchemyMeta,
+  fetchBatchNFTMetadataForEvents as fetchAlchemyMetaForEvents,
+} from "../nftMetadata";
 
 afterEach(() => {
   vi.restoreAllMocks();

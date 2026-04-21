@@ -14,11 +14,12 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ConnectKitButton } from "connectkit";
 import { useConnection, useSwitchChain } from "wagmi";
 import { useWrongNetwork, APP_CHAIN } from "@/hooks/useWrongNetwork";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { cn } from "@/lib/utils";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { BellDropdown } from "./BellDropdown";
 import { WalletDropdown } from "./WalletDropdown";
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState } from "react";
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
 
@@ -31,10 +32,7 @@ function NavbarContent() {
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  useEffect(() => {
-    document.body.style.overflow = isMobileMenuOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [isMobileMenuOpen]);
+  useBodyScrollLock(isMobileMenuOpen);
 
   const { mutateAsync } = useSwitchChain();
 

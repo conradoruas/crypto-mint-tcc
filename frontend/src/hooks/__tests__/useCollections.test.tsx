@@ -7,9 +7,12 @@ import {
   useProfileNFTs,
   type CollectionInfo,
 } from "../collections";
-import { GET_COLLECTIONS } from "@/lib/graphql/queries";
+import {
+  GET_COLLECTIONS,
+  GET_COLLECTIONS_BY_CREATOR,
+} from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
-import { MockLink } from "@apollo/client/testing";
+import { type MockLink } from "@apollo/client/testing";
 import { getAddress } from "viem";
 
 type MockedResponse = MockLink.MockedResponse;
@@ -54,8 +57,6 @@ const ADDR_COL2 = "0x1000000000000000000000000000000000000002" as `0x${string}`;
 const ADDR_CREATOR = "0xabcd000000000000000000000000000000000001" as `0x${string}`;
 // getAddress computes the proper EIP-55 checksum — same address, uppercase variant for case-insensitivity test
 const ADDR_CREATOR_UPPER = getAddress(ADDR_CREATOR);
-const ADDR_FOREIGN = "0x3000000000000000000000000000000000000001" as `0x${string}`;
-const ADDR_OTHER = "0x4000000000000000000000000000000000000001" as `0x${string}`;
 const ADDR_MINIMAL = "0x5000000000000000000000000000000000000001" as `0x${string}`;
 const ADDR_OWNER = "0x6000000000000000000000000000000000000001" as `0x${string}`;
 const ADDR_CONTRACT = "0x7000000000000000000000000000000000000001" as `0x${string}`;
@@ -85,6 +86,25 @@ const makeCollectionsMock = (
   result: {
     data: {
       // Garantimos que cada coleção injetada tenha o __typename
+      collections: collections.map((c) => ({
+        ...c,
+        __typename: "Collection",
+      })),
+    },
+  },
+});
+
+const makeCollectionsByCreatorMock = (
+  creator: `0x${string}`,
+  collections: CollectionInfo[] = [COLLECTION_1],
+): MockedResponse => ({
+  maxUsageCount: 2,
+  request: {
+    query: GET_COLLECTIONS_BY_CREATOR,
+    variables: { creator: creator.toLowerCase(), first: 100, skip: 0 },
+  },
+  result: {
+    data: {
       collections: collections.map((c) => ({
         ...c,
         __typename: "Collection",
@@ -359,12 +379,7 @@ describe("useCreatorCollections", () => {
       address: ADDR_CREATOR,
     } as ReturnType<typeof useConnection>);
 
-    const foreign = {
-      ...COLLECTION_1,
-      contractAddress: ADDR_FOREIGN,
-      creator: ADDR_OTHER,
-    };
-    const mocks = [makeCollectionsMock([COLLECTION_1, foreign])];
+    const mocks = [makeCollectionsByCreatorMock(ADDR_CREATOR, [COLLECTION_1])];
 
     const { result } = renderHook(() => useCreatorCollections(), {
       wrapper: makeWrapper(mocks),
@@ -382,7 +397,7 @@ describe("useCreatorCollections", () => {
     } as ReturnType<typeof useConnection>);
 
     const { result } = renderHook(() => useCreatorCollections(), {
-      wrapper: makeWrapper([makeCollectionsMock()]),
+      wrapper: makeWrapper([makeCollectionsByCreatorMock(ADDR_CREATOR_UPPER)]),
     });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -397,7 +412,7 @@ describe("useCreatorCollections", () => {
     } as ReturnType<typeof useConnection>);
 
     const { result } = renderHook(() => useCreatorCollections(), {
-      wrapper: makeWrapper([makeCollectionsMock()]),
+      wrapper: makeWrapper([makeCollectionsByCreatorMock(ADDR_CREATOR)]),
     });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -415,7 +430,9 @@ describe("useCreatorCollections", () => {
       contractAddress: ADDR_COL2,
       name: "Second",
     };
-    const mocks = [makeCollectionsMock([COLLECTION_1, col2])];
+    const mocks = [
+      makeCollectionsByCreatorMock(ADDR_CREATOR, [COLLECTION_1, col2]),
+    ];
 
     const { result } = renderHook(() => useCreatorCollections(), {
       wrapper: makeWrapper(mocks),

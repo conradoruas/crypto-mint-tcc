@@ -1,4 +1,5 @@
 "use client";
+import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 import { Navbar } from "@/components/navbar";
 import { useCollections } from "@/hooks/collections";
@@ -17,8 +18,8 @@ import {
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { shortAddr } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { PageControls } from "@/components/ui";
 
-const SUBGRAPH_ENABLED = !!process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 function CollectionCard({ collection }: { collection: CollectionInfo }) {
   const image = resolveIpfsUrl(collection.image);
@@ -369,63 +370,13 @@ export default function CollectionsPage() {
               ))}
             </div>
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-12 pt-6 border-t border-outline-variant/10">
-                <p className="text-xs text-on-surface-variant uppercase tracking-widest">
-                  {(page - 1) * PAGE_SIZE + 1}–
-                  {Math.min(page * PAGE_SIZE, filtered.length)} of{" "}
-                  {filtered.length}
-                </p>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    Prev
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter(
-                      (p) =>
-                        p === 1 || p === totalPages || Math.abs(p - page) <= 1,
-                    )
-                    .reduce<(number | "…")[]>((acc, p, idx, arr) => {
-                      if (idx > 0 && p - (arr[idx - 1] as number) > 1)
-                        acc.push("…");
-                      acc.push(p);
-                      return acc;
-                    }, [])
-                    .map((p, idx) =>
-                      p === "…" ? (
-                        <span
-                          key={`ellipsis-${idx}`}
-                          className="px-2 text-on-surface-variant/40 text-xs"
-                        >
-                          …
-                        </span>
-                      ) : (
-                        <button
-                          key={p}
-                          onClick={() => setPage(p as number)}
-                          className={`w-8 h-8 text-xs font-bold rounded-sm border transition-all ${page === p
-                            ? "bg-primary text-on-primary border-primary"
-                            : "border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline"
-                            }`}
-                        >
-                          {p}
-                        </button>
-                      ),
-                    )}
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="px-3 py-2 text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/15 text-on-surface-variant hover:text-on-surface hover:border-outline disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
+            <PageControls
+              page={page}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              pageSize={PAGE_SIZE}
+              setPage={setPage}
+            />
           </>
         )}
       </div>

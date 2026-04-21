@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { SortOption } from "@/components/marketplace/FilterSidebar";
+import type { SortOption } from "./filterModel";
 
 export interface ExploreFilters {
   selectedCollection: string;

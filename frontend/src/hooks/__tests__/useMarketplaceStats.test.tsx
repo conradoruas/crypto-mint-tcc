@@ -3,7 +3,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { useMarketplaceStats } from "../marketplace";
 import { GET_MARKETPLACE_STATS } from "@/lib/graphql/queries";
 import { makeApolloWrapper } from "@/test/apolloWrapper";
-import { MockLink } from "@apollo/client/testing";
+import { type MockLink } from "@apollo/client/testing";
 
 type MockedResponse = MockLink.MockedResponse;
 

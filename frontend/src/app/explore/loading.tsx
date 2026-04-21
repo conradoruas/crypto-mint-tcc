@@ -1,3 +1,5 @@
+import { NFTCardSkeleton } from "@/components/ui";
+
 export default function ExploreLoading() {
   return (
     <main className="min-h-screen bg-background text-on-surface">
@@ -64,7 +66,7 @@ export default function ExploreLoading() {
                 key={i}
                 className="bg-surface-container-low rounded-sm overflow-hidden border border-outline-variant/5"
               >
-                <div className="aspect-square animate-pulse bg-surface-container-high" />
+                <NFTCardSkeleton />
                 <div className="p-4 space-y-2">
                   <div className="h-3 w-1/2 rounded-sm animate-pulse bg-surface-container-high" />
                   <div className="h-4 w-3/4 rounded-sm animate-pulse bg-surface-container-high" />

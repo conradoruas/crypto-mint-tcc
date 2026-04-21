@@ -14,22 +14,23 @@ import {
   saveProfileHash,
   type UserProfile,
 } from "@/services/profile";
-import { buildUploadAuthHeaders } from "@/lib/uploadAuthClient";
 import {
   editProfileSchema,
   getZodErrors,
-  EditProfileErrors,
+  type EditProfileErrors,
 } from "@/lib/schemas";
 import { resolveIpfsUrl } from "@/lib/ipfs";
+import { createUploadAuthHeaders } from "@/lib/uploadClient";
+import { useObjectUrl } from "@/hooks/useObjectUrl";
 
 export default function EditProfilePage() {
   const { address } = useConnection();
   const { mutateAsync } = useSignMessage();
 
   const getAuthHeaders = useCallback(
-    (pathname: string) => {
+    async (pathname: string) => {
       if (!address) throw new Error("Wallet required");
-      return buildUploadAuthHeaders(mutateAsync, address, pathname);
+      return createUploadAuthHeaders(mutateAsync, address)(pathname);
     },
     [mutateAsync, address],
   );
@@ -44,18 +45,25 @@ export default function EditProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectPreviewUrl = useObjectUrl(imageFile);
 
   useEffect(() => {
     if (isLoadingProfile || currentProfile === undefined) return;
+    if (imageFile) return;
     setName(currentProfile?.name ?? "");
     setPreviewUrl(currentProfile?.imageUri ? resolveIpfsUrl(currentProfile.imageUri) : "");
-  }, [currentProfile, isLoadingProfile]);
+  }, [currentProfile, isLoadingProfile, imageFile]);
+
+  useEffect(() => {
+    if (objectPreviewUrl) {
+      setPreviewUrl(objectPreviewUrl);
+    }
+  }, [objectPreviewUrl]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setImageFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
   };
 
   const handleSave = async () => {

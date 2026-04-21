@@ -1,6 +1,6 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { useBuyNFT } from "./useBuyNFT";
+import { useBuyNFT } from "../marketplace/useBuyNFT";
 import { useContractMutation } from "../useContractMutation";
 import { parseEther } from "viem";
 import { MARKETPLACE_ADDRESS } from "@/constants/contracts";
@@ -32,16 +32,22 @@ describe("useBuyNFT", () => {
     const mockPrice = "0.5";
 
     await act(async () => {
-      await result.current.buyNFT(mockNftContract as `0x${string}`, mockTokenId, mockPrice);
+      await result.current.buyNFT(
+        mockNftContract as `0x${string}`,
+        mockTokenId,
+        mockPrice,
+      );
     });
 
     expect(mockMutate).toHaveBeenCalledTimes(1);
-    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({
-      address: MARKETPLACE_ADDRESS,
-      functionName: "buyItem",
-      args: [mockNftContract, BigInt(mockTokenId)],
-      value: parseEther(mockPrice),
-    }));
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: MARKETPLACE_ADDRESS,
+        functionName: "buyItem",
+        args: [mockNftContract, BigInt(mockTokenId)],
+        value: parseEther(mockPrice),
+      }),
+    );
   });
 
   it("should return the state of useContractMutation", () => {

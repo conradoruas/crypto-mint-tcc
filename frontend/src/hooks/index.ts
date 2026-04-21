@@ -36,6 +36,7 @@ export type { ActivityType, ActivityEvent } from "./activity";
 
 export { useContractMutation } from "./useContractMutation";
 export { useClickOutside } from "./useClickOutside";
+export { useBodyScrollLock } from "./useBodyScrollLock";
 export { usePaginationState } from "./usePaginationState";
 export { useStableArray } from "./useStableArray";
 export { useWrongNetwork, APP_CHAIN } from "./useWrongNetwork";

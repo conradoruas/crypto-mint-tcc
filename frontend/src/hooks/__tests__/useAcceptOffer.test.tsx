@@ -1,6 +1,6 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { useAcceptOffer } from "./useAcceptOffer";
+import { useAcceptOffer } from "../marketplace/useAcceptOffer";
 import * as wagmi from "wagmi";
 import * as viemActions from "viem/actions";
 import { MARKETPLACE_ADDRESS } from "@/constants/contracts";
@@ -49,15 +49,21 @@ describe("useAcceptOffer", () => {
     const { result } = renderHook(() => useAcceptOffer());
 
     await act(async () => {
-      await result.current.acceptOffer(mockNftContract as `0x${string}`, mockTokenId, mockBuyer as `0x${string}`);
+      await result.current.acceptOffer(
+        mockNftContract as `0x${string}`,
+        mockTokenId,
+        mockBuyer as `0x${string}`,
+      );
     });
 
     expect(mockReadContract).toHaveBeenCalledTimes(1);
     expect(mockMutateAsync).toHaveBeenCalledTimes(1);
-    expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-      functionName: "acceptOffer",
-      args: [mockNftContract, BigInt(mockTokenId), mockBuyer],
-    }));
+    expect(mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "acceptOffer",
+        args: [mockNftContract, BigInt(mockTokenId), mockBuyer],
+      }),
+    );
 
     expect(result.current.phase).toBe("idle");
     expect(result.current.isPending).toBe(false);
@@ -72,50 +78,78 @@ describe("useAcceptOffer", () => {
     const { result } = renderHook(() => useAcceptOffer());
 
     await act(async () => {
-      await result.current.acceptOffer(mockNftContract as `0x${string}`, mockTokenId, mockBuyer as `0x${string}`);
+      await result.current.acceptOffer(
+        mockNftContract as `0x${string}`,
+        mockTokenId,
+        mockBuyer as `0x${string}`,
+      );
     });
 
     expect(mockReadContract).toHaveBeenCalledTimes(1);
     expect(mockMutateAsync).toHaveBeenCalledTimes(2);
     expect(mockMutateAsync).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ functionName: "setApprovalForAll", args: [MARKETPLACE_ADDRESS, true] })
+      expect.objectContaining({
+        functionName: "setApprovalForAll",
+        args: [MARKETPLACE_ADDRESS, true],
+      }),
     );
     expect(mockMutateAsync).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ functionName: "acceptOffer", args: [mockNftContract, BigInt(mockTokenId), mockBuyer] })
+      expect.objectContaining({
+        functionName: "acceptOffer",
+        args: [mockNftContract, BigInt(mockTokenId), mockBuyer],
+      }),
     );
   });
 
   it("should throw error if already in progress", async () => {
     mockReadContract.mockResolvedValue(true);
     let resolveTx: (val: unknown) => void;
-    mockMutateAsync.mockReturnValue(new Promise((r) => { resolveTx = r; }));
+    mockMutateAsync.mockReturnValue(
+      new Promise((r) => {
+        resolveTx = r;
+      }),
+    );
 
     const { result } = renderHook(() => useAcceptOffer());
 
     let promise: Promise<void>;
     act(() => {
-      promise = result.current.acceptOffer(mockNftContract as `0x${string}`, mockTokenId, mockBuyer as `0x${string}`);
-    });
-
-    await act(async () => {
-      await expect(result.current.acceptOffer(mockNftContract as `0x${string}`, mockTokenId, mockBuyer as `0x${string}`)).rejects.toThrow(
-        "Accept offer already in progress."
+      promise = result.current.acceptOffer(
+        mockNftContract as `0x${string}`,
+        mockTokenId,
+        mockBuyer as `0x${string}`,
       );
     });
 
+    await act(async () => {
+      await expect(
+        result.current.acceptOffer(
+          mockNftContract as `0x${string}`,
+          mockTokenId,
+          mockBuyer as `0x${string}`,
+        ),
+      ).rejects.toThrow("Accept offer already in progress.");
+    });
+
     resolveTx!("0xHash");
-    await act(async () => { await promise; });
+    await act(async () => {
+      await promise;
+    });
   });
 
   it("should throw error if no network connection", async () => {
     (wagmi.useConnection as Mock).mockReturnValue({ address: undefined });
     const { result } = renderHook(() => useAcceptOffer());
     await act(async () => {
-      await expect(result.current.acceptOffer(mockNftContract as `0x${string}`, mockTokenId, mockBuyer as `0x${string}`)).rejects.toThrow(
-        "No network connection."
-      );
+      await expect(
+        result.current.acceptOffer(
+          mockNftContract as `0x${string}`,
+          mockTokenId,
+          mockBuyer as `0x${string}`,
+        ),
+      ).rejects.toThrow("No network connection.");
     });
   });
 });

@@ -23,13 +23,13 @@ export class ErrorBoundary extends React.Component<Props, State> {
     return { hasError: true, message: error?.message ?? "Unknown error" };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
+  override componentDidCatch(error: Error, info: React.ErrorInfo) {
     logger.error("[ErrorBoundary]", error, { componentStack: info.componentStack });
   }
 
   reset = () => this.setState({ hasError: false, message: "" });
 
-  render() {
+  override render() {
     if (!this.state.hasError) return this.props.children;
 
     return (

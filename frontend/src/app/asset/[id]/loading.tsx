@@ -1,8 +1,10 @@
+import { NFTCardSkeleton } from "@/components/ui";
+
 export default function AssetLoading() {
   return (
     <div className="pt-32 pb-20 max-w-[1400px] mx-auto px-8 grid grid-cols-1 md:grid-cols-2 gap-12">
       {/* Image */}
-      <div className="aspect-square animate-pulse bg-surface-container-high rounded-sm" />
+      <NFTCardSkeleton rounded />
 
       {/* Details */}
       <div className="flex flex-col gap-5 pt-4">

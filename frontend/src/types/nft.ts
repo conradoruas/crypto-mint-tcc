@@ -17,22 +17,14 @@ export interface NFTItemWithMarket extends NFTItem {
   seller: string | null;
 }
 
-// ─── NFT inside a collection ──────────────────────────────────────────────────
+// ─── NFT inside a collection (structurally identical to NFTItem) ──────────────
+// Kept as a named alias so call sites remain expressive about context.
 
-export interface CollectionNFTItem {
-  tokenId: string;
-  name: string;
-  description: string;
-  image: string;
-  nftContract: string;
-  collectionName?: string;
-}
+export type CollectionNFTItem = NFTItem;
 
-// ─── NFT created by the connected user ────────────────────────────────────────
+// ─── NFT created by the connected user (collectionName is required) ───────────
 
-export interface CreatedNFTItem extends CollectionNFTItem {
-  collectionName: string;
-}
+export type CreatedNFTItem = NFTItem & Required<Pick<NFTItem, "collectionName">>;
 
 // ─── Favorite reference stored in localStorage ────────────────────────────────
 

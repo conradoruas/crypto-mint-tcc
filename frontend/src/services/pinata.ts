@@ -1,5 +1,5 @@
 import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
-import type { UploadAuthHeadersFn } from "@/services/profile";
+import type { UploadAuthHeadersFn } from "@/lib/uploadClient";
 
 export const uploadFileToIPFS = async (
   file: File,

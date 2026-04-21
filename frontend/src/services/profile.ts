@@ -5,7 +5,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { resolveIpfsUrl } from "@/lib/ipfs";
-import { UPLOAD_API_PATHS } from "@/lib/uploadAuthMessage";
+import {
+  type UploadAuthHeadersFn,
+  uploadImageFile,
+  uploadJsonMetadata,
+} from "@/lib/uploadClient";
 
 export interface UserProfile {
   address: string;
@@ -16,32 +20,12 @@ export interface UserProfile {
 
 const STORAGE_KEY = (address: string) => `nft_profile_${address.toLowerCase()}`;
 
-/** Returns headers from `buildUploadAuthHeaders` for the given API pathname. */
-export type UploadAuthHeadersFn = (
-  pathname: string,
-) => Promise<Record<string, string>>;
-
 // ─── Upload de imagem para o IPFS ───
 export async function uploadProfileImage(
   file: File,
   authHeaders: UploadAuthHeadersFn,
 ): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const headers = await authHeaders(UPLOAD_API_PATHS.image);
-  const res = await fetch("/api/upload-image", {
-    method: "POST",
-    body: formData,
-    headers,
-  });
-
-  if (!res.ok) throw new Error(`Falha no upload da imagem: ${res.status}`);
-
-  const data = await res.json();
-  if (!data.uri) throw new Error("URI inválida retornada pelo servidor");
-
-  return data.uri; // ipfs://Qm... direto da imagem
+  return uploadImageFile(file, authHeaders);
 }
 
 // ─── Upload do JSON de perfil para o IPFS ───
@@ -49,22 +33,7 @@ export async function uploadProfileToIPFS(
   profile: UserProfile,
   authHeaders: UploadAuthHeadersFn,
 ): Promise<string> {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(await authHeaders(UPLOAD_API_PATHS.profile)),
-  };
-  const res = await fetch("/api/upload-profile", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(profile),
-  });
-
-  if (!res.ok) throw new Error(`Falha no upload do perfil: ${res.status}`);
-
-  const data = await res.json();
-  if (!data.uri) throw new Error("URI inválida retornada pelo servidor");
-
-  return data.uri; // ipfs://Qm...
+  return uploadJsonMetadata("/api/upload-profile", profile, authHeaders);
 }
 
 // ─── Salva o hash do perfil no localStorage ───
@@ -106,7 +75,7 @@ export function clearProfile(address: string): void {
 export function useProfileQuery(address: string | undefined) {
   return useQuery({
     queryKey: ["profile", address],
-    queryFn: () => fetchProfile(address!),
+    queryFn: () => fetchProfile(address ?? ""),
     enabled: !!address,
     staleTime: 5 * 60_000,
   });

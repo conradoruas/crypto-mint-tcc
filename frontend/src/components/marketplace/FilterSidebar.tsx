@@ -1,27 +1,9 @@
 "use client";
 
-import React, { useEffect } from "react";
 import { X } from "lucide-react";
 import type { CollectionInfo } from "@/types/collection";
-
-export type SortOption =
-  | "default"
-  | "price_asc"
-  | "price_desc"
-  | "offer_desc"
-  | "listed_first"
-  | "id_asc"
-  | "id_desc";
-
-export const SORT_LABELS: Record<SortOption, string> = {
-  default: "Default",
-  price_asc: "Price: Low to High",
-  price_desc: "Price: High to Low",
-  offer_desc: "Top Offer",
-  listed_first: "Listed First",
-  id_asc: "ID Ascending",
-  id_desc: "ID Descending",
-};
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { SORT_LABELS, type SortOption } from "@/hooks/marketplace/filterModel";
 
 interface FilterSidebarProps {
   hasActiveFilters: boolean;
@@ -197,15 +179,7 @@ function FilterContent({
 export function FilterSidebar(props: FilterSidebarProps) {
   const { mobileOpen, onMobileClose } = props;
 
-  // Prevent body scroll when mobile drawer is open
-  useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => { document.body.style.overflow = ""; };
-  }, [mobileOpen]);
+  useBodyScrollLock(mobileOpen ?? false);
 
   return (
     <>
