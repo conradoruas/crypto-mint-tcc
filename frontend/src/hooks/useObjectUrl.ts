@@ -7,6 +7,7 @@ export function useObjectUrl(file: File | null | undefined) {
 
   useEffect(() => {
     if (!file) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setObjectUrl("");
       return;
     }
