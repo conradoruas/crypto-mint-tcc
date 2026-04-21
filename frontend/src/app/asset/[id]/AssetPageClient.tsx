@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useCallback, useState } from "react";
+import { useCallback } from "react";
 import { useConnection } from "wagmi";
 import { Navbar } from "@/components/navbar";
 import {
@@ -27,23 +27,14 @@ import {
 } from "@/hooks/marketplace";
 import { OffersTable } from "@/components/marketplace/OffersTable";
 import { useIsFavorited, useFavorite } from "@/hooks/user";
-import {
-  offerAmountSchema,
-  listPriceSchema,
-  getZodErrors,
-  parseAddress,
-  addressSchema,
-} from "@/lib/schemas";
-import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
+import { parseAddress } from "@/lib/schemas";
 import { shortAddr } from "@/lib/utils";
-import { logger } from "@/lib/logger";
-import { formatTransactionError } from "@/lib/txErrors";
-import { toast } from "sonner";
 import { PriceHistory } from "@/components/asset/PriceHistory";
 import { ListingPanel } from "@/components/asset/ListingPanel";
 import { OfferPanel } from "@/components/asset/OfferPanel";
 import { NFTCardSkeleton } from "@/components/ui";
 import { useAssetNft } from "./useAssetNft";
+import { useAssetPageActions } from "./useAssetPageActions";
 
 function LoadingSkeleton() {
   return (
@@ -79,13 +70,6 @@ export default function AssetPageClient({
     nftContract ?? null,
     initialNft,
   );
-  const [listPrice, setListPrice] = useState("");
-  const [offerAmount, setOfferAmount] = useState("");
-  const [showListForm, setShowListForm] = useState(false);
-  const [showOfferForm, setShowOfferForm] = useState(false);
-  const [listErrors, setListErrors] = useState<ListPriceErrors>({});
-  const [offerErrors, setOfferErrors] = useState<OfferAmountErrors>({});
-  const [copied, setCopied] = useState(false);
 
   const {
     owner,
@@ -141,135 +125,24 @@ export default function AssetPageClient({
     refetchOffers();
   }, [refetchListing, refetchMyOffer, refetchOffers]);
 
-  // Consolidate all transaction-success side-effects into a single effect.
-  // Each flag is stable across renders and only transitions once per mutation.
-  useEffect(() => {
-    if (isBought) {
-      toast.success("NFT purchased successfully!", {
-        action: buyHash
-          ? {
-              label: "View Tx",
-              onClick: () =>
-                window.open(
-                  `https://sepolia.etherscan.io/tx/${buyHash}`,
-                  "_blank",
-                ),
-            }
-          : undefined,
-      });
-      refetchAll();
-    }
-  }, [isBought, refetchAll, buyHash]);
-
-  useEffect(() => {
-    if (isOfferMade) {
-      toast.success("Offer sent! ETH is held in escrow for 7 days.");
-      setShowOfferForm(false);
-      setOfferAmount("");
-      refetchAll();
-    }
-  }, [isOfferMade, refetchAll]);
-
-  useEffect(() => {
-    if (isOfferCancelled) {
-      toast.success("Offer cancelled. ETH returned.");
-      refetchAll();
-    }
-  }, [isOfferCancelled, refetchAll]);
-
-  useEffect(() => {
-    if (isCancelled) {
-      toast.success("Listing cancelled.");
-      setShowListForm(false);
-      refetchAll();
-    }
-  }, [isCancelled, refetchAll]);
-
-  const handleShare = async () => {
-    const url = window.location.href;
-    const title = nft?.name ?? "NFT";
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, url });
-      } catch { /* user cancelled */ }
-    } else {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const handleList = async () => {
-    if (!nftContract) return;
-    const errors = getZodErrors(listPriceSchema, { price: listPrice }) as ListPriceErrors;
-    setListErrors(errors);
-    if (errors.price) return;
-    try {
-      await listNFT(nftContract, tokenId, listPrice);
-      setShowListForm(false);
-      setListPrice("");
-      toast.success("NFT listed successfully!");
-      refetchAll();
-    } catch (e) {
-      toast.error(formatTransactionError(e, "Could not list this NFT."));
-    }
-  };
-
-  const handleBuy = async () => {
-    if (!nftContract || !price) return;
-    try {
-      await buyNFT(nftContract, tokenId, price);
-    } catch (e) {
-      toast.error(formatTransactionError(e, "Could not complete purchase."));
-    }
-  };
-
-  const handleCancelListing = async () => {
-    if (!nftContract) return;
-    try {
-      await cancelListing(nftContract, tokenId);
-    } catch (e) {
-      toast.error(formatTransactionError(e, "Could not cancel listing."));
-    }
-  };
-
-  const handleMakeOffer = async () => {
-    if (!nftContract) return;
-    const errors = getZodErrors(offerAmountSchema, { amount: offerAmount }) as OfferAmountErrors;
-    setOfferErrors(errors);
-    if (errors.amount) return;
-    try {
-      await makeOffer(nftContract, tokenId, offerAmount);
-    } catch (e) {
-      toast.error(formatTransactionError(e, "Could not send offer."));
-    }
-  };
-
-  const handleAcceptOffer = async (buyerAddress: string) => {
-    if (!nftContract) return;
-    const result = addressSchema.safeParse(buyerAddress);
-    if (!result.success) {
-      toast.error("Buyer address is invalid. Action cancelled for security.");
-      return;
-    }
-    try {
-      await acceptOffer(nftContract, tokenId, result.data);
-      toast.success("Offer accepted! NFT transferred.");
-      refetchAll();
-    } catch (e) {
-      logger.error("acceptOffer failed", e);
-      toast.error(formatTransactionError(e, "Could not accept offer."));
-    }
-  };
-
-  const handleCancelOffer = async () => {
-    if (!nftContract) return;
-    try {
-      await cancelOffer(nftContract, tokenId);
-    } catch (e) {
-      toast.error(formatTransactionError(e, "Could not cancel offer."));
-    }
-  };
+  const actions = useAssetPageActions({
+    nftName: nft?.name,
+    nftContract,
+    tokenId,
+    price,
+    buyHash,
+    isBought,
+    isOfferMade,
+    isOfferCancelled,
+    isCancelled,
+    refetchAll,
+    listNFT,
+    buyNFT,
+    cancelListing,
+    makeOffer,
+    acceptOffer,
+    cancelOffer,
+  });
 
   if (!nftContract) {
     return (
@@ -359,15 +232,15 @@ export default function AssetPageClient({
                 </button>
               )}
               <button
-                onClick={handleShare}
+                onClick={actions.handleShare}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-outline-variant/15 bg-surface-container text-on-surface-variant hover:border-outline transition-all text-xs font-bold uppercase tracking-widest"
               >
-                {copied ? (
+                {actions.copied ? (
                   <Check size={13} className="text-primary" />
                 ) : (
                   <Share2 size={13} />
                 )}
-                {copied ? "Copied!" : "Share"}
+                {actions.copied ? "Copied!" : "Share"}
               </button>
             </div>
             {topOffer && (
@@ -389,18 +262,21 @@ export default function AssetPageClient({
             isOwner={!!isOwner}
             isBuying={isBuying}
             isBuyConfirming={isBuyConfirming}
-            onBuy={handleBuy}
+            onBuy={actions.handleBuy}
             isCancelling={isCancelling}
-            onCancelListing={handleCancelListing}
-            showListForm={showListForm}
-            listPrice={listPrice}
-            listErrors={listErrors}
+            onCancelListing={actions.handleCancelListing}
+            showListForm={actions.showListForm}
+            listPrice={actions.listPrice}
+            listErrors={actions.listErrors}
             isListing={isListing}
             listPhase={listPhase}
-            onShowListForm={() => setShowListForm(true)}
-            onHideListForm={() => setShowListForm(false)}
-            onListPriceChange={(v) => { setListPrice(v); setListErrors({}); }}
-            onList={handleList}
+            onShowListForm={() => actions.setShowListForm(true)}
+            onHideListForm={() => actions.setShowListForm(false)}
+            onListPriceChange={(v) => {
+              actions.setListPrice(v);
+              actions.setListErrors({});
+            }}
+            onList={actions.handleList}
           />
 
           {!isOwner && address && (
@@ -408,17 +284,20 @@ export default function AssetPageClient({
               hasActiveOffer={!!hasActiveOffer}
               myOfferAmount={myOfferAmount}
               expiresAt={expiresAt ?? null}
-              showOfferForm={showOfferForm}
-              offerAmount={offerAmount}
-              offerErrors={offerErrors}
+              showOfferForm={actions.showOfferForm}
+              offerAmount={actions.offerAmount}
+              offerErrors={actions.offerErrors}
               isMakingOffer={isMakingOffer}
               isOfferConfirming={isOfferConfirming}
               isCancellingOffer={isCancellingOffer}
-              onShowOfferForm={() => setShowOfferForm(true)}
-              onHideOfferForm={() => setShowOfferForm(false)}
-              onOfferAmountChange={(v) => { setOfferAmount(v); setOfferErrors({}); }}
-              onMakeOffer={handleMakeOffer}
-              onCancelOffer={handleCancelOffer}
+              onShowOfferForm={() => actions.setShowOfferForm(true)}
+              onHideOfferForm={() => actions.setShowOfferForm(false)}
+              onOfferAmountChange={(v) => {
+                actions.setOfferAmount(v);
+                actions.setOfferErrors({});
+              }}
+              onMakeOffer={actions.handleMakeOffer}
+              onCancelOffer={actions.handleCancelOffer}
             />
           )}
 
@@ -450,7 +329,7 @@ export default function AssetPageClient({
               offers={offers}
               isLoading={isLoadingOffers}
               isOwner={!!isOwner}
-              onAccept={handleAcceptOffer}
+              onAccept={actions.handleAcceptOffer}
               isAccepting={isAccepting}
             />
           </div>

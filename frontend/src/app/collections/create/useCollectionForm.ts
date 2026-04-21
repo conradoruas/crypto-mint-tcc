@@ -49,7 +49,8 @@ export type CollectionFormAction =
   | { type: "SET_NFTS"; nfts: NFTDraft[] }
   | { type: "ADD_NFT" }
   | { type: "REMOVE_NFT"; id: number }
-  | { type: "UPDATE_NFT"; id: number; field: keyof NFTDraft; value: string | File | null }
+  | { type: "UPDATE_NFT"; id: number; field: keyof Omit<NFTDraft, "previewUrl">; value: string | File | null }
+  | { type: "SET_NFT_FILE"; id: number; file: File | null; previewUrl: string }
   | { type: "SET_PAGE"; page: number }
   | { type: "SET_UPLOADING_COVER"; value: boolean }
   | { type: "SET_UPLOADING_NFTS"; value: boolean }
@@ -92,9 +93,6 @@ export function collectionFormReducer(
 ): CollectionFormState {
   switch (action.type) {
     case "SET_COVER":
-      if (state.coverPreview) {
-        URL.revokeObjectURL(state.coverPreview);
-      }
       return { ...state, coverFile: action.file, coverPreview: action.preview };
     case "SET_NAME":
       return { ...state, name: action.value };
@@ -105,9 +103,6 @@ export function collectionFormReducer(
     case "SET_MINT_PRICE":
       return { ...state, mintPrice: action.value };
     case "SET_NFTS":
-      for (const nft of state.nfts) {
-        if (nft.previewUrl) URL.revokeObjectURL(nft.previewUrl);
-      }
       return { ...state, nfts: action.nfts };
     case "ADD_NFT":
       return {
@@ -118,23 +113,23 @@ export function collectionFormReducer(
         ],
       };
     case "REMOVE_NFT":
-      for (const nft of state.nfts) {
-        if (nft.id === action.id && nft.previewUrl) {
-          URL.revokeObjectURL(nft.previewUrl);
-        }
-      }
       return { ...state, nfts: state.nfts.filter((n) => n.id !== action.id) };
     case "UPDATE_NFT":
       return {
         ...state,
         nfts: state.nfts.map((n) => {
           if (n.id !== action.id) return n;
-          if (action.field === "file" && action.value instanceof File) {
-            if (n.previewUrl) URL.revokeObjectURL(n.previewUrl);
-            return { ...n, file: action.value, previewUrl: URL.createObjectURL(action.value) };
-          }
           return { ...n, [action.field]: action.value };
         }),
+      };
+    case "SET_NFT_FILE":
+      return {
+        ...state,
+        nfts: state.nfts.map((n) =>
+          n.id === action.id
+            ? { ...n, file: action.file, previewUrl: action.previewUrl }
+            : n,
+        ),
       };
     case "SET_PAGE":
       return { ...state, currentPage: action.page };

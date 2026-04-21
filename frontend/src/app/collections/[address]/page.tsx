@@ -2,16 +2,8 @@
 
 import Image from "next/image";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { formatEther } from "viem";
-import {
-  useBalance,
-  useConnection,
-  useReadContract,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-  usePublicClient,
-} from "wagmi";
+import { useState } from "react";
+import { useConnection, useReadContract } from "wagmi";
 import { Navbar } from "@/components/navbar";
 import {
   Loader2,
@@ -23,7 +15,6 @@ import {
   AlertTriangle,
   X,
   CheckCircle2,
-  Wallet,
 } from "lucide-react";
 import { useCollectionDetails, useCollectionNFTs } from "@/hooks/collections";
 import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
@@ -31,11 +22,9 @@ import Footer from "@/components/Footer";
 import { CollectionNFTCard } from "@/components/marketplace/CollectionNFTCard";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { shortAddr } from "@/lib/utils";
-import { formatTransactionError } from "@/lib/txErrors";
-import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
-import { generateAndStoreMintSeed } from "@/lib/mintSeed";
-import { LoadNFTsPanel } from "./LoadNFTsPanel";
 import { MintModal } from "./MintModal";
+import { CollectionOwnerPanels } from "./CollectionOwnerPanels";
+import { useCollectionOwnerActions } from "./useCollectionOwnerActions";
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -45,13 +34,8 @@ export default function CollectionPage() {
     (Array.isArray(collectionAddr) ? collectionAddr[0] : collectionAddr) ?? "";
 
   const { address: userAddress, isConnected } = useConnection();
-  const publicClientMain = usePublicClient();
   const [showMintModal, setShowMintModal] = useState(false);
   const [mintSuccess, setMintSuccess] = useState<string | null>(null);
-  const [loadSuccess, setLoadSuccess] = useState(false);
-  const [withdrawError, setWithdrawError] = useState<string | null>(null);
-  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
-  const [withdrawHash, setWithdrawHash] = useState<`0x${string}` | undefined>();
 
   const details = useCollectionDetails(collectionAddress);
   const {
@@ -69,7 +53,8 @@ export default function CollectionPage() {
     functionName: "urisLoaded",
     query: { enabled: !!collectionAddress },
   });
-  const urisLoaded = (urisLoadedData as boolean | undefined) || loadSuccess;
+  const [didLoadUrisLocally, setDidLoadUrisLocally] = useState(false);
+  const urisLoaded = (urisLoadedData as boolean | undefined) || didLoadUrisLocally;
 
   const { data: mintSeedCommittedData, refetch: refetchMintSeedCommitted } =
     useReadContract({
@@ -80,94 +65,11 @@ export default function CollectionPage() {
     });
   const mintSeedCommitted = Boolean(mintSeedCommittedData);
 
-  const {
-    mutateAsync: commitSeedWrite,
-    isPending: isCommitSeedPending,
-  } = useWriteContract();
-  const [commitSeedHash, setCommitSeedHash] = useState<
-    `0x${string}` | undefined
-  >();
-  const [commitSeedError, setCommitSeedError] = useState<string | null>(null);
-  const {
-    isLoading: isCommitSeedConfirming,
-    isSuccess: isCommitSeedConfirmed,
-  } = useWaitForTransactionReceipt({ hash: commitSeedHash });
-
-  useEffect(() => {
-    if (isCommitSeedConfirmed) refetchMintSeedCommitted();
-  }, [isCommitSeedConfirmed, refetchMintSeedCommitted]);
-
-  const handleCommitMintSeed = async () => {
-    setCommitSeedError(null);
-    try {
-      if (!userAddress || !publicClientMain) {
-        throw new Error("Connect your wallet.");
-      }
-      const { commitment } = generateAndStoreMintSeed(collectionAddress);
-      const gas = await estimateContractGasWithBuffer(publicClientMain, {
-        account: userAddress,
-        address: collectionAddress as `0x${string}`,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "commitMintSeed",
-        args: [commitment],
-      });
-      const tx = await commitSeedWrite({
-        address: collectionAddress as `0x${string}`,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "commitMintSeed",
-        args: [commitment],
-        gas,
-      });
-      setCommitSeedHash(tx);
-    } catch (e) {
-      setCommitSeedError(
-        formatTransactionError(e, "Could not enable minting. Try again."),
-      );
-    }
-  };
-
-  const { data: contractBalance, refetch: refetchBalance } = useBalance({
-    address: collectionAddress as `0x${string}`,
-    query: { enabled: !!collectionAddress },
-  });
-
-  const { mutateAsync: withdrawWrite, isPending: isWithdrawPending } =
-    useWriteContract();
-  const { isLoading: isWithdrawConfirming, isSuccess: isWithdrawConfirmed } =
-    useWaitForTransactionReceipt({ hash: withdrawHash });
-
-  useEffect(() => {
-    if (isWithdrawConfirmed) {
-      setWithdrawSuccess(true);
-      refetchBalance();
-    }
-  }, [isWithdrawConfirmed, refetchBalance]);
-
-  const handleWithdraw = async () => {
-    setWithdrawError(null);
-    try {
-      if (!userAddress || !publicClientMain) {
-        throw new Error("Connect your wallet.");
-      }
-      const gas = await estimateContractGasWithBuffer(publicClientMain, {
-        account: userAddress,
-        address: collectionAddress as `0x${string}`,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "withdraw",
-      });
-      const tx = await withdrawWrite({
-        address: collectionAddress as `0x${string}`,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "withdraw",
-        gas,
-      });
-      setWithdrawHash(tx);
-    } catch (e) {
-      setWithdrawError(
-        formatTransactionError(e, "Could not withdraw funds. Try again."),
-      );
-    }
-  };
+  const ownerActions = useCollectionOwnerActions(
+    collectionAddress as `0x${string}`,
+    userAddress,
+    refetchMintSeedCommitted,
+  );
 
   const isOwner =
     userAddress &&
@@ -183,7 +85,7 @@ export default function CollectionPage() {
   const bannerImage = details.image ? resolveIpfsUrl(details.image) : null;
 
   const handleLoadSuccess = () => {
-    setLoadSuccess(true);
+    setDidLoadUrisLocally(true);
     refetchUrisLoaded();
   };
 
@@ -258,26 +160,6 @@ export default function CollectionPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-3 shrink-0">
-                  {isOwner &&
-                    contractBalance &&
-                    contractBalance.value > BigInt(0) && (
-                      <button
-                        onClick={handleWithdraw}
-                        disabled={isWithdrawPending || isWithdrawConfirming}
-                        className="flex items-center gap-2 font-bold px-6 py-3 bg-surface-container border border-secondary/30 text-secondary hover:border-secondary hover:bg-secondary/10 transition-colors whitespace-nowrap disabled:opacity-50"
-                      >
-                        {isWithdrawPending || isWithdrawConfirming ? (
-                          <Loader2 className="animate-spin" size={16} />
-                        ) : (
-                          <Wallet size={16} />
-                        )}
-                        Withdraw{" "}
-                        {parseFloat(formatEther(contractBalance.value)).toFixed(
-                          4,
-                        )}{" "}
-                        ETH
-                      </button>
-                    )}
                   {isConnected &&
                     !isSoldOut &&
                     urisLoaded &&
@@ -359,56 +241,22 @@ export default function CollectionPage() {
         </div>
       </div>
 
-      {/* Load NFTs panel — owner only, while urisLoaded is false */}
-      {isOwner && !urisLoaded && details.maxSupply && details.maxSupply > 0 && (
-        <LoadNFTsPanel
-          collectionAddress={collectionAddress as `0x${string}`}
-          maxSupply={Number(details.maxSupply)}
-          onSuccess={handleLoadSuccess}
-        />
-      )}
-
-      {/* Commit mint seed panel — owner only, once URIs are loaded but seed not committed */}
-      {isOwner && urisLoaded && !mintSeedCommitted && (
-        <div className="max-w-7xl mx-auto px-4 mb-10">
-          <div className="bg-surface-container-low border border-secondary/30 p-8 shadow-sm">
-            <div className="flex items-start gap-4 mb-4">
-              <AlertTriangle size={20} className="text-secondary shrink-0 mt-1" />
-              <div>
-                <h3 className="font-headline font-bold text-lg text-on-surface uppercase tracking-tight">
-                  Habilitar Minting
-                </h3>
-                <p className="text-sm text-on-surface-variant mt-1">
-                  Commite o mint seed para ativar o minting desta coleção. O
-                  seed é gerado localmente, salvo no seu navegador e commitado
-                  como hash on-chain. Guarde este navegador para fazer o
-                  reveal depois que a coleção esgotar.
-                </p>
-              </div>
-            </div>
-            {commitSeedError && (
-              <p className="text-xs text-error mb-3">{commitSeedError}</p>
-            )}
-            <button
-              onClick={handleCommitMintSeed}
-              disabled={isCommitSeedPending || isCommitSeedConfirming}
-              className="flex items-center gap-2 font-bold px-6 py-3 bg-primary text-on-primary hover:bg-primary-dim transition-colors disabled:opacity-50"
-            >
-              {isCommitSeedPending || isCommitSeedConfirming ? (
-                <>
-                  <Loader2 className="animate-spin" size={16} />
-                  {isCommitSeedPending ? "Aguardando..." : "Confirmando..."}
-                </>
-              ) : (
-                <>
-                  <ShieldCheck size={16} />
-                  Commitar mint seed
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
+      <CollectionOwnerPanels
+        isOwner={!!isOwner}
+        urisLoaded={urisLoaded}
+        mintSeedCommitted={mintSeedCommitted}
+        maxSupply={details.maxSupply}
+        collectionAddress={collectionAddress as `0x${string}`}
+        contractBalanceEth={ownerActions.contractBalanceEth}
+        onWithdraw={ownerActions.handleWithdraw}
+        isWithdrawPending={ownerActions.isWithdrawPending}
+        isWithdrawConfirming={ownerActions.isWithdrawConfirming}
+        onLoadSuccess={handleLoadSuccess}
+        commitSeedError={ownerActions.commitSeedError}
+        onCommitMintSeed={ownerActions.handleCommitMintSeed}
+        isCommitSeedPending={ownerActions.isCommitSeedPending}
+        isCommitSeedConfirming={ownerActions.isCommitSeedConfirming}
+      />
 
       {/* NFT Grid */}
       <div className="max-w-7xl mx-auto px-4 pb-16">
@@ -524,16 +372,16 @@ export default function CollectionPage() {
       )}
 
       {/* Success toast — withdraw */}
-      {withdrawSuccess && (
+      {ownerActions.withdrawSuccess && (
         <div className="fixed bottom-6 right-6 flex items-center gap-3 p-4 z-40 shadow-xl bg-surface-container border border-secondary/30">
           <CheckCircle2 size={18} className="text-secondary shrink-0" />
           <div>
             <p className="font-headline font-bold text-sm text-on-surface">
               Royalties retirados!
             </p>
-            {withdrawHash && (
+            {ownerActions.withdrawHash && (
               <a
-                href={`https://sepolia.etherscan.io/tx/${withdrawHash}`}
+                href={`https://sepolia.etherscan.io/tx/${ownerActions.withdrawHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-secondary underline"
@@ -543,7 +391,7 @@ export default function CollectionPage() {
             )}
           </div>
           <button
-            onClick={() => setWithdrawSuccess(false)}
+            onClick={() => ownerActions.setWithdrawSuccess(false)}
             className="ml-2 text-on-surface-variant hover:text-on-surface transition-colors"
           >
             <X size={14} />
@@ -552,12 +400,12 @@ export default function CollectionPage() {
       )}
 
       {/* Error toast — withdraw */}
-      {withdrawError && (
+      {ownerActions.withdrawError && (
         <div className="fixed bottom-6 right-6 flex items-center gap-3 p-4 z-40 shadow-xl bg-surface-container border border-error/30">
           <AlertTriangle size={18} className="text-error shrink-0" />
-          <p className="text-sm text-error">{withdrawError}</p>
+          <p className="text-sm text-error">{ownerActions.withdrawError}</p>
           <button
-            onClick={() => setWithdrawError(null)}
+            onClick={() => ownerActions.setWithdrawError(null)}
             className="ml-2 text-on-surface-variant hover:text-on-surface transition-colors"
           >
             <X size={14} />

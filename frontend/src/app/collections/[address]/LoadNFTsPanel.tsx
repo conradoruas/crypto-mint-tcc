@@ -1,23 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
-import {
-  useConnection,
-  useSignMessage,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-  usePublicClient,
-} from "wagmi";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Loader2, Upload } from "lucide-react";
-import { NFT_COLLECTION_ABI } from "@/abi/NFTCollection";
 import { formatTransactionError } from "@/lib/txErrors";
-import { estimateContractGasWithBuffer } from "@/lib/estimateContractGas";
-import {
-  createUploadAuthHeaders,
-  uploadImageFile,
-  uploadNftMetadata,
-} from "@/lib/uploadClient";
+import { createObjectUrl, revokeRemovedObjectUrls } from "@/lib/objectUrlRegistry";
+import { usePublishCollectionUris } from "@/hooks/collections/usePublishCollectionUris";
 
 interface NFTLoadDraft {
   name: string;
@@ -45,46 +33,26 @@ export function LoadNFTsPanel({
         previewUrl: "",
       })),
   );
-  const [isUploading, setIsUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-
-  const { address } = useConnection();
-  const publicClient = usePublicClient();
-  const { signMessageAsync } = useSignMessage();
-  const getAuthHeaders = useCallback(
-    createUploadAuthHeaders(signMessageAsync, address),
-    [signMessageAsync, address],
-  );
-
-  const uploadImage = useCallback(
-    async (file: File): Promise<string> => uploadImageFile(file, getAuthHeaders),
-    [getAuthHeaders],
-  );
-
-  const uploadMetadata = useCallback(
-    async (name: string, description: string, imageUri: string) =>
-      uploadNftMetadata({ name, description, imageUri }, getAuthHeaders),
-    [getAuthHeaders],
-  );
-
-  const { mutateAsync, isPending } = useWriteContract();
-  const [loadHash, setLoadHash] = useState<`0x${string}` | undefined>();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: loadHash,
-  });
+  const previewUrlsRef = useRef<string[]>([]);
+  const publishing = usePublishCollectionUris();
 
   useEffect(() => {
-    if (isSuccess) onSuccess();
-  }, [isSuccess, onSuccess]);
+    if (publishing.isSuccess) onSuccess();
+  }, [onSuccess, publishing.isSuccess]);
 
   useEffect(() => {
-    return () => {
-      for (const draft of nftDrafts) {
-        if (draft.previewUrl) URL.revokeObjectURL(draft.previewUrl);
-      }
-    };
+    const nextUrls = nftDrafts.map((draft) => draft.previewUrl);
+    revokeRemovedObjectUrls(previewUrlsRef.current, nextUrls);
+    previewUrlsRef.current = nextUrls;
   }, [nftDrafts]);
+
+  useEffect(
+    () => () => {
+      revokeRemovedObjectUrls(previewUrlsRef.current, []);
+    },
+    [],
+  );
 
   const updateNFT = (
     index: number,
@@ -95,11 +63,10 @@ export function LoadNFTsPanel({
       prev.map((nft, i) => {
         if (i !== index) return nft;
         if (field === "file" && value instanceof File) {
-          if (nft.previewUrl) URL.revokeObjectURL(nft.previewUrl);
           return {
             ...nft,
             file: value,
-            previewUrl: URL.createObjectURL(value),
+            previewUrl: createObjectUrl(value),
           };
         }
         return { ...nft, [field]: value };
@@ -115,58 +82,23 @@ export function LoadNFTsPanel({
     }
 
     setError(null);
-    setIsUploading(true);
     try {
-      const uris: string[] = [];
-      for (let i = 0; i < nftDrafts.length; i++) {
-        setProgress(Math.round((i / nftDrafts.length) * 90));
-        const nft = nftDrafts[i];
-
-        if (!nft.file) {
-          throw new Error(`NFT "${nft.name}" is missing an image file`);
-        }
-
-        const imageUri = await uploadImage(nft.file);
-        const metaUri = await uploadMetadata(
-          nft.name,
-          nft.description,
-          imageUri,
-        );
-        uris.push(metaUri);
-      }
-
-      setProgress(95);
-      setIsUploading(false);
-
-      if (!address || !publicClient) {
-        throw new Error("Carteira necessária");
-      }
-
-      const gas = await estimateContractGasWithBuffer(publicClient, {
-        account: address,
-        address: collectionAddress,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "loadTokenURIs",
-        args: [uris],
+      await publishing.publishUris({
+        collectionAddress,
+        drafts: nftDrafts,
+        chunkLoadSize: maxSupply,
       });
-      const tx = await mutateAsync({
-        address: collectionAddress,
-        abi: NFT_COLLECTION_ABI,
-        functionName: "loadTokenURIs",
-        args: [uris],
-        gas,
-      });
-      setLoadHash(tx);
-      setProgress(100);
     } catch (e) {
       setError(
         formatTransactionError(e, "Could not load NFTs on-chain. Try again."),
       );
-      setIsUploading(false);
     }
   };
 
-  const busy = isUploading || isPending || isConfirming;
+  const busy =
+    publishing.isUploading ||
+    publishing.isWalletPending ||
+    publishing.isConfirming;
   const inputClass =
     "w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-3 py-2 rounded-sm text-xs focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40";
 
@@ -268,18 +200,18 @@ export function LoadNFTsPanel({
           <div className="mb-6">
             <div className="flex justify-between text-[10px] text-on-surface-variant mb-2 uppercase tracking-widest">
               <span>
-                {isUploading
-                  ? `IPFS: ${progress}%`
-                  : isPending
+                {publishing.isUploading
+                  ? `IPFS: ${publishing.progress}%`
+                  : publishing.isWalletPending
                     ? "Carteira..."
                     : "Blockchain..."}
               </span>
-              <span>{progress}%</span>
+              <span>{publishing.progress}%</span>
             </div>
             <div className="h-1 bg-surface-container-high overflow-hidden">
               <div
                 className="h-full bg-primary transition-all duration-500"
-                style={{ width: `${progress}%` }}
+                style={{ width: `${publishing.progress}%` }}
               />
             </div>
           </div>
