@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
 import { Navbar } from "../navbar";
+import { ThemeProvider } from "../ThemeProvider";
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,13 @@ import { usePathname } from "next/navigation";
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe("Navbar", () => {
+  const renderNavbar = () =>
+    render(
+      <ThemeProvider defaultTheme="dark">
+        <Navbar />
+      </ThemeProvider>,
+    );
+
   beforeEach(() => {
     vi.mocked(useConnection).mockReturnValue(
       { isConnected: false, address: undefined } as ReturnType<typeof useConnection>,
@@ -62,13 +70,13 @@ describe("Navbar", () => {
   // ── branding ───────────────────────────────────────────────────────────────
 
   it("renders the brand name", () => {
-    const { getByText } = render(<Navbar />);
+    const { getByText } = renderNavbar();
     expect(getByText("crypto.")).toBeInTheDocument();
     expect(getByText("mint")).toBeInTheDocument();
   });
 
   it("brand links to home", () => {
-    const { getAllByRole } = render(<Navbar />);
+    const { getAllByRole } = renderNavbar();
     const links = getAllByRole("link");
     const brandLink = links.find((l: HTMLElement) => l.getAttribute("href") === "/");
     expect(brandLink).toBeDefined();
@@ -77,7 +85,7 @@ describe("Navbar", () => {
   // ── nav links ──────────────────────────────────────────────────────────────
 
   it("renders Explore, Collections, Activity nav links", () => {
-    const { getAllByRole } = render(<Navbar />);
+    const { getAllByRole } = renderNavbar();
     const hrefs = getAllByRole("link").map((l: HTMLElement) => l.getAttribute("href"));
     expect(hrefs).toContain("/explore");
     expect(hrefs).toContain("/collections");
@@ -85,13 +93,13 @@ describe("Navbar", () => {
   });
 
   it("renders the Mint nav link", () => {
-    const { getAllByRole } = render(<Navbar />);
+    const { getAllByRole } = renderNavbar();
     const mintLinks = getAllByRole("link").filter((l: HTMLElement) => l.getAttribute("href") === "/create");
     expect(mintLinks.length).toBeGreaterThan(0);
   });
 
   it("does not show Profile link when disconnected", () => {
-    const { getAllByRole } = render(<Navbar />);
+    const { getAllByRole } = renderNavbar();
     const hrefs = getAllByRole("link").map((l: HTMLElement) => l.getAttribute("href"));
     expect(hrefs).not.toContain("/profile");
   });
@@ -100,7 +108,7 @@ describe("Navbar", () => {
     vi.mocked(useConnection).mockReturnValue(
       { isConnected: true, address: "0xabc0000000000000000000000000000000000001" } as unknown as ReturnType<typeof useConnection>,
     );
-    const { getAllByRole } = render(<Navbar />);
+    const { getAllByRole } = renderNavbar();
     const hrefs = getAllByRole("link").map((l: HTMLElement) => l.getAttribute("href"));
     expect(hrefs).toContain("/profile");
   });
@@ -109,14 +117,14 @@ describe("Navbar", () => {
 
   it("applies active class to the current route link", () => {
     vi.mocked(usePathname).mockReturnValue("/explore");
-    const { getAllByRole } = render(<Navbar />);
+    const { getAllByRole } = renderNavbar();
     const exploreLink = getAllByRole("link").find((l: HTMLElement) => l.getAttribute("href") === "/explore");
     expect(exploreLink?.className).toMatch(/primary-container/);
   });
 
   it("does not apply active class to non-current route links", () => {
     vi.mocked(usePathname).mockReturnValue("/explore");
-    const { getAllByRole } = render(<Navbar />);
+    const { getAllByRole } = renderNavbar();
     const collectionsLink = getAllByRole("link").find((l: HTMLElement) => l.getAttribute("href") === "/collections");
     expect(collectionsLink?.className).not.toMatch(/primary-container/);
   });
@@ -124,18 +132,18 @@ describe("Navbar", () => {
   // ── wallet button ──────────────────────────────────────────────────────────
 
   it("shows 'Connect' button when disconnected", () => {
-    const { getByText } = render(<Navbar />);
+    const { getByText } = renderNavbar();
     expect(getByText(/^connect$/i)).toBeInTheDocument();
   });
 
   it("shows disabled bell and wallet icon buttons when disconnected", () => {
-    const { getByRole } = render(<Navbar />);
+    const { getByRole } = renderNavbar();
     expect(getByRole("button", { name: /activity notifications/i })).toBeDisabled();
     expect(getByRole("button", { name: /^wallet$/i })).toBeDisabled();
   });
 
   it("renders GlobalSearch component", () => {
-    const { getByTestId } = render(<Navbar />);
+    const { getByTestId } = renderNavbar();
     expect(getByTestId("global-search")).toBeInTheDocument();
   });
 });
