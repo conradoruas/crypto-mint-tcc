@@ -1,0 +1,122 @@
+"use client";
+
+import { apolloClient } from "@/lib/apolloClient";
+import { GET_COLLECTION_WITH_NFTS } from "@/lib/graphql/queries";
+import { fetchIpfsJson, resolveIpfsUrl } from "@/lib/ipfs";
+import type { AlchemyNFT } from "@/types/alchemy";
+import type { CollectionNFTItem } from "@/types/nft";
+
+export const COLLECTION_NFT_PAGE_SIZE = 20;
+
+type GqlNFT = { tokenId: string; tokenUri?: string };
+
+async function resolveTokenMeta(tokenUri: string) {
+  const json = await fetchIpfsJson<{
+    name?: string;
+    description?: string;
+    image?: string;
+  }>(tokenUri);
+
+  if (!json) {
+    return null;
+  }
+
+  return {
+    name: json.name ?? "",
+    description: json.description ?? "",
+    image: resolveIpfsUrl(json.image ?? ""),
+  };
+}
+
+function mapCollectionNft(
+  collectionAddress: string,
+  tokenId: string,
+  meta?: { name: string; description: string; image: string } | null,
+): CollectionNFTItem {
+  return {
+    tokenId,
+    name: meta?.name || `NFT #${tokenId}`,
+    description: meta?.description ?? "",
+    image: meta?.image ?? "",
+    nftContract: collectionAddress,
+  };
+}
+
+export async function fetchCollectionNftsFromSubgraph(
+  collectionAddress: string,
+  skip: number,
+) {
+  const { data } = await apolloClient.query<{
+    collection: { totalSupply: string } | null;
+    nfts: GqlNFT[];
+  }>({
+    query: GET_COLLECTION_WITH_NFTS,
+    variables: {
+      id: collectionAddress.toLowerCase(),
+      first: COLLECTION_NFT_PAGE_SIZE + 1,
+      skip,
+    },
+    fetchPolicy: "network-only",
+  });
+
+  const rawNfts = data?.nfts ?? [];
+  const hasMore = rawNfts.length > COLLECTION_NFT_PAGE_SIZE;
+  const pageItems = hasMore
+    ? rawNfts.slice(0, COLLECTION_NFT_PAGE_SIZE)
+    : rawNfts;
+  const metaResults = await Promise.all(
+    pageItems.map((nft) => resolveTokenMeta(nft.tokenUri ?? "")),
+  );
+
+  return {
+    items: pageItems.map((nft, index) =>
+      mapCollectionNft(collectionAddress, nft.tokenId, metaResults[index]),
+    ),
+    totalCount: Number(data?.collection?.totalSupply ?? 0),
+    hasMore,
+  };
+}
+
+export async function fetchCollectionNftsFromAlchemy(
+  collectionAddress: string,
+  pageKey?: string,
+) {
+  const params = new URLSearchParams({
+    contractAddress: collectionAddress,
+    withMetadata: "true",
+    refreshCache: "false",
+    pageSize: String(COLLECTION_NFT_PAGE_SIZE),
+  });
+
+  if (pageKey) {
+    params.set("pageKey", pageKey);
+  }
+
+  const response = await fetch(`/api/alchemy/getNFTsForContract?${params}`);
+  const data = await response.json();
+
+  const items: CollectionNFTItem[] = await Promise.all(
+    (data.nfts ?? []).map(async (nft: AlchemyNFT) => {
+      let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
+
+      if (!image && nft.tokenUri) {
+        const meta = await fetchIpfsJson<{ image?: string }>(nft.tokenUri);
+        image = resolveIpfsUrl(meta?.image ?? "");
+      }
+
+      return {
+        tokenId: nft.tokenId,
+        name: nft.name ?? `NFT #${nft.tokenId}`,
+        description: nft.description ?? "",
+        image,
+        nftContract: collectionAddress,
+      };
+    }),
+  );
+
+  return {
+    items,
+    nextPageKey: data.pageKey as string | undefined,
+    totalCount: (data.totalCount as number | undefined) ?? items.length,
+  };
+}

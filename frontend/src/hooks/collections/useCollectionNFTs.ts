@@ -3,203 +3,123 @@ import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CollectionNFTItem } from "@/types/nft";
-import { fetchIpfsJson, resolveIpfsUrl } from "@/lib/ipfs";
 import { logger } from "@/lib/logger";
-import type { AlchemyNFT } from "@/types/alchemy";
-import { apolloClient } from "@/lib/apolloClient";
-import { GET_COLLECTION_WITH_NFTS } from "@/lib/graphql/queries";
+import {
+  fetchCollectionNftsFromAlchemy,
+  fetchCollectionNftsFromSubgraph,
+} from "./collectionNftSources";
 
-const PAGE_SIZE = 20;
+type PaginationCursor = {
+  alchemyPageKey?: string;
+  subgraphSkip: number;
+};
 
-// ─── IPFS metadata resolution ───
-
-type IpfsMeta = { name: string; description: string; image: string };
-
-async function resolveTokenMeta(tokenUri: string): Promise<IpfsMeta | null> {
-  const json = await fetchIpfsJson<{ name?: string; description?: string; image?: string }>(tokenUri);
-  if (!json) return null;
-  return {
-    name: json.name ?? "",
-    description: json.description ?? "",
-    image: resolveIpfsUrl(json.image ?? ""),
-  };
-}
-
-// ─── Subgraph fetch ───
-
-type GqlNFT = { tokenId: string; tokenUri?: string };
-
-async function fetchSubgraphPage(
-  collectionAddress: string,
-  skip: number,
-): Promise<{ items: CollectionNFTItem[]; totalCount: number; hasMore: boolean }> {
-  const { data } = await apolloClient.query<{
-    collection: { totalSupply: string } | null;
-    nfts: GqlNFT[];
-  }>({
-    query: GET_COLLECTION_WITH_NFTS,
-    variables: {
-      id: collectionAddress.toLowerCase(),
-      first: PAGE_SIZE + 1,
-      skip,
-    },
-    fetchPolicy: "network-only",
+function useCollectionNftCursor() {
+  const cursorRef = useRef<PaginationCursor>({
+    alchemyPageKey: undefined,
+    subgraphSkip: 0,
   });
 
-  type RawNft = { tokenId: string; tokenUri?: string | null };
-  const rawNfts: RawNft[] = data?.nfts ?? [];
-  const hasMore = rawNfts.length > PAGE_SIZE;
-  const nfts = hasMore ? rawNfts.slice(0, PAGE_SIZE) : rawNfts;
-  const totalCount = Number(data?.collection?.totalSupply ?? 0);
+  const reset = useCallback(() => {
+    cursorRef.current = { alchemyPageKey: undefined, subgraphSkip: 0 };
+  }, []);
 
-  const metaResults = await Promise.all(
-    nfts.map((nft) => resolveTokenMeta(nft.tokenUri ?? "")),
-  );
+  const read = useCallback(() => cursorRef.current, []);
 
-  const items: CollectionNFTItem[] = nfts.map((nft, i) => {
-    const meta = metaResults[i];
-    return {
-      tokenId: nft.tokenId,
-      name: meta?.name || `NFT #${nft.tokenId}`,
-      description: meta?.description ?? "",
-      image: meta?.image ?? "",
-      nftContract: collectionAddress,
-    };
-  });
+  const updateSubgraph = useCallback((loadedCount: number) => {
+    cursorRef.current.subgraphSkip += loadedCount;
+  }, []);
 
-  return { items, totalCount, hasMore };
+  const updateAlchemy = useCallback((nextPageKey?: string) => {
+    cursorRef.current.alchemyPageKey = nextPageKey;
+  }, []);
+
+  return { read, reset, updateSubgraph, updateAlchemy };
 }
-
-// ─── Alchemy fetch ───
-
-async function fetchAlchemyPage(
-  collectionAddress: string,
-  pageKey?: string,
-): Promise<{
-  items: CollectionNFTItem[];
-  nextPageKey?: string;
-  totalCount: number;
-}> {
-  const params = new URLSearchParams({
-    contractAddress: collectionAddress,
-    withMetadata: "true",
-    refreshCache: "false",
-    pageSize: String(PAGE_SIZE),
-  });
-  if (pageKey) params.set("pageKey", pageKey);
-
-  const res = await fetch(`/api/alchemy/getNFTsForContract?${params}`);
-  const data = await res.json();
-
-  const items: CollectionNFTItem[] = await Promise.all(
-    (data.nfts ?? []).map(async (nft: AlchemyNFT) => {
-      let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
-      if (!image && nft.tokenUri) {
-        const meta = await fetchIpfsJson<{ image?: string }>(nft.tokenUri);
-        image = resolveIpfsUrl(meta?.image ?? "");
-      }
-      return {
-        tokenId: nft.tokenId,
-        name: nft.name ?? `NFT #${nft.tokenId}`,
-        description: nft.description ?? "",
-        image,
-        nftContract: collectionAddress,
-      };
-    }),
-  );
-
-  return {
-    items,
-    nextPageKey: data.pageKey as string | undefined,
-    totalCount: (data.totalCount as number | undefined) ?? items.length,
-  };
-}
-
-// ─── Hook ───
 
 export function useCollectionNFTs(collectionAddress: string | undefined) {
   const [nfts, setNfts] = useState<CollectionNFTItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [totalSupply, setTotalSupply] = useState<number>(0);
+  const [totalSupply, setTotalSupply] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  // Destructure stable callbacks from the cursor hook so they can be used
+  // individually as useCallback/useEffect deps. The wrapper object returned by
+  // useCollectionNftCursor() is a new reference on every render even though
+  // its members are stable useCallback refs — using the object directly as a
+  // dep causes loadInitialPage to be recreated every render, which re-triggers
+  // the effect, which calls setIsLoading(true), which re-renders, infinitely.
+  const { read: cursorRead, reset: cursorReset, updateSubgraph, updateAlchemy } = useCollectionNftCursor();
 
-  // Pagination cursors
-  const alchemyPageKey = useRef<string | undefined>(undefined);
-  const subgraphSkip = useRef(0);
-
-  // Initial load
-  useEffect(() => {
-    setNfts([]);
-    setHasMore(false);
-    alchemyPageKey.current = undefined;
-    subgraphSkip.current = 0;
-
+  const loadInitialPage = useCallback(async () => {
     if (!collectionAddress) {
       setIsLoading(false);
+      setNfts([]);
+      setHasMore(false);
       return;
     }
 
-    let cancelled = false;
     setIsLoading(true);
 
-    const load = async () => {
-      try {
-        if (SUBGRAPH_ENABLED) {
-          const { items, totalCount, hasMore: more } =
-            await fetchSubgraphPage(collectionAddress, 0);
-          if (!cancelled) {
-            setNfts(items);
-            setTotalSupply(totalCount);
-            setHasMore(more);
-            subgraphSkip.current = items.length;
-          }
-        } else {
-          const { items, nextPageKey, totalCount } =
-            await fetchAlchemyPage(collectionAddress);
-          if (!cancelled) {
-            setNfts(items);
-            setTotalSupply(totalCount);
-            setHasMore(!!nextPageKey);
-            alchemyPageKey.current = nextPageKey;
-          }
-        }
-      } catch (error) {
-        if (!cancelled) logger.error("Erro ao buscar NFTs da coleção", error);
-      } finally {
-        if (!cancelled) setIsLoading(false);
+    try {
+      if (SUBGRAPH_ENABLED) {
+        const result = await fetchCollectionNftsFromSubgraph(collectionAddress, 0);
+        setNfts(result.items);
+        setTotalSupply(result.totalCount);
+        setHasMore(result.hasMore);
+        updateSubgraph(result.items.length);
+        return;
       }
-    };
 
-    load();
-    return () => { cancelled = true; };
-  }, [collectionAddress]);
+      const result = await fetchCollectionNftsFromAlchemy(collectionAddress);
+      setNfts(result.items);
+      setTotalSupply(result.totalCount);
+      setHasMore(!!result.nextPageKey);
+      updateAlchemy(result.nextPageKey);
+    } catch (error) {
+      logger.error("Erro ao buscar NFTs da coleção", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [collectionAddress, updateSubgraph, updateAlchemy]);
 
-  // Load more
+  useEffect(() => {
+    cursorReset();
+    void loadInitialPage();
+  }, [cursorReset, loadInitialPage]);
+
   const loadMore = useCallback(async () => {
-    if (!collectionAddress || isLoadingMore || !hasMore) return;
+    if (!collectionAddress || isLoadingMore || !hasMore) {
+      return;
+    }
+
     setIsLoadingMore(true);
 
     try {
       if (SUBGRAPH_ENABLED) {
-        const { items, hasMore: more } =
-          await fetchSubgraphPage(collectionAddress, subgraphSkip.current);
-        setNfts((prev) => [...prev, ...items]);
-        setHasMore(more);
-        subgraphSkip.current += items.length;
-      } else {
-        const { items, nextPageKey } =
-          await fetchAlchemyPage(collectionAddress, alchemyPageKey.current);
-        setNfts((prev) => [...prev, ...items]);
-        setHasMore(!!nextPageKey);
-        alchemyPageKey.current = nextPageKey;
+        const result = await fetchCollectionNftsFromSubgraph(
+          collectionAddress,
+          cursorRead().subgraphSkip,
+        );
+        setNfts((previous) => [...previous, ...result.items]);
+        setHasMore(result.hasMore);
+        updateSubgraph(result.items.length);
+        return;
       }
+
+      const result = await fetchCollectionNftsFromAlchemy(
+        collectionAddress,
+        cursorRead().alchemyPageKey,
+      );
+      setNfts((previous) => [...previous, ...result.items]);
+      setHasMore(!!result.nextPageKey);
+      updateAlchemy(result.nextPageKey);
     } catch (error) {
       logger.error("Erro ao buscar mais NFTs", error);
     } finally {
       setIsLoadingMore(false);
     }
-  }, [collectionAddress, isLoadingMore, hasMore]);
+  }, [collectionAddress, cursorRead, updateSubgraph, updateAlchemy, hasMore, isLoadingMore]);
 
   return { nfts, isLoading, isLoadingMore, totalSupply, hasMore, loadMore };
 }
