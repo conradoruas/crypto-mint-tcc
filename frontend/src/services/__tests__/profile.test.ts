@@ -10,7 +10,7 @@ import {
 } from "@/services/profile";
 
 const testProfile: UserProfile = {
-  address: "0xuser",
+  address: "0xalice",
   name: "Alice",
   imageUri: "ipfs://QmImage",
   updatedAt: 1700000000,
@@ -116,7 +116,10 @@ describe("fetchProfile", () => {
   it("fetches and returns the profile from IPFS", async () => {
     saveProfileHash("0xalice", "ipfs://QmProfileHash");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify(testProfile), { status: 200 }),
+      new Response(JSON.stringify(testProfile), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
     );
     const profile = await fetchProfile("0xalice");
     expect(profile?.name).toBe("Alice");
@@ -128,11 +131,27 @@ describe("fetchProfile", () => {
     expect(await fetchProfile("0xalice")).toBeNull();
   });
 
-  it("returns null when response is not ok", async () => {
-    saveProfileHash("0xalice", "ipfs://QmNotFound");
+  it("returns null for a profile that does not match the requested address", async () => {
+    saveProfileHash("0xalice", "ipfs://QmMismatch");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("Not Found", { status: 404 }),
+      new Response(
+        JSON.stringify({
+          ...testProfile,
+          address: "0xbob",
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
     );
     expect(await fetchProfile("0xalice")).toBeNull();
+  });
+
+  it("returns null when the stored profile URI is hostile", async () => {
+    saveProfileHash("0xalice", "javascript:alert(1)");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    expect(await fetchProfile("0xalice")).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

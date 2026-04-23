@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { resolveIpfsUrl, fetchIpfsJson, IPFS_GATEWAY_COUNT } from "@/lib/ipfs";
+import {
+  resolveIpfsUrl,
+  fetchIpfsJson,
+  IPFS_GATEWAY_COUNT,
+  getSafeImageUrl,
+  getSafeMetadataUrl,
+} from "@/lib/ipfs";
 
 describe("resolveIpfsUrl", () => {
   it("converts ipfs:// URI to first gateway by default", () => {
@@ -19,9 +25,13 @@ describe("resolveIpfsUrl", () => {
     expect(url).toContain("ipfs.io");
   });
 
-  it("passes through https URLs unchanged", () => {
-    const url = "https://example.com/image.png";
+  it("passes through allowlisted https URLs unchanged", () => {
+    const url = "https://nft-cdn.alchemy.com/image.png";
     expect(resolveIpfsUrl(url)).toBe(url);
+  });
+
+  it("returns empty string for disallowed https URLs", () => {
+    expect(resolveIpfsUrl("https://example.com/image.png")).toBe("");
   });
 
   it("returns empty string for empty input", () => {
@@ -41,7 +51,7 @@ describe("fetchIpfsJson", () => {
         headers: { "content-type": "application/json" },
       }),
     );
-    const result = await fetchIpfsJson("https://example.com/meta.json");
+    const result = await fetchIpfsJson("https://ipfs.io/ipfs/QmMeta");
     expect(result).toEqual(data);
   });
 
@@ -56,7 +66,7 @@ describe("fetchIpfsJson", () => {
 
   it("returns null on network error", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Network error"));
-    const result = await fetchIpfsJson("https://example.com/meta.json");
+    const result = await fetchIpfsJson("https://ipfs.io/ipfs/QmMeta");
     expect(result).toBeNull();
   });
 
@@ -69,7 +79,7 @@ describe("fetchIpfsJson", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("not-json"),
     );
-    const result = await fetchIpfsJson("https://example.com/meta.json");
+    const result = await fetchIpfsJson("https://ipfs.io/ipfs/QmMeta");
     expect(result).toBeNull();
   });
 
@@ -80,9 +90,62 @@ describe("fetchIpfsJson", () => {
       return Promise.resolve(new Response(JSON.stringify({})));
     });
     controller.abort();
-    const result = await fetchIpfsJson("https://example.com/meta.json", {
+    const result = await fetchIpfsJson("https://ipfs.io/ipfs/QmMeta", {
       signal: controller.signal,
     });
     expect(result).toBeNull();
+  });
+
+  it("supports safe https metadata URLs for client-side best-effort fetching", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const result = await fetchIpfsJson("https://example.com/meta.json");
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("returns null for unexpected content types", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html></html>", {
+        headers: { "content-type": "text/html" },
+      }),
+    );
+    const result = await fetchIpfsJson("ipfs://QmMeta");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when content-length exceeds the safety limit", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        headers: {
+          "content-type": "application/json",
+          "content-length": "1000001",
+        },
+      }),
+    );
+    const result = await fetchIpfsJson("ipfs://QmMeta");
+    expect(result).toBeNull();
+  });
+});
+
+describe("URI safety helpers", () => {
+  it("rejects hostile image schemes", () => {
+    expect(getSafeImageUrl("javascript:alert(1)")).toBeNull();
+    expect(getSafeImageUrl("data:text/html;base64,abc")).toBeNull();
+  });
+
+  it("allows blob previews only when explicitly enabled", () => {
+    expect(getSafeImageUrl("blob:https://app.local/id")).toBeNull();
+    expect(
+      getSafeImageUrl("blob:https://app.local/id", { allowObjectUrl: true }),
+    ).toBe("blob:https://app.local/id");
+  });
+
+  it("rejects non-gateway metadata URLs", () => {
+    expect(getSafeMetadataUrl("https://example.com/meta.json")).toBe(
+      "https://example.com/meta.json",
+    );
   });
 });

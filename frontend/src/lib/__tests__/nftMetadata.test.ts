@@ -3,6 +3,7 @@ import {
   fetchContractNFTMetadata,
   fetchBatchNFTMetadata,
   fetchBatchNFTMetadataForEvents,
+  resolveNftImage,
 } from "@/lib/nftMetadata";
 
 function mockFetchJson(body: unknown, status = 200) {
@@ -100,6 +101,15 @@ describe("fetchContractNFTMetadata", () => {
     const result = await fetchContractNFTMetadata("0xabc");
     expect(result.get("3")?.image).toBe("https://img.example.com/3.png");
   });
+
+  it("can refuse non-IPFS tokenUri metadata for SSR-sensitive call sites", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const image = await resolveNftImage({}, "https://evil.example/meta.json", {
+      ipfsOnlyTokenUri: true,
+    });
+    expect(image).toBe("");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
 
 // ── fetchBatchNFTMetadata ─────────────────────────────────────────────────────
@@ -150,5 +160,15 @@ describe("fetchBatchNFTMetadataForEvents", () => {
     const call = vi.mocked(globalThis.fetch).mock.calls[0];
     const body = JSON.parse(call[1]?.body as string);
     expect(body.tokens).toHaveLength(2);
+  });
+});
+
+describe("resolveNftImage", () => {
+  it("returns empty string for hostile direct image URLs", async () => {
+    const image = await resolveNftImage(
+      { originalUrl: "javascript:alert(1)" },
+      undefined,
+    );
+    expect(image).toBe("");
   });
 });
