@@ -17,6 +17,7 @@ import {
 import Footer from "@/components/Footer";
 import { CollectionNFTCard } from "@/components/marketplace/CollectionNFTCard";
 import { shortAddr } from "@/lib/utils";
+import { buildEtherscanAddressUrl, buildEtherscanTxUrl } from "@/lib/externalLinks";
 import { MintModal } from "./MintModal";
 import { CollectionOwnerPanels } from "./CollectionOwnerPanels";
 import { useCollectionPageCoordinator } from "./useCollectionPageCoordinator";
@@ -51,6 +52,9 @@ export default function CollectionPage() {
     bannerImage,
     handleLoadSuccess,
   } = useCollectionPageCoordinator(collectionAddress);
+  const contractUrl = buildEtherscanAddressUrl(collectionAddress);
+  const mintTxUrl = buildEtherscanTxUrl(mintSuccess);
+  const withdrawTxUrl = buildEtherscanTxUrl(ownerActions.withdrawHash);
 
   return (
     <div className="bg-background min-h-screen text-on-surface">
@@ -232,14 +236,16 @@ export default function CollectionPage() {
               </span>
             )}
           </h2>
-          <a
-            href={`https://sepolia.etherscan.io/address/${collectionAddress}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary transition-colors"
-          >
-            Ver contrato <ExternalLink size={11} />
-          </a>
+          {contractUrl && (
+            <a
+              href={contractUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary transition-colors"
+            >
+              Ver contrato <ExternalLink size={11} />
+            </a>
+          )}
         </div>
 
         {isLoadingNFTs ? (
@@ -316,14 +322,16 @@ export default function CollectionPage() {
             <p className="font-headline font-bold text-sm text-on-surface">
               NFT Mintado!
             </p>
-            <a
-              href={`https://sepolia.etherscan.io/tx/${mintSuccess}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-primary underline"
-            >
-              Ver no Etherscan
-            </a>
+            {mintTxUrl && (
+              <a
+                href={mintTxUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-primary underline"
+              >
+                Ver no Etherscan
+              </a>
+            )}
           </div>
           <button
             onClick={() => setMintSuccess(null)}
@@ -342,9 +350,9 @@ export default function CollectionPage() {
             <p className="font-headline font-bold text-sm text-on-surface">
               Royalties retirados!
             </p>
-            {ownerActions.withdrawHash && (
+            {withdrawTxUrl && (
               <a
-                href={`https://sepolia.etherscan.io/tx/${ownerActions.withdrawHash}`}
+                href={withdrawTxUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-secondary underline"

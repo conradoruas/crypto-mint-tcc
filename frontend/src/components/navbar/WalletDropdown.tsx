@@ -14,6 +14,7 @@ import { useBalance, useDisconnect } from "wagmi";
 import { cn } from "@/lib/utils";
 import { useState, useRef } from "react";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import { buildEtherscanAddressUrl } from "@/lib/externalLinks";
 
 export function WalletDropdown({ address }: { address: string }) {
   const [open, setOpen] = useState(false);
@@ -22,6 +23,7 @@ export function WalletDropdown({ address }: { address: string }) {
   const { setOpen: openConnectKit } = useModal();
   const { mutate } = useDisconnect();
   useClickOutside(ref, () => setOpen(false));
+  const etherscanAddressUrl = buildEtherscanAddressUrl(address);
 
   const { data: balance } = useBalance({ address: address as `0x${string}` });
 
@@ -67,14 +69,16 @@ export function WalletDropdown({ address }: { address: string }) {
                   <Copy size={13} />
                 )}
               </button>
-              <a
-                href={`https://sepolia.etherscan.io/address/${address}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-on-surface-variant hover:text-primary transition-colors shrink-0"
-              >
-                <ExternalLink size={13} />
-              </a>
+              {etherscanAddressUrl && (
+                <a
+                  href={etherscanAddressUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-on-surface-variant hover:text-primary transition-colors shrink-0"
+                >
+                  <ExternalLink size={13} />
+                </a>
+              )}
             </div>
           </div>
 

@@ -72,6 +72,10 @@ export const addressSchema = z
     message: "Invalid Ethereum address",
   });
 
+export const tokenIdSchema = z
+  .string()
+  .regex(/^(?:0x[a-fA-F0-9]{1,64}|[0-9]{1,78})$/, "Invalid token id");
+
 /**
  * Retorna um endereço validado ou `undefined` se inválido.
  * Preferir este helper para dados externos (GraphQL, parâmetros de URL)
@@ -79,5 +83,10 @@ export const addressSchema = z
  */
 export const parseAddress = (addr: string | undefined | null): Address | undefined => {
   const result = addressSchema.safeParse(addr);
+  return result.success ? result.data : undefined;
+};
+
+export const parseTokenId = (tokenId: string | undefined | null): string | undefined => {
+  const result = tokenIdSchema.safeParse(tokenId);
   return result.success ? result.data : undefined;
 };

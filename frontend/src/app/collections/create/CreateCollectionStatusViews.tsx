@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle, Download, Loader2, ShieldCheck, Upload } from "lucide-react";
+import { buildEtherscanTxUrl } from "@/lib/externalLinks";
 
 type SeedActionsProps = {
   generatedSeed: `0x${string}` | null;
@@ -67,6 +68,7 @@ export function CreateCollectionUrisStep(props: {
     isBusy,
     onLoadUris,
   } = props;
+  const createTxUrl = buildEtherscanTxUrl(createHash);
 
   return (
     <div className="max-w-xl mx-auto px-8 py-32 text-center">
@@ -105,9 +107,9 @@ export function CreateCollectionUrisStep(props: {
         </div>
       )}
 
-      {createHash && (
+      {createTxUrl && (
         <a
-          href={`https://sepolia.etherscan.io/tx/${createHash}`}
+          href={createTxUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="block mb-6 text-sm text-primary hover:text-primary-container transition-colors font-mono underline"
@@ -197,6 +199,7 @@ export function CreateCollectionSeedStep(props: {
     onDownloadSeed,
     onCopySeed,
   } = props;
+  const loadUrisTxUrl = buildEtherscanTxUrl(loadURIsHash);
 
   return (
     <div className="max-w-xl mx-auto px-8 py-32 text-center">
@@ -228,9 +231,9 @@ export function CreateCollectionSeedStep(props: {
         </div>
       )}
 
-      {loadURIsHash && (
+      {loadUrisTxUrl && (
         <a
-          href={`https://sepolia.etherscan.io/tx/${loadURIsHash}`}
+          href={loadUrisTxUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="block mb-6 text-sm text-primary hover:text-primary-container transition-colors font-mono underline"

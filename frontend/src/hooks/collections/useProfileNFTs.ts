@@ -5,8 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useCollections } from "./useCollections";
 import { useCreatorCollections } from "./useCollections";
 import { useStableArray } from "../useStableArray";
-import { fetchIpfsJson, resolveIpfsUrl } from "@/lib/ipfs";
 import { logger } from "@/lib/logger";
+import { normalizeNftText, resolveNftImage } from "@/lib/nftMetadata";
+import { getSafeImageUrl } from "@/lib/resourceSecurity";
 import type { CollectionNFTItem, CreatedNFTItem } from "@/types/nft";
 import type { AlchemyNFT } from "@/types/alchemy";
 
@@ -39,18 +40,14 @@ export function useProfileNFTs(
       const data = await res.json();
       return Promise.all(
         (data.ownedNfts ?? []).map(async (nft: AlchemyNFT) => {
-          let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
-          if (!image && nft.tokenUri) {
-            const meta = await fetchIpfsJson<{ image?: string }>(nft.tokenUri, { signal });
-            image = resolveIpfsUrl(meta?.image ?? "");
-          }
+          const image = await resolveNftImage(nft.image, nft.tokenUri, { signal });
           return {
             tokenId: nft.tokenId,
-            name: nft.name ?? `NFT #${nft.tokenId}`,
-            description: nft.description ?? "",
+            name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
+            description: normalizeNftText(nft.description, "", 10_000),
             image,
             nftContract: nft.contract?.address ?? collectionAddress ?? "",
-            collectionName: nft.collection?.name ?? "",
+            collectionName: normalizeNftText(nft.collection?.name, "", 200),
           } satisfies CollectionNFTItem;
         }),
       );
@@ -88,11 +85,11 @@ export function useCreatedNFTs(ownerAddress: string | undefined) {
           const data = await res.json();
           return (data.nfts ?? []).map((nft: AlchemyNFT) => ({
             tokenId: nft.tokenId,
-            name: nft.name ?? `NFT #${nft.tokenId}`,
-            description: nft.description ?? "",
-            image: nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "",
+            name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
+            description: normalizeNftText(nft.description, "", 10_000),
+            image: getSafeImageUrl(nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "") ?? "",
             nftContract: col.contractAddress,
-            collectionName: col.name,
+            collectionName: normalizeNftText(col.name, "", 200),
           })) satisfies CreatedNFTItem[];
         }),
       );

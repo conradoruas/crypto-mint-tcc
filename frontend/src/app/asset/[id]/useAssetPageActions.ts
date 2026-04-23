@@ -11,6 +11,7 @@ import {
 import type { ListPriceErrors, OfferAmountErrors } from "@/lib/schemas";
 import { formatTransactionError } from "@/lib/txErrors";
 import { logger } from "@/lib/logger";
+import { buildEtherscanTxUrl, openSafeExternalUrl } from "@/lib/externalLinks";
 
 type AssetPageActionsArgs = {
   nftName?: string;
@@ -56,21 +57,21 @@ export function useAssetPageActions({
   const [listErrors, setListErrors] = useState<ListPriceErrors>({});
   const [offerErrors, setOfferErrors] = useState<OfferAmountErrors>({});
   const [copied, setCopied] = useState(false);
+  const buyTxUrl = buildEtherscanTxUrl(buyHash);
 
   useEffect(() => {
     if (isBought) {
       toast.success("NFT purchased successfully!", {
-        action: buyHash
+        action: buyTxUrl
           ? {
               label: "View Tx",
-              onClick: () =>
-                window.open(`https://sepolia.etherscan.io/tx/${buyHash}`, "_blank"),
+              onClick: () => openSafeExternalUrl(buyTxUrl),
             }
           : undefined,
       });
       refetchAll();
     }
-  }, [buyHash, isBought, refetchAll]);
+  }, [buyTxUrl, isBought, refetchAll]);
 
   useEffect(() => {
     if (isOfferMade) {

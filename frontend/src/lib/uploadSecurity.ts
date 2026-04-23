@@ -2,22 +2,16 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { verifyMessage, type Address } from "viem";
 import { buildUploadAuthMessage } from "@/lib/uploadAuthMessage";
+import {
+  MAX_IMAGE_UPLOAD_BYTES,
+  MAX_JSON_UPLOAD_BYTES,
+  isAllowedImageMime,
+} from "@/lib/uploadPolicy";
 
-/** Max body size for JSON profile uploads (bytes). */
-export const MAX_JSON_UPLOAD_BYTES = 256 * 1024;
-
-/** Max image / multipart file part size (bytes). */
-export const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
+export { MAX_IMAGE_UPLOAD_BYTES, MAX_JSON_UPLOAD_BYTES };
 
 /** Max total multipart body (file + fields) for /api/upload. */
 export const MAX_UPLOAD_COMBINED_BYTES = 11 * 1024 * 1024;
-
-const ALLOWED_IMAGE_MIME = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-]);
 
 /** Signature must be at most this many seconds old (either direction). */
 const AUTH_MAX_SKEW_SEC = 300;
@@ -99,10 +93,6 @@ export function assertContentLength(
     );
   }
   return null;
-}
-
-export function isAllowedImageMime(mime: string): boolean {
-  return ALLOWED_IMAGE_MIME.has(mime.toLowerCase());
 }
 
 export function validateImageFile(file: File): NextResponse | null {

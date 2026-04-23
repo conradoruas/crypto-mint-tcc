@@ -13,7 +13,7 @@ import {
 import Image from "next/image";
 import type { NFTItem } from "@/types/nft";
 import { OffersTable } from "@/components/marketplace/OffersTable";
-import { parseAddress } from "@/lib/schemas";
+import { parseAddress, parseTokenId } from "@/lib/schemas";
 import { shortAddr } from "@/lib/utils";
 import { PriceHistory } from "@/components/asset/PriceHistory";
 import { ListingPanel } from "@/components/asset/ListingPanel";
@@ -46,7 +46,7 @@ export default function AssetPageClient({
 }) {
   const { id } = useParams();
   const searchParams = useSearchParams();
-  const tokenId = (Array.isArray(id) ? id[0] : id) ?? "";
+  const tokenId = parseTokenId((Array.isArray(id) ? id[0] : id) ?? "") ?? "";
   const nftContract = parseAddress(searchParams.get("contract"));
   const {
     address,
@@ -76,12 +76,12 @@ export default function AssetPageClient({
     actions,
   } = useAssetPageCoordinator(tokenId, nftContract ?? null, initialNft);
 
-  if (!nftContract) {
+  if (!nftContract || !tokenId) {
     return (
       <main className="min-h-screen bg-background text-on-surface">
         <Navbar />
         <p className="text-center py-20 text-on-surface-variant text-sm">
-          Contract address not provided.
+          Invalid asset reference.
         </p>
       </main>
     );

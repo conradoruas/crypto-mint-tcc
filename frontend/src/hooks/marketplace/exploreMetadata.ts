@@ -1,6 +1,8 @@
 import { formatEther } from "viem";
 import { type QueryClient } from "@tanstack/react-query";
-import { fetchIpfsJson, resolveIpfsUrl } from "@/lib/ipfs";
+import { fetchIpfsJson } from "@/lib/ipfs";
+import { normalizeNftText } from "@/lib/nftMetadata";
+import { getSafeImageUrl } from "@/lib/resourceSecurity";
 import type { GqlNFT, NFTItemWithMarket } from "./exploreTypes";
 
 type IpfsMeta = { name: string; description: string; image: string };
@@ -15,9 +17,9 @@ async function fetchTokenMeta(tokenUri: string): Promise<IpfsMeta | null> {
   if (!json) return null;
 
   return {
-    name: json.name ?? "",
-    description: json.description ?? "",
-    image: resolveIpfsUrl(json.image ?? ""),
+    name: normalizeNftText(json.name, "", 500),
+    description: normalizeNftText(json.description, "", 10_000),
+    image: getSafeImageUrl(json.image ?? "") ?? "",
   };
 }
 

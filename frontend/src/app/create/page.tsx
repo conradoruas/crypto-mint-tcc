@@ -22,6 +22,8 @@ import Link from "next/link";
 import Footer from "@/components/Footer";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { formatTransactionError } from "@/lib/txErrors";
+import { buildEtherscanTxUrl } from "@/lib/externalLinks";
+import { getSafeImageUrl, sanitizeUntrustedText } from "@/lib/resourceSecurity";
 
 function CollectionOption({
   collection,
@@ -103,6 +105,7 @@ export default function MintPage() {
 
   const { mint, isPending, isConfirming, hash, receipt } =
     useMintToCollection();
+  const mintTxUrl = buildEtherscanTxUrl(hash);
 
   // Single source of truth for mintable status: read live supply straight
   // from the chain. Avoids the subgraph-indexing lag that caused the count
@@ -155,6 +158,7 @@ export default function MintPage() {
   const chosen = mintableCollections.find(
     (c) => c.contractAddress === selectedCollection,
   );
+  const chosenImage = chosen ? resolveIpfsUrl(chosen.image) : "";
 
   // Auto-clear the selection the moment the chosen collection reports sold out.
   useEffect(() => {
@@ -205,10 +209,16 @@ export default function MintPage() {
         const data = await r.json();
         if (cancelled) return;
 
-        const image = resolveIpfsUrl(
-          data.image?.cachedUrl ?? data.image?.originalUrl ?? "",
-        );
-        setMintedNft({ name: data.name ?? `NFT #${tokenId}`, image, tokenId });
+        const image =
+          getSafeImageUrl(data.image?.cachedUrl ?? data.image?.originalUrl ?? "") ?? "";
+        setMintedNft({
+          name: sanitizeUntrustedText(data.name, {
+            maxLength: 500,
+            fallback: `NFT #${tokenId}`,
+          }),
+          image,
+          tokenId,
+        });
       } catch {
         // silently ignore
       } finally {
@@ -367,7 +377,7 @@ export default function MintPage() {
             )}
 
             {/* Success banner */}
-            {showSuccess && hash && (
+            {showSuccess && mintTxUrl && (
               <div className="flex items-center gap-4 p-5 bg-primary/5 border border-primary/20">
                 <CheckCircle2 size={20} className="text-primary shrink-0" />
                 <div className="flex-1">
@@ -375,7 +385,7 @@ export default function MintPage() {
                     NFT Minted Successfully!
                   </p>
                   <a
-                    href={`https://sepolia.etherscan.io/tx/${hash}`}
+                    href={mintTxUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5"
@@ -488,10 +498,10 @@ export default function MintPage() {
                         #{mintedNft.tokenId.padStart(3, "0")}
                       </div>
                     </>
-                  ) : chosen && resolveIpfsUrl(chosen.image) ? (
+                  ) : chosen && chosenImage ? (
                     <>
                       <Image
-                        src={resolveIpfsUrl(chosen.image)}
+                        src={chosenImage}
                         alt={chosen.name}
                         fill
                         className="object-cover grayscale"

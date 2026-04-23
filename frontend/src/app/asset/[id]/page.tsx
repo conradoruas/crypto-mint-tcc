@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import AssetPageClient from "./AssetPageClient";
 import type { NFTItem } from "@/types/nft";
 import { ALCHEMY_API_KEY as ALCHEMY_KEY } from "@/lib/env";
-import { resolveIpfsUrl } from "@/lib/ipfs";
+import { parseAddress, parseTokenId } from "@/lib/schemas";
+import { normalizeNftText, resolveNftImage } from "@/lib/nftMetadata";
+import { getSafeImageUrl } from "@/lib/resourceSecurity";
 
 const ALCHEMY_BASE = `https://eth-sepolia.g.alchemy.com/nft/v3/${ALCHEMY_KEY}`;
 
@@ -31,22 +33,16 @@ async function parseNFTToItem(
   const imageData = data.image as
     | { cachedUrl?: string; originalUrl?: string }
     | undefined;
-  let image = imageData?.cachedUrl ?? imageData?.originalUrl ?? "";
-
-  if (!image && data.tokenUri) {
-    try {
-      const metaRes = await fetch(resolveIpfsUrl(data.tokenUri as string));
-      const meta = await metaRes.json() as Record<string, unknown>;
-      image = resolveIpfsUrl((meta.image as string | undefined) ?? "");
-    } catch {
-      // image stays empty — client will show placeholder
-    }
-  }
+  const image = await resolveNftImage(
+    imageData,
+    typeof data.tokenUri === "string" ? data.tokenUri : undefined,
+    { ipfsOnlyTokenUri: true },
+  );
 
   return {
-    tokenId: (data.tokenId as string | undefined) ?? tokenId,
-    name: (data.name as string | undefined) ?? `NFT #${tokenId}`,
-    description: (data.description as string | undefined) ?? "",
+    tokenId: normalizeNftText(data.tokenId, tokenId, 100),
+    name: normalizeNftText(data.name, `NFT #${tokenId}`, 500),
+    description: normalizeNftText(data.description, "", 10_000),
     image,
     nftContract: contract as `0x${string}`,
   };
@@ -61,24 +57,28 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const { contract } = await searchParams;
+  const nftContract = parseAddress(contract);
+  const tokenId = parseTokenId(id);
 
-  const fallback: Metadata = { title: `NFT #${id} | CryptoMint` };
-  if (!contract) return fallback;
+  const fallback: Metadata = { title: `NFT #${tokenId ?? id} | CryptoMint` };
+  if (!nftContract || !tokenId) return fallback;
 
-  const data = await fetchNFTMeta(contract, id);
+  const data = await fetchNFTMeta(nftContract, tokenId);
   if (!data) return fallback;
 
   const name: string =
-    (data.name as string | undefined) ??
-    (data.contract as { name?: string } | undefined)?.name ??
-    `NFT #${id}`;
+    normalizeNftText(
+      data.name ?? (data.contract as { name?: string } | undefined)?.name,
+      `NFT #${tokenId}`,
+      500,
+    );
   const description: string | undefined =
-    (data.description as string | undefined) || undefined;
+    normalizeNftText(data.description, "", 10_000) || undefined;
   const imageData = data.image as
     | { cachedUrl?: string; originalUrl?: string }
     | undefined;
   const image: string | undefined =
-    imageData?.cachedUrl ?? imageData?.originalUrl ?? undefined;
+    getSafeImageUrl(imageData?.cachedUrl ?? imageData?.originalUrl ?? "") ?? undefined;
 
   return {
     title: `${name} | CryptoMint`,
@@ -102,11 +102,13 @@ export default async function AssetPage({
 }) {
   const { id } = await params;
   const { contract } = await searchParams;
+  const nftContract = parseAddress(contract);
+  const tokenId = parseTokenId(id);
 
   let initialNft: NFTItem | null = null;
-  if (contract) {
-    const data = await fetchNFTMeta(contract, id);
-    if (data) initialNft = await parseNFTToItem(data, id, contract);
+  if (nftContract && tokenId) {
+    const data = await fetchNFTMeta(nftContract, tokenId);
+    if (data) initialNft = await parseNFTToItem(data, tokenId, nftContract);
   }
 
   return <AssetPageClient initialNft={initialNft} />;

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { resolveIpfsUrl } from "@/lib/ipfs";
 import { logger } from "@/lib/logger";
 import type { NFTItem } from "@/types/nft";
+import { normalizeNftText, resolveNftImage } from "@/lib/nftMetadata";
 
 export function useAssetNft(
   tokenId: string,
@@ -31,20 +31,15 @@ export function useAssetNft(
           `/api/alchemy/getNFTMetadata?contractAddress=${nftContract}&tokenId=${tokenId}&refreshCache=false`,
           { signal },
         );
+        if (!res.ok) throw new Error(`metadata_fetch_failed:${res.status}`);
         const data = await res.json();
-        let image = data.image?.cachedUrl ?? data.image?.originalUrl ?? "";
-
-        if (!image && data.tokenUri) {
-          const metaRes = await fetch(resolveIpfsUrl(data.tokenUri), { signal });
-          const meta = await metaRes.json();
-          image = resolveIpfsUrl(meta.image ?? "");
-        }
+        const image = await resolveNftImage(data.image, data.tokenUri, { signal });
 
         if (cancelled) return;
         setNft({
-          tokenId: data.tokenId,
-          name: data.name ?? `NFT #${tokenId}`,
-          description: data.description ?? "",
+          tokenId: normalizeNftText(data.tokenId, tokenId, 100),
+          name: normalizeNftText(data.name, `NFT #${tokenId}`, 500),
+          description: normalizeNftText(data.description, "", 10_000),
           image,
           nftContract,
         });

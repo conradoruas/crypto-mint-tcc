@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import { createObjectUrl, revokeObjectUrl, revokeRemovedObjectUrls } from "@/lib/objectUrlRegistry";
+import {
+  MAX_BULK_METADATA_BYTES,
+  MAX_BULK_METADATA_ENTRIES,
+  validateImageFile,
+  validateJsonFile,
+} from "@/lib/uploadPolicy";
 import { useCollectionForm, type NFTDraft } from "./useCollectionForm";
 
 interface BulkMetadataItem {
@@ -71,6 +77,15 @@ export function useCreateCollectionDraftManager() {
 
   const setCoverFile = useCallback(
     (file: File | null) => {
+      if (file) {
+        const validationError = validateImageFile(file);
+        if (validationError) {
+          dispatch({ type: "SET_ERROR", error: validationError });
+          return;
+        }
+      }
+
+      dispatch({ type: "SET_ERROR", error: null });
       dispatch({
         type: "SET_COVER",
         file,
@@ -94,19 +109,43 @@ export function useCreateCollectionDraftManager() {
   );
 
   const setNFTFile = useCallback(
-    (id: number, file: File | null) =>
+    (id: number, file: File | null) => {
+      if (file) {
+        const validationError = validateImageFile(file);
+        if (validationError) {
+          dispatch({ type: "SET_ERROR", error: validationError });
+          return;
+        }
+      }
+
+      dispatch({ type: "SET_ERROR", error: null });
       dispatch({
         type: "SET_NFT_FILE",
         id,
         file,
         previewUrl: createObjectUrl(file),
-      }),
+      });
+    },
     [dispatch],
   );
 
   const handleBulkMetadataFileChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0] ?? null;
+      if (file) {
+        const validationError = validateJsonFile(file, MAX_BULK_METADATA_BYTES);
+        if (validationError) {
+          dispatch({ type: "SET_ERROR", error: validationError });
+          dispatch({
+            type: "SET_BULK_METADATA_FILE",
+            file: null,
+            name: "",
+          });
+          return;
+        }
+      }
+
+      dispatch({ type: "SET_ERROR", error: null });
       dispatch({
         type: "SET_BULK_METADATA_FILE",
         file,
@@ -119,6 +158,21 @@ export function useCreateCollectionDraftManager() {
   const handleBulkImageFilesChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files ? Array.from(event.target.files) : [];
+      const invalidFile = files.find((file) => validateImageFile(file));
+      if (invalidFile) {
+        dispatch({
+          type: "SET_ERROR",
+          error: validateImageFile(invalidFile),
+        });
+        dispatch({
+          type: "SET_BULK_IMAGE_FILES",
+          files: [],
+          names: [],
+        });
+        return;
+      }
+
+      dispatch({ type: "SET_ERROR", error: null });
       dispatch({
         type: "SET_BULK_IMAGE_FILES",
         files,
@@ -157,6 +211,11 @@ export function useCreateCollectionDraftManager() {
       if (!Array.isArray(json)) {
         throw new Error("Bulk metadata must be an array of objects.");
       }
+      if (json.length > MAX_BULK_METADATA_ENTRIES) {
+        throw new Error(
+          `Bulk metadata supports at most ${MAX_BULK_METADATA_ENTRIES} entries.`,
+        );
+      }
 
       const parsedNFTs = json.map((item: BulkMetadataItem, index: number) => {
         const nftName = String(item.name ?? "").trim();
@@ -179,6 +238,10 @@ export function useCreateCollectionDraftManager() {
           throw new Error(
             `Image '${imageName}' for entry ${index + 1} not found in uploaded images.`,
           );
+        }
+        const fileError = validateImageFile(imageFile);
+        if (fileError) {
+          throw new Error(`Image '${imageFile.name}' is invalid: ${fileError}`);
         }
 
         return {

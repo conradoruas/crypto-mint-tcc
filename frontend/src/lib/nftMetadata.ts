@@ -6,8 +6,14 @@
  * This module consolidates all Alchemy metadata fetching into one place.
  */
 
-import { fetchIpfsJson, resolveIpfsUrl } from "@/lib/ipfs";
+import { fetchIpfsJson } from "@/lib/ipfs";
 import type { AlchemyNFT, NFTMeta, MetaMap } from "@/types/alchemy";
+import {
+  getSafeAssetUri,
+  getSafeImageUrl,
+  getSafeIpfsMetadataUrl,
+  sanitizeUntrustedText,
+} from "@/lib/resourceSecurity";
 
 export type { NFTMeta, MetaMap };
 
@@ -16,6 +22,32 @@ export interface NFTMetaExtended {
   name: string;
   description: string;
   image: string;
+}
+
+type AlchemyImageShape = { cachedUrl?: string; originalUrl?: string } | undefined;
+
+export async function resolveNftImage(
+  image: AlchemyImageShape,
+  tokenUri: string | null | undefined,
+  options?: { signal?: AbortSignal; ipfsOnlyTokenUri?: boolean },
+) {
+  const directImage = getSafeImageUrl(image?.cachedUrl ?? image?.originalUrl ?? "");
+  if (directImage) return directImage;
+  if (!tokenUri) return "";
+
+  const safeTokenUri = options?.ipfsOnlyTokenUri
+    ? getSafeIpfsMetadataUrl(tokenUri)
+    : tokenUri;
+  if (!safeTokenUri) return "";
+
+  const meta = await fetchIpfsJson<{ image?: string }>(safeTokenUri, {
+    signal: options?.signal,
+  });
+  return getSafeImageUrl(meta?.image ?? "") ?? "";
+}
+
+export function normalizeNftText(value: unknown, fallback: string, maxLength: number) {
+  return sanitizeUntrustedText(value, { maxLength, fallback });
 }
 
 // ── Collection endpoint (all NFTs for a contract) ────────────────────────────
@@ -37,14 +69,10 @@ export async function fetchContractNFTMetadata(
     );
     const data = await res.json();
     for (const nft of data.nfts ?? []) {
-      let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
-      if (!image && nft.tokenUri) {
-        const meta = await fetchIpfsJson<{ image?: string }>(nft.tokenUri);
-        image = resolveIpfsUrl(meta?.image ?? "");
-      }
+      const image = await resolveNftImage(nft.image, nft.tokenUri);
       map.set(nft.tokenId, {
-        name: nft.name ?? `NFT #${nft.tokenId}`,
-        description: nft.description ?? "",
+        name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
+        description: normalizeNftText(nft.description, "", 10_000),
         image,
       });
     }
@@ -75,8 +103,8 @@ export async function fetchBatchNFTMetadata(
     for (const nft of (data.nfts ?? []) as AlchemyNFT[]) {
       const key = `${(nft.contract?.address ?? "").toLowerCase()}-${nft.tokenId}`;
       map.set(key, {
-        name: nft.name ?? `NFT #${nft.tokenId}`,
-        image: nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "",
+        name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
+        image: getSafeAssetUri(nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "") ?? "",
       });
     }
   } catch {

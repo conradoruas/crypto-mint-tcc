@@ -22,6 +22,7 @@ import {
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { createUploadAuthHeaders } from "@/lib/uploadClient";
 import { useObjectUrl } from "@/hooks/useObjectUrl";
+import { IMAGE_ACCEPT_ATTR, validateImageFile } from "@/lib/uploadPolicy";
 
 export default function EditProfilePage() {
   const { address } = useConnection();
@@ -63,6 +64,12 @@ export default function EditProfilePage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError(null);
     setImageFile(file);
   };
 
@@ -159,7 +166,7 @@ export default function EditProfilePage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept={IMAGE_ACCEPT_ATTR}
                     className="hidden"
                     onChange={handleFileChange}
                   />

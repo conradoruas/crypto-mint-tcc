@@ -33,6 +33,7 @@ import { NFTCardSkeleton } from "@/components/ui";
 import type { MetaMap } from "@/types/alchemy";
 import { resolveIpfsUrl } from "@/lib/ipfs";
 import { shortAddr, formatTimeAgo } from "@/lib/utils";
+import { buildEtherscanAddressUrl, buildEtherscanTxUrl } from "@/lib/externalLinks";
 
 const EVENT_CONFIG = getEventConfig(14);
 
@@ -126,6 +127,7 @@ function ProfileAvatar({
 
 export default function ProfilePage() {
   const { address } = useConnection();
+  const addressUrl = buildEtherscanAddressUrl(address);
   const { collections, isLoading: isLoadingCollections } = useCollections();
   const [selectedCollection, setSelectedCollection] = useState<string>("");
   const { data: profile } = useProfileQuery(address);
@@ -246,14 +248,16 @@ export default function ProfilePage() {
                   <span className="text-primary font-mono text-sm tracking-tight">
                     {address ? shortAddr(address) : ""}
                   </span>
-                  <a
-                    href={`https://sepolia.etherscan.io/address/${address}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-on-surface-variant hover:text-primary transition-colors"
-                  >
-                    <ExternalLink size={12} />
-                  </a>
+                  {addressUrl && (
+                    <a
+                      href={addressUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
                 </div>
               </div>
             </div>
@@ -570,14 +574,16 @@ export default function ProfilePage() {
                           <td className="py-5 pl-4 text-right">
                             <div className="flex items-center justify-end gap-2 text-on-surface-variant text-xs whitespace-nowrap">
                               <span>{formatTimeAgo(event.timestamp)}</span>
-                              <a
-                                href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:text-primary transition-colors"
-                              >
-                                <ExternalLink size={12} />
-                              </a>
+                              {buildEtherscanTxUrl(event.txHash) && (
+                                <a
+                                  href={buildEtherscanTxUrl(event.txHash) ?? undefined}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="hover:text-primary transition-colors"
+                                >
+                                  <ExternalLink size={12} />
+                                </a>
+                              )}
                             </div>
                           </td>
                         </tr>

@@ -5,6 +5,7 @@ import { Image as ImageIcon, Info, Layers, Loader2, Plus, Upload, X } from "luci
 import type { ChangeEvent } from "react";
 import type { CreateCollectionErrors } from "@/lib/schemas";
 import type { CollectionFormState, NFTDraft } from "./useCollectionForm";
+import { IMAGE_ACCEPT_ATTR } from "@/lib/uploadPolicy";
 
 const inputClass =
   "w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40";
@@ -120,7 +121,7 @@ export function CreateCollectionForm({
               type="file"
               id="cover-upload"
               className="hidden"
-              accept="image/*"
+              accept={IMAGE_ACCEPT_ATTR}
               onChange={(e) => onSetCoverFile(e.target.files?.[0] ?? null)}
             />
             <label
@@ -310,7 +311,7 @@ export function CreateCollectionForm({
                   <div className="mt-2">
                     <input
                       type="file"
-                      accept="image/*"
+                      accept={IMAGE_ACCEPT_ATTR}
                       onChange={onBulkImageFilesChange}
                       multiple
                       className="w-full rounded-sm border border-outline-variant/20 bg-surface-container px-3 py-2 text-sm text-on-surface transition-colors focus:border-primary focus:outline-none cursor-pointer"
@@ -370,7 +371,7 @@ export function CreateCollectionForm({
                       type="file"
                       id={`nft-file-${nft.id}`}
                       className="hidden"
-                      accept="image/*"
+                      accept={IMAGE_ACCEPT_ATTR}
                       onChange={(e) => onSetNFTFile(nft.id, e.target.files?.[0] ?? null)}
                     />
                     <label

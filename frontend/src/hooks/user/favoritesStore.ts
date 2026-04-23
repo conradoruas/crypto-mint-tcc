@@ -13,7 +13,23 @@ export function readFavoriteRefs(address: string): FavoriteRef[] {
 
   try {
     const raw = localStorage.getItem(favoritesStorageKey(address));
-    return raw ? (JSON.parse(raw) as FavoriteRef[]) : [];
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((item): item is FavoriteRef => {
+      if (!item || typeof item !== "object") return false;
+      const favorite = item as Partial<FavoriteRef>;
+      return (
+        typeof favorite.tokenId === "string" &&
+        favorite.tokenId.length > 0 &&
+        favorite.tokenId.length <= 100 &&
+        typeof favorite.nftContract === "string" &&
+        favorite.nftContract.trim().length > 0 &&
+        favorite.nftContract.length <= 200
+      );
+    });
   } catch {
     return [];
   }

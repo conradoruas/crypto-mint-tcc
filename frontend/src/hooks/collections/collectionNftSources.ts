@@ -2,7 +2,9 @@
 
 import { apolloClient } from "@/lib/apolloClient";
 import { GET_COLLECTION_WITH_NFTS } from "@/lib/graphql/queries";
-import { fetchIpfsJson, resolveIpfsUrl } from "@/lib/ipfs";
+import { fetchIpfsJson } from "@/lib/ipfs";
+import { normalizeNftText, resolveNftImage } from "@/lib/nftMetadata";
+import { getSafeImageUrl } from "@/lib/resourceSecurity";
 import type { AlchemyNFT } from "@/types/alchemy";
 import type { CollectionNFTItem } from "@/types/nft";
 
@@ -22,9 +24,9 @@ async function resolveTokenMeta(tokenUri: string) {
   }
 
   return {
-    name: json.name ?? "",
-    description: json.description ?? "",
-    image: resolveIpfsUrl(json.image ?? ""),
+    name: normalizeNftText(json.name, "", 500),
+    description: normalizeNftText(json.description, "", 10_000),
+    image: getSafeImageUrl(json.image ?? "") ?? "",
   };
 }
 
@@ -97,17 +99,12 @@ export async function fetchCollectionNftsFromAlchemy(
 
   const items: CollectionNFTItem[] = await Promise.all(
     (data.nfts ?? []).map(async (nft: AlchemyNFT) => {
-      let image = nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "";
-
-      if (!image && nft.tokenUri) {
-        const meta = await fetchIpfsJson<{ image?: string }>(nft.tokenUri);
-        image = resolveIpfsUrl(meta?.image ?? "");
-      }
+      const image = await resolveNftImage(nft.image, nft.tokenUri);
 
       return {
         tokenId: nft.tokenId,
-        name: nft.name ?? `NFT #${nft.tokenId}`,
-        description: nft.description ?? "",
+        name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
+        description: normalizeNftText(nft.description, "", 10_000),
         image,
         nftContract: collectionAddress,
       };

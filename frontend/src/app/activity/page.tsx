@@ -15,6 +15,7 @@ import type { NFTMeta, MetaMap } from "@/types/alchemy";
 import { useStableArray } from "@/hooks/useStableArray";
 import { shortAddr, formatTimeAgo } from "@/lib/utils";
 import { PageControls } from "@/components/ui";
+import { buildEtherscanTxUrl } from "@/lib/externalLinks";
 
 const EVENT_CONFIG = getEventConfig(16);
 
@@ -30,6 +31,7 @@ function EventRow({
   meta?: NFTMeta;
 }) {
   const cfg = EVENT_CONFIG[event.type];
+  const txUrl = buildEtherscanTxUrl(event.txHash);
   if (!cfg) return null;
 
   return (
@@ -110,14 +112,16 @@ function EventRow({
       <td className="py-5 pl-3 text-right">
         <div className="flex items-center justify-end gap-2 text-on-surface-variant text-xs whitespace-nowrap">
           <span>{formatTimeAgo(event.timestamp)}</span>
-          <a
-            href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-primary transition-colors shrink-0"
-          >
-            <ExternalLink size={12} />
-          </a>
+          {txUrl && (
+            <a
+              href={txUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary transition-colors shrink-0"
+            >
+              <ExternalLink size={12} />
+            </a>
+          )}
         </div>
       </td>
     </tr>
@@ -134,6 +138,7 @@ function EventCard({
   meta?: NFTMeta;
 }) {
   const cfg = EVENT_CONFIG[event.type];
+  const txUrl = buildEtherscanTxUrl(event.txHash);
   if (!cfg) return null;
 
   return (
@@ -161,14 +166,16 @@ function EventCard({
           </div>
           <div className="flex items-center gap-1.5 text-on-surface-variant text-xs shrink-0">
             <span>{formatTimeAgo(event.timestamp)}</span>
-            <a
-              href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-primary transition-colors"
-            >
-              <ExternalLink size={11} />
-            </a>
+            {txUrl && (
+              <a
+                href={txUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary transition-colors"
+              >
+                <ExternalLink size={11} />
+              </a>
+            )}
           </div>
         </div>
 

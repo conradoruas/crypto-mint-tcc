@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { resolveIpfsUrl, IPFS_GATEWAY_COUNT } from "@/lib/ipfs";
+import { IPFS_GATEWAY_COUNT, getSafeImageUrl, resolveIpfsUrl } from "@/lib/ipfs";
 
 type NFTImageProps = Omit<React.ComponentProps<typeof Image>, "src" | "onError"> & {
   src: string;
@@ -31,7 +31,11 @@ export function NFTImage({ src, fallback, alt, ...props }: NFTImageProps) {
 
   const resolved = src.startsWith("ipfs://")
     ? resolveIpfsUrl(src, gatewayIndex)
-    : src;
+    : getSafeImageUrl(src);
+
+  if (!resolved) {
+    return fallback ? <>{fallback}</> : null;
+  }
 
   return <Image src={resolved} alt={alt} onError={handleError} {...props} />;
 }

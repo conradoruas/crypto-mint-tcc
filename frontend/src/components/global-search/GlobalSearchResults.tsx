@@ -54,43 +54,47 @@ export function GlobalSearchResults({
               <p className="px-4 pt-3 pb-1 text-[10px] font-headline font-bold uppercase tracking-[0.2em] text-on-surface-variant">
                 Collections
               </p>
-              {collectionResults.map((collection) => (
-                <Link
-                  key={collection.contractAddress}
-                  href={`/collections/${collection.contractAddress}`}
-                  onClick={onSelect}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container transition-colors"
-                >
-                  <div className="w-9 h-9 shrink-0 bg-surface-container-high overflow-hidden relative">
-                    {collection.image ? (
-                      <Image
-                        src={resolveIpfsUrl(collection.image)}
-                        alt={collection.name || "Collection Image"}
-                        fill
-                        className="object-cover"
-                        sizes="36px"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Layers size={14} className="text-on-surface-variant/30" />
-                      </div>
+              {collectionResults.map((collection) => {
+                const collectionImage = resolveIpfsUrl(collection.image);
+
+                return (
+                  <Link
+                    key={collection.contractAddress}
+                    href={`/collections/${collection.contractAddress}`}
+                    onClick={onSelect}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container transition-colors"
+                  >
+                    <div className="w-9 h-9 shrink-0 bg-surface-container-high overflow-hidden relative">
+                      {collectionImage ? (
+                        <Image
+                          src={collectionImage}
+                          alt={collection.name || "Collection Image"}
+                          fill
+                          className="object-cover"
+                          sizes="36px"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Layers size={14} className="text-on-surface-variant/30" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-headline font-bold truncate text-on-surface">
+                        {collection.name}
+                      </p>
+                      <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">
+                        {collection.symbol}
+                      </p>
+                    </div>
+                    {collection.totalSupply !== undefined && (
+                      <span className="text-[10px] text-on-surface-variant shrink-0">
+                        {collection.totalSupply} NFTs
+                      </span>
                     )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-headline font-bold truncate text-on-surface">
-                      {collection.name}
-                    </p>
-                    <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">
-                      {collection.symbol}
-                    </p>
-                  </div>
-                  {collection.totalSupply !== undefined && (
-                    <span className="text-[10px] text-on-surface-variant shrink-0">
-                      {collection.totalSupply} NFTs
-                    </span>
-                  )}
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
 

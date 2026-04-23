@@ -6,6 +6,7 @@ import { AlertTriangle, Loader2, Upload } from "lucide-react";
 import { formatTransactionError } from "@/lib/txErrors";
 import { createObjectUrl, revokeRemovedObjectUrls } from "@/lib/objectUrlRegistry";
 import { usePublishCollectionUris } from "@/hooks/collections/usePublishCollectionUris";
+import { IMAGE_ACCEPT_ATTR, validateImageFile } from "@/lib/uploadPolicy";
 
 interface NFTLoadDraft {
   name: string;
@@ -63,6 +64,12 @@ export function LoadNFTsPanel({
       prev.map((nft, i) => {
         if (i !== index) return nft;
         if (field === "file" && value instanceof File) {
+          const validationError = validateImageFile(value);
+          if (validationError) {
+            setError(validationError);
+            return nft;
+          }
+          setError(null);
           return {
             ...nft,
             file: value,
@@ -129,7 +136,7 @@ export function LoadNFTsPanel({
                   type="file"
                   id={`nft-load-file-${index}`}
                   className="hidden"
-                  accept="image/*"
+                  accept={IMAGE_ACCEPT_ATTR}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) updateNFT(index, "file", file);

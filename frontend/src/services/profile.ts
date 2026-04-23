@@ -4,12 +4,13 @@
 // ─────────────────────────────────────────────
 
 import { useQuery } from "@tanstack/react-query";
-import { resolveIpfsUrl } from "@/lib/ipfs";
+import { fetchIpfsJson } from "@/lib/ipfs";
 import {
   type UploadAuthHeadersFn,
   uploadImageFile,
   uploadJsonMetadata,
 } from "@/lib/uploadClient";
+import { getSafeImageUrl, sanitizeUntrustedText } from "@/lib/resourceSecurity";
 
 export interface UserProfile {
   address: string;
@@ -55,14 +56,32 @@ export async function fetchProfile(
   const hash = loadProfileHash(address);
   if (!hash) return null;
 
-  try {
-    const res = await fetch(resolveIpfsUrl(hash));
-    if (!res.ok) return null;
-    const profile = (await res.json()) as UserProfile;
-    return profile;
-  } catch {
+  const profile = await fetchIpfsJson<Partial<UserProfile>>(hash);
+  if (!profile || typeof profile !== "object") {
     return null;
   }
+
+  const profileAddress =
+    typeof profile.address === "string" ? profile.address.toLowerCase() : "";
+  if (profileAddress !== address.toLowerCase()) {
+    return null;
+  }
+
+  const updatedAt =
+    typeof profile.updatedAt === "number" && Number.isFinite(profile.updatedAt)
+      ? profile.updatedAt
+      : 0;
+  const imageUri =
+    typeof profile.imageUri === "string" && getSafeImageUrl(profile.imageUri)
+      ? profile.imageUri
+      : "";
+
+  return {
+    address: profile.address ?? address,
+    name: sanitizeUntrustedText(profile.name, { maxLength: 50 }),
+    imageUri,
+    updatedAt,
+  };
 }
 
 // ─── Remove o perfil do localStorage ───
