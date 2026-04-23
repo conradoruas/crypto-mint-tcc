@@ -18,6 +18,11 @@ const JSON_CONTENT_TYPES = [
   "text/plain",
 ] as const;
 
+type ResponseLikeWithOptionalBody = {
+  body?: unknown;
+  json?: () => Promise<unknown>;
+};
+
 async function readResponseTextWithLimit(
   response: Response,
   maxBytes: number,
@@ -107,15 +112,16 @@ export async function fetchIpfsJson<T = Record<string, unknown>>(
     // Many tests and some fetch mocks provide a response-like object with
     // `json()` but without a readable body or `text()`. Accept that shape
     // while keeping the stricter path for real browser/server responses.
-    if (!("body" in res) && typeof res.json === "function") {
-      return (await res.json()) as T;
+    const responseWithJson = res as ResponseLikeWithOptionalBody;
+    if (responseWithJson.body === undefined && typeof responseWithJson.json === "function") {
+      return (await responseWithJson.json()) as T;
     }
 
     const text = await readResponseTextWithLimit(res, maxBytes);
     if (text == null) {
       if (text === null) return null;
-      if (typeof res.json === "function") {
-        return (await res.json()) as T;
+      if (typeof responseWithJson.json === "function") {
+        return (await responseWithJson.json()) as T;
       }
       return null;
     }
