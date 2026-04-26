@@ -8,6 +8,7 @@ import {
   validateImageFile,
   validateJsonFile,
 } from "@/lib/uploadPolicy";
+import type { NftAttribute, TraitSchema } from "@/types/traits";
 import { useCollectionForm, type NFTDraft } from "./useCollectionForm";
 
 interface BulkMetadataItem {
@@ -268,6 +269,18 @@ export function useCreateCollectionDraftManager() {
     }
   }, [bulkImageFiles, bulkMetadataFile, dispatch]);
 
+  const setTraitSchema = useCallback(
+    (schema: TraitSchema | undefined) =>
+      dispatch({ type: "SET_TRAIT_SCHEMA", schema }),
+    [dispatch],
+  );
+
+  const setNFTAttributes = useCallback(
+    (id: number, attributes: NftAttribute[]) =>
+      dispatch({ type: "SET_NFT_ATTRIBUTES", id, attributes }),
+    [dispatch],
+  );
+
   return {
     form,
     dispatch,
@@ -278,6 +291,8 @@ export function useCreateCollectionDraftManager() {
     updateNFTField,
     setNFTFile,
     setCoverFile,
+    setTraitSchema,
+    setNFTAttributes,
     setPage: (page: number) => dispatch({ type: "SET_PAGE", page }),
     handleBulkMetadataFileChange,
     handleBulkImageFilesChange,

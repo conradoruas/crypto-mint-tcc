@@ -21,6 +21,12 @@ export type PublishableNftDraft = {
   name: string;
   description: string;
   file: File | null;
+  attributes?: Array<{
+    trait_type: string;
+    value: string | number | boolean;
+    display_type?: string;
+    max_value?: number;
+  }>;
 };
 
 type PublishCollectionUrisArgs = {
@@ -50,8 +56,13 @@ export function usePublishCollectionUris() {
   );
 
   const uploadMetadata = useCallback(
-    async (name: string, description: string, imageUri: string) =>
-      uploadNftMetadata({ name, description, imageUri }, getAuthHeaders),
+    async (
+      name: string,
+      description: string,
+      imageUri: string,
+      attributes?: PublishableNftDraft["attributes"],
+    ) =>
+      uploadNftMetadata({ name, description, imageUri, attributes }, getAuthHeaders),
     [getAuthHeaders],
   );
 
@@ -89,6 +100,7 @@ export function usePublishCollectionUris() {
                 draft.name,
                 draft.description,
                 imageUri,
+                draft.attributes,
               );
 
               completed += 1;

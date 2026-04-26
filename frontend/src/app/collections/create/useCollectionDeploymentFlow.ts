@@ -2,11 +2,17 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useConnection, useSignMessage } from "wagmi";
-import { createUploadAuthHeaders, uploadImageFile } from "@/lib/uploadClient";
+import {
+  createUploadAuthHeaders,
+  uploadImageFile,
+  uploadCollectionContractMetadata,
+} from "@/lib/uploadClient";
 import { createCollectionSchema, getZodErrors } from "@/lib/schemas";
 import type { CreateCollectionErrors } from "@/lib/schemas";
 import { formatTransactionError } from "@/lib/txErrors";
 import { useCreateCollection } from "@/hooks/collections";
+import { useCreateCollectionV2 } from "@/hooks/collections/useCreateCollectionV2";
+import { FACTORY_V2_ADDRESS } from "@/constants/contracts";
 import type { CollectionFormState } from "./useCollectionForm";
 
 type UseCollectionDeploymentFlowArgs = {
@@ -33,7 +39,11 @@ export function useCollectionDeploymentFlow({
     [getAuthHeaders],
   );
 
-  const deployment = useCreateCollection();
+  const deploymentV1 = useCreateCollection();
+  const deploymentV2 = useCreateCollectionV2();
+
+  const useV2 = !!FACTORY_V2_ADDRESS;
+  const deployment = useV2 ? deploymentV2 : deploymentV1;
 
   const createCollection = useCallback(async () => {
     setError(null);
@@ -73,14 +83,45 @@ export function useCollectionDeploymentFlow({
     try {
       setIsUploadingCover(true);
       const coverUri = await uploadCoverImage(form.coverFile);
-      await deployment.createCollection({
-        name: form.name,
-        symbol: form.symbol.toUpperCase(),
-        description: form.description,
-        image: coverUri,
-        maxSupply: form.nfts.length,
-        mintPrice: form.mintPrice,
-      });
+
+      if (useV2 && address) {
+        // Pin the contractURI JSON (with trait schema) before deploying
+        let contractUri = "";
+        try {
+          contractUri = await uploadCollectionContractMetadata(
+            {
+              collectionAddress: address,
+              name: form.name,
+              image: coverUri,
+              description: form.description || undefined,
+              traitSchema: form.traitSchema as Record<string, unknown> | undefined,
+            },
+            getAuthHeaders,
+          );
+        } catch {
+          // If pinning fails, proceed with empty contractURI rather than blocking
+          contractUri = "";
+        }
+
+        await deploymentV2.createCollection({
+          name: form.name,
+          symbol: form.symbol.toUpperCase(),
+          description: form.description,
+          image: coverUri,
+          maxSupply: form.nfts.length,
+          mintPrice: form.mintPrice,
+          contractURI: contractUri,
+        });
+      } else {
+        await deploymentV1.createCollection({
+          name: form.name,
+          symbol: form.symbol.toUpperCase(),
+          description: form.description,
+          image: coverUri,
+          maxSupply: form.nfts.length,
+          mintPrice: form.mintPrice,
+        });
+      }
     } catch (error) {
       setError(
         formatTransactionError(
@@ -92,17 +133,22 @@ export function useCollectionDeploymentFlow({
       setIsUploadingCover(false);
     }
   }, [
-    deployment,
+    address,
+    deploymentV1,
+    deploymentV2,
     form.coverFile,
     form.description,
     form.mintPrice,
     form.name,
     form.nfts,
     form.symbol,
+    form.traitSchema,
+    getAuthHeaders,
     isConnected,
     setError,
     setFieldErrors,
     uploadCoverImage,
+    useV2,
   ]);
 
   return {
@@ -112,5 +158,6 @@ export function useCollectionDeploymentFlow({
     isConfirmingCreate: deployment.isConfirming,
     collectionCreated: deployment.isSuccess,
     createHash: deployment.hash,
+    isV2: useV2,
   };
 }

@@ -108,7 +108,12 @@ export default function CreateCollectionPage() {
     try {
       await uriPublishing.publishUris({
         collectionAddress: deployedAddress,
-        drafts: form.nfts,
+        drafts: form.nfts.map((n) => ({
+          name: n.name,
+          description: n.description,
+          file: n.file,
+          attributes: n.attributes,
+        })),
       });
     } catch (cause) {
       setError(
@@ -229,6 +234,8 @@ export default function CreateCollectionPage() {
         onUpdateNFTField={drafts.updateNFTField}
         onSetNFTFile={drafts.setNFTFile}
         onSetPage={drafts.setPage}
+        onSetTraitSchema={drafts.setTraitSchema}
+        onSetNFTAttributes={drafts.setNFTAttributes}
         onBulkMetadataFileChange={drafts.handleBulkMetadataFileChange}
         onBulkImageFilesChange={drafts.handleBulkImageFilesChange}
         onParseBulkNFTs={drafts.parseBulkNFTs}

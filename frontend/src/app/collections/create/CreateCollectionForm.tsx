@@ -4,8 +4,11 @@ import Image from "next/image";
 import { Image as ImageIcon, Info, Layers, Loader2, Plus, Upload, X } from "lucide-react";
 import type { ChangeEvent } from "react";
 import type { CreateCollectionErrors } from "@/lib/schemas";
+import type { NftAttribute, TraitSchema } from "@/types/traits";
 import type { CollectionFormState, NFTDraft } from "./useCollectionForm";
 import { IMAGE_ACCEPT_ATTR } from "@/lib/uploadPolicy";
+import { TraitSchemaEditor } from "./TraitSchemaEditor";
+import { TraitFieldsEditor } from "./TraitFieldsEditor";
 
 const inputClass =
   "w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-4 py-3 rounded-sm text-sm focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40";
@@ -40,6 +43,8 @@ type Props = {
   onUpdateNFTField: (id: number, field: "name" | "description", value: string) => void;
   onSetNFTFile: (id: number, file: File | null) => void;
   onSetPage: (page: number) => void;
+  onSetTraitSchema: (schema: TraitSchema | undefined) => void;
+  onSetNFTAttributes: (id: number, attributes: NftAttribute[]) => void;
   onBulkMetadataFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onBulkImageFilesChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onParseBulkNFTs: () => void | Promise<void>;
@@ -62,6 +67,8 @@ export function CreateCollectionForm({
   onUpdateNFTField,
   onSetNFTFile,
   onSetPage,
+  onSetTraitSchema,
+  onSetNFTAttributes,
   onBulkMetadataFileChange,
   onBulkImageFilesChange,
   onParseBulkNFTs,
@@ -260,6 +267,11 @@ export function CreateCollectionForm({
               user receives a <strong className="text-on-surface font-semibold">random NFT</strong> when minting.
             </p>
           </div>
+
+          <TraitSchemaEditor
+            schema={form.traitSchema}
+            onChange={onSetTraitSchema}
+          />
         </div>
 
         <div className="bg-surface-container-low border border-outline-variant/10 p-8 space-y-6">
@@ -420,6 +432,13 @@ export function CreateCollectionForm({
                       className={`${inputClass} h-16 resize-none`}
                       placeholder="Description (optional)"
                     />
+                    {form.traitSchema && form.traitSchema.fields.length > 0 && (
+                      <TraitFieldsEditor
+                        schema={form.traitSchema}
+                        attributes={nft.attributes ?? []}
+                        onChange={(attrs) => onSetNFTAttributes(nft.id, attrs)}
+                      />
+                    )}
                   </div>
 
                   <button
