@@ -14,6 +14,11 @@ type Collection @entity {
   mintSeedCommitted: Boolean!
   mintSeedRevealed: Boolean!
   revealed: Boolean!
+  # v2 trait schema support
+  contractURI: String
+  traitSchemaCID: String
+  rarityFinalized: Boolean!
+  traitDefinitions: [TraitDefinition!]! @derivedFrom(field: "collection")
   nfts: [NFT!]! @derivedFrom(field: "collection")
   stats: CollectionStat
   dailySnapshots: [DailyCollectionSnapshot!]! @derivedFrom(field: "collection")
@@ -29,6 +34,42 @@ type CollectionWithdrawal @entity(immutable: true) {
   txHash: Bytes!
 }
 
+# ─── Per-collection trait schema (populated from contractURI IPFS JSON) ───────
+
+type TraitDefinition @entity {
+  id: ID!                           # "<collectionAddress>-<key>"
+  collection: Collection!
+  key: String!
+  label: String!
+  type: String!                     # "string"|"number"|"enum"|"boolean"|"date"
+  required: Boolean!
+  position: Int!
+  minValue: BigDecimal
+  maxValue: BigDecimal
+  options: [TraitOption!]! @derivedFrom(field: "definition")
+}
+
+type TraitOption @entity {
+  id: ID!                           # "<collectionAddress>-<key>-<valueSafe>"
+  definition: TraitDefinition!
+  collection: Collection!
+  value: String!
+  count: BigInt!
+  frequency: BigDecimal!
+}
+
+# ─── Per-NFT resolved attributes (populated from tokenUri IPFS JSON) ──────────
+
+type Attribute @entity {
+  id: ID!                           # "<collectionAddress>-<tokenId>-<traitType>"
+  nft: NFT!
+  collection: Collection!
+  traitType: String!
+  valueStr: String
+  valueNum: BigDecimal
+  displayType: String
+}
+
 type NFT @entity {
   id: ID!
   tokenId: BigInt!
@@ -38,6 +79,12 @@ type NFT @entity {
   mintedAt: BigInt!
   listing: Listing
   offers: [Offer!]! @derivedFrom(field: "nft")
+  # trait & rarity fields (populated after IPFS metadata is resolved)
+  metadataResolved: Boolean!
+  attributes: [Attribute!]! @derivedFrom(field: "nft")
+  rarityScore: BigDecimal
+  rarityRank: Int
+  rarityTier: String
 }
 
 type Listing @entity {
@@ -114,6 +161,7 @@ type CollectionStat @entity {
   sales24h: BigInt!
   lastUpdated: BigInt!
   activeListingCount: BigInt!
+  rarityComputedAt: BigInt
 }
 
 type DailyCollectionSnapshot @entity {

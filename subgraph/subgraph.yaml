@@ -1,4 +1,4 @@
-specVersion: 0.0.5
+specVersion: 0.0.9
 schema:
   file: ./schema.graphql
 dataSources:
@@ -79,6 +79,29 @@ dataSources:
           handler: handlePendingWithdrawn
       file: ./src/marketplace.ts
 
+  # NFTCollectionFactoryV2: same network, v2 contract (address set after deploy)
+  - kind: ethereum
+    name: NFTCollectionFactoryV2
+    network: sepolia
+    source:
+      address: "0x0000000000000000000000000000000000000000"
+      abi: NFTCollectionFactoryV2
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Collection
+        - MarketplaceStats
+      abis:
+        - name: NFTCollectionFactoryV2
+          file: ./abis/NFTCollectionFactoryV2.json
+      eventHandlers:
+        - event: CollectionCreated(indexed address,indexed address,string,indexed uint256,string)
+          handler: handleCollectionCreatedV2
+      file: ./src/factory-v2.ts
+
 templates:
   - kind: ethereum
     name: NFTCollection
@@ -87,7 +110,7 @@ templates:
       abi: NFTCollection
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.7
+      apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
         - NFT
@@ -111,3 +134,69 @@ templates:
         - event: Withdrawn(indexed address,uint256)
           handler: handleCollectionWithdrawn
       file: ./src/collection.ts
+
+  # NFTCollectionV2 template — same events as v1, triggered by factory-v2.ts
+  - kind: ethereum
+    name: NFTCollectionV2
+    network: sepolia
+    source:
+      abi: NFTCollectionV2
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - NFT
+        - Collection
+        - Attribute
+        - TraitOption
+        - ActivityEvent
+        - MarketplaceStats
+        - CollectionStat
+      abis:
+        - name: NFTCollectionV2
+          file: ./abis/NFTCollectionV2.json
+      eventHandlers:
+        - event: NFTMinted(indexed address,indexed uint256,string)
+          handler: handleNFTMintedV2
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
+        - event: MintSeedCommitted(bytes32)
+          handler: handleMintSeedCommitted
+        - event: MintSeedRevealed(bytes32)
+          handler: handleMintSeedRevealed
+        - event: Revealed()
+          handler: handleRevealedV2
+        - event: Withdrawn(indexed address,uint256)
+          handler: handleCollectionWithdrawn
+      file: ./src/collection-v2.ts
+
+  # File Data Source: resolves contractURI IPFS JSON → TraitDefinition + TraitOption entities
+  - kind: file/ipfs
+    name: CollectionContractURI
+    mapping:
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Collection
+        - TraitDefinition
+        - TraitOption
+      abis:
+        - name: NFTCollectionFactoryV2
+          file: ./abis/NFTCollectionFactoryV2.json
+      file: ./src/collectionMetadata.ts
+
+  # File Data Source: resolves tokenUri IPFS JSON → Attribute entities + rarity accumulation
+  - kind: file/ipfs
+    name: TokenMetadata
+    mapping:
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - NFT
+        - Attribute
+        - TraitOption
+      abis:
+        - name: NFTCollectionV2
+          file: ./abis/NFTCollectionV2.json
+      file: ./src/tokenMetadata.ts

@@ -16,6 +16,7 @@ export function handleCollectionCreated(event: CollectionCreated): void {
   collection.mintSeedCommitted = false;
   collection.mintSeedRevealed = false;
   collection.revealed = false;
+  collection.rarityFinalized = false;
 
   // Fetch full metadata from the factory contract
   let factory = NFTCollectionFactory.bind(event.address);

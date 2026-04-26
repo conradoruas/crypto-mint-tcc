@@ -20,6 +20,7 @@ export function handleNFTMinted(event: NFTMinted): void {
   nft.owner = event.params.to;
   nft.collection = collectionId;
   nft.mintedAt = event.block.timestamp;
+  nft.metadataResolved = false;
   nft.save();
 
   // Increment collection totalSupply
