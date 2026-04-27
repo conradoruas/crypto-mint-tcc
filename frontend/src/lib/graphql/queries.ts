@@ -121,15 +121,6 @@ export const GET_NFTS_FOR_CONTRACT = gql`
       tokenId
       tokenUri
       owner
-      rarityRank
-      rarityScore
-      rarityTier
-      attributes {
-        traitType
-        valueStr
-        valueNum
-        displayType
-      }
       listing {
         id
         price
@@ -168,15 +159,6 @@ export const GET_ALL_NFTS = gql`
       tokenId
       tokenUri
       owner
-      rarityRank
-      rarityScore
-      rarityTier
-      attributes {
-        traitType
-        valueStr
-        valueNum
-        displayType
-      }
       collection {
         id
         contractAddress

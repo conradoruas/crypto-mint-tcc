@@ -27,7 +27,7 @@ function newField(): TraitField {
 }
 
 export function TraitSchemaEditor({ schema, onChange }: Props) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
 
   const fields = schema?.fields ?? [];
 

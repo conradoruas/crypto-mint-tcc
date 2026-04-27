@@ -432,12 +432,16 @@ export function CreateCollectionForm({
                       className={`${inputClass} h-16 resize-none`}
                       placeholder="Description (optional)"
                     />
-                    {form.traitSchema && form.traitSchema.fields.length > 0 && (
+                    {form.traitSchema && form.traitSchema.fields.length > 0 ? (
                       <TraitFieldsEditor
                         schema={form.traitSchema}
                         attributes={nft.attributes ?? []}
                         onChange={(attrs) => onSetNFTAttributes(nft.id, attrs)}
                       />
+                    ) : (
+                      <p className="text-[10px] text-on-surface-variant/50 uppercase tracking-widest mt-2">
+                        Define a trait schema above to add per-NFT trait values
+                      </p>
                     )}
                   </div>
 

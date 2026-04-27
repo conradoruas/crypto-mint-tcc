@@ -103,7 +103,6 @@ function ExploreContent() {
           setOnlyListed={setOnlyListed}
           onlyFavorites={onlyFavorites}
           setOnlyFavorites={setOnlyFavorites}
-          setPage={setPage}
           sort={sort}
           setSort={setSort}
           isLoadingCollections={isLoadingCollections}

@@ -14,7 +14,6 @@ interface FilterSidebarProps {
   setOnlyListed: (v: boolean) => void;
   onlyFavorites: boolean;
   setOnlyFavorites: (v: boolean) => void;
-  setPage: (v: number) => void;
   sort: SortOption;
   setSort: (v: SortOption) => void;
   isLoadingCollections: boolean;
@@ -38,7 +37,6 @@ function FilterContent({
   setOnlyListed,
   onlyFavorites,
   setOnlyFavorites,
-  setPage,
   sort,
   setSort,
   isLoadingCollections,
@@ -86,11 +84,7 @@ function FilterContent({
         </h3>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => {
-              setOnlyListed(false);
-              setOnlyFavorites(false);
-              setPage(1);
-            }}
+            onClick={() => setOnlyListed(false)}
             className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
               !onlyListed && !onlyFavorites
                 ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -100,11 +94,7 @@ function FilterContent({
             All
           </button>
           <button
-            onClick={() => {
-              setOnlyListed(true);
-              setOnlyFavorites(false);
-              setPage(1);
-            }}
+            onClick={() => setOnlyListed(true)}
             className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
               onlyListed
                 ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -114,11 +104,7 @@ function FilterContent({
             Buy Now
           </button>
           <button
-            onClick={() => {
-              setOnlyFavorites(!onlyFavorites);
-              setOnlyListed(false);
-              setPage(1);
-            }}
+            onClick={() => setOnlyFavorites(!onlyFavorites)}
             className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
               onlyFavorites
                 ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -139,10 +125,7 @@ function FilterContent({
           {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
             <button
               key={key}
-              onClick={() => {
-                setSort(key);
-                setPage(1);
-              }}
+              onClick={() => setSort(key)}
               className={`w-full text-left px-3 py-2 rounded-sm text-sm transition-all ${
                 sort === key
                   ? "bg-primary/10 text-primary border border-primary/20"
@@ -171,10 +154,7 @@ function FilterContent({
                   type="radio"
                   name="collection"
                   checked={selectedCollection === c.contractAddress}
-                  onChange={() => {
-                    setSelectedCollection(c.contractAddress);
-                    setPage(1);
-                  }}
+                  onChange={() => setSelectedCollection(c.contractAddress)}
                   className="accent-primary"
                 />
                 <span className="text-sm text-on-surface-variant group-hover:text-on-surface transition-colors">
