@@ -1,6 +1,6 @@
 # CryptoMint — NFT Marketplace
 
-Marketplace descentralizado para criação e negociação de NFTs com suporte a coleções, ofertas, royalties ERC2981 e listagens — tudo on-chain via Smart Contracts na rede Sepolia.
+Decentralized marketplace for creating and trading NFTs, featuring support for collections, offers, ERC2981 royalties, and listings — all fully on-chain via smart contracts on the Sepolia network.
 
 🟢 **Status:** Live
 
