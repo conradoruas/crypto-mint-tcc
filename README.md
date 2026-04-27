@@ -2,6 +2,10 @@
 
 Marketplace descentralizado para criação e negociação de NFTs com suporte a coleções, ofertas, royalties ERC2981 e listagens — tudo on-chain via Smart Contracts na rede Sepolia.
 
+🟢 **Status:** Live
+
+🌐 **LIVE IN:** https://www.cryptomint.com.br/
+
 ## 🏗️ Architecture
 
 ```
