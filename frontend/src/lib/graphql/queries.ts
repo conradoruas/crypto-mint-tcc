@@ -121,6 +121,15 @@ export const GET_NFTS_FOR_CONTRACT = gql`
       tokenId
       tokenUri
       owner
+      rarityRank
+      rarityScore
+      rarityTier
+      attributes {
+        traitType
+        valueStr
+        valueNum
+        displayType
+      }
       listing {
         id
         price
@@ -159,6 +168,15 @@ export const GET_ALL_NFTS = gql`
       tokenId
       tokenUri
       owner
+      rarityRank
+      rarityScore
+      rarityTier
+      attributes {
+        traitType
+        valueStr
+        valueNum
+        displayType
+      }
       collection {
         id
         contractAddress
@@ -175,6 +193,29 @@ export const GET_ALL_NFTS = gql`
         id
         amount
         buyer
+      }
+    }
+  }
+`;
+
+export const GET_COLLECTION_TRAIT_SCHEMA = gql`
+  query GetCollectionTraitSchema($id: ID!) {
+    collection(id: $id) {
+      id
+      traitSchemaCID
+      traitDefinitions(orderBy: position) {
+        id
+        key
+        label
+        type
+        required
+        minValue
+        maxValue
+        options(orderBy: count, orderDirection: desc, first: 200) {
+          value
+          count
+          frequency
+        }
       }
     }
   }

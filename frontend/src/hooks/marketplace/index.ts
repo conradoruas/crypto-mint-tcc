@@ -1,5 +1,6 @@
 export { useNFTListing } from "./useNFTListing";
 export { useExploreNFTs, useExploreAllNFTs } from "./useExploreNfts";
+export { useCollectionTraitSchema } from "./useCollectionTraitSchema";
 export { useMarketplaceStats } from "./useMarketplaceStats";
 export { useTrendingCollections } from "./useTrendingCollections";
 export type { MarketplaceStats } from "./useMarketplaceStats";

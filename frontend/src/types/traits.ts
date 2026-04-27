@@ -57,8 +57,8 @@ export interface NftAttribute {
 
 export interface TraitOptionData {
   value: string;
-  count: string;
-  frequency: string;
+  count: number;
+  frequency: number;
 }
 
 export interface TraitDefinitionData {

@@ -5,6 +5,7 @@ import { useNowBucketed } from "../useNowBucketed";
 import { resolveExploreNftMetadata } from "./exploreMetadata";
 import { buildExploreQueryConfig } from "./exploreQuery";
 import type { ExploreVariant, GqlNFTsData, NFTItemWithMarket } from "./exploreTypes";
+import type { TraitFilters } from "@/types/traits";
 
 type UseExploreOrchestratorArgs = {
   variant: ExploreVariant;
@@ -14,6 +15,7 @@ type UseExploreOrchestratorArgs = {
   onlyListed?: boolean;
   search?: string;
   sort?: string;
+  traitFilters?: TraitFilters;
 };
 
 export function useExploreOrchestrator({
@@ -24,6 +26,7 @@ export function useExploreOrchestrator({
   onlyListed = false,
   search = "",
   sort = "default",
+  traitFilters = {},
 }: UseExploreOrchestratorArgs) {
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,9 +44,13 @@ export function useExploreOrchestrator({
         onlyListed,
         search,
         sort,
+        traitFilters,
         nowBucketed,
       }),
-    [collectionAddress, nowBucketed, onlyListed, page, pageSize, search, sort, variant],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [collectionAddress, nowBucketed, onlyListed, page, pageSize, search, sort, variant,
+      // Stringify traitFilters to detect deep changes
+      JSON.stringify(traitFilters)],
   );
 
   const { data, loading, refetch } = useQuery<GqlNFTsData>(queryConfig.query, {

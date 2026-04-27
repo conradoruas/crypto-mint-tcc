@@ -4,10 +4,10 @@ import { Navbar } from "@/components/navbar";
 import { useCollections } from "@/hooks/collections";
 import { useExploreAllNFTs } from "@/hooks/marketplace";
 import { useExploreFilters } from "@/hooks/marketplace/useExploreFilters";
+import { useCollectionTraitSchema } from "@/hooks/marketplace/useCollectionTraitSchema";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers, Heart } from "lucide-react";
 import { useState, useMemo, Suspense, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
 import { useConnection } from "wagmi";
 import { useUserFavorites } from "@/hooks/user";
@@ -18,7 +18,6 @@ import { FilterSidebar } from "@/components/marketplace/FilterSidebar";
 const PAGE_SIZE = 8;
 
 function ExploreContent() {
-  const searchParams = useSearchParams();
   const { address } = useConnection();
   const { collections, isLoading: isLoadingCollections } = useCollections();
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
@@ -29,16 +28,22 @@ function ExploreContent() {
     sort,
     onlyListed,
     onlyFavorites,
+    traitFilters,
     page,
     setSelectedCollection,
     setSearch,
     setSort,
     setOnlyListed,
     setOnlyFavorites,
+    setTraitFilter,
+    clearTraitFilters,
     setPage,
     clearFilters,
     hasActiveFilters,
-  } = useExploreFilters(searchParams.get("q") ?? "");
+  } = useExploreFilters();
+
+  const { schema: traitSchema, optionData: traitOptionData } =
+    useCollectionTraitSchema(selectedCollection || undefined);
 
   const {
     nfts,
@@ -52,6 +57,7 @@ function ExploreContent() {
     onlyListed,
     search,
     sort,
+    traitFilters,
   );
 
   const { favorites } = useUserFavorites(address);
@@ -104,6 +110,11 @@ function ExploreContent() {
           collections={collections}
           selectedCollection={selectedCollection}
           setSelectedCollection={setSelectedCollection}
+          traitSchema={traitSchema}
+          traitOptionData={traitOptionData}
+          traitFilters={traitFilters}
+          onSetTraitFilter={setTraitFilter}
+          onClearTraitFilters={clearTraitFilters}
           mobileOpen={isMobileFilterOpen}
           onMobileClose={() => setIsMobileFilterOpen(false)}
         />

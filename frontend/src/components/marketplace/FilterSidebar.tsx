@@ -4,6 +4,8 @@ import { X } from "lucide-react";
 import type { CollectionInfo } from "@/types/collection";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { SORT_LABELS, type SortOption } from "@/hooks/marketplace/filterModel";
+import { DynamicTraitFilters } from "@/components/explore/DynamicTraitFilters";
+import type { TraitSchema, TraitFilters, TraitFilterValue, TraitOptionData } from "@/types/traits";
 
 interface FilterSidebarProps {
   hasActiveFilters: boolean;
@@ -19,6 +21,12 @@ interface FilterSidebarProps {
   collections: CollectionInfo[];
   selectedCollection: string;
   setSelectedCollection: (v: string) => void;
+  // Trait filter props (optional — only shown when a v2 collection with schema is selected)
+  traitSchema?: TraitSchema | null;
+  traitOptionData?: Record<string, TraitOptionData[]>;
+  traitFilters?: TraitFilters;
+  onSetTraitFilter?: (key: string, value: TraitFilterValue | undefined) => void;
+  onClearTraitFilters?: () => void;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
@@ -37,6 +45,11 @@ function FilterContent({
   collections,
   selectedCollection,
   setSelectedCollection,
+  traitSchema,
+  traitOptionData,
+  traitFilters,
+  onSetTraitFilter,
+  onClearTraitFilters,
   onMobileClose,
 }: Omit<FilterSidebarProps, "mobileOpen"> & { onMobileClose?: () => void }) {
   return (
@@ -171,6 +184,17 @@ function FilterContent({
             ))}
           </div>
         </section>
+      )}
+
+      {/* Dynamic trait filters — only when a v2 collection with a schema is selected */}
+      {traitSchema && traitFilters && onSetTraitFilter && onClearTraitFilters && (
+        <DynamicTraitFilters
+          schema={traitSchema}
+          optionData={traitOptionData ?? {}}
+          traitFilters={traitFilters}
+          onSetTraitFilter={onSetTraitFilter}
+          onClearTraitFilters={onClearTraitFilters}
+        />
       )}
     </div>
   );
