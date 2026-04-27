@@ -40,10 +40,18 @@ const Footer = () => {
               </li>
               <li>
                 <Link
-                  href="/mint"
+                  href="/create"
                   className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider transition-colors"
                 >
                   Mint
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/activity"
+                  className="text-on-surface-variant hover:text-secondary text-sm uppercase tracking-wider transition-colors"
+                >
+                  Activity
                 </Link>
               </li>
             </ul>
