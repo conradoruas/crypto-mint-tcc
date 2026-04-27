@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -22,15 +26,23 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"],
-      "@testing-library/dom": ["./node_modules/@testing-library/dom/types/index.d.ts"]
-    }
+      "@/*": [
+        "./src/*"
+      ],
+      "@testing-library/dom": [
+        "./node_modules/@testing-library/dom/types/index.d.ts"
+      ]
+    },
+    "allowJs": true
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }
