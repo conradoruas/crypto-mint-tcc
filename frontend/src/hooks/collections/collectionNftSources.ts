@@ -21,6 +21,29 @@ type TokenMeta = {
   attributes?: NftAttribute[];
 };
 
+function normalizeAttributes(
+  rawAttrs:
+    | Array<{
+        trait_type?: string;
+        value?: string | number | boolean;
+        display_type?: string;
+      }>
+    | undefined,
+): NftAttribute[] | undefined {
+  const attributes = rawAttrs
+    ?.flatMap((attr) =>
+      attr.trait_type && attr.value != null
+        ? [{
+            trait_type: attr.trait_type,
+            value: attr.value,
+            display_type: attr.display_type,
+          }]
+        : [],
+    );
+
+  return attributes && attributes.length > 0 ? attributes : undefined;
+}
+
 async function resolveTokenMeta(tokenUri: string): Promise<TokenMeta | null> {
   const json = await fetchIpfsJson<{
     name?: string;
@@ -31,20 +54,13 @@ async function resolveTokenMeta(tokenUri: string): Promise<TokenMeta | null> {
 
   if (!json) return null;
 
-  const rawAttrs = json.attributes;
-  const attributes = rawAttrs
-    ?.filter((a) => a.trait_type && a.value != null)
-    .map((a) => ({
-      trait_type: a.trait_type!,
-      value: a.value as string | number | boolean,
-      display_type: a.display_type,
-    }));
+  const attributes = normalizeAttributes(json.attributes);
 
   return {
     name: normalizeNftText(json.name, "", 500),
     description: normalizeNftText(json.description, "", 10_000),
     image: getSafeImageUrl(json.image ?? "") ?? "",
-    attributes: attributes && attributes.length > 0 ? attributes : undefined,
+    attributes,
   };
 }
 
@@ -119,21 +135,14 @@ export async function fetchCollectionNftsFromAlchemy(
   const items: CollectionNFTItem[] = await Promise.all(
     (data.nfts ?? []).map(async (nft: AlchemyNFT) => {
       const image = await resolveNftImage(nft.image, nft.tokenUri);
-      const rawAttrs = nft.raw?.metadata?.attributes;
-      const attributes = rawAttrs
-        ?.filter((a) => a.trait_type && a.value != null)
-        .map((a) => ({
-          trait_type: a.trait_type!,
-          value: a.value as string | number | boolean,
-          display_type: a.display_type,
-        }));
+      const attributes = normalizeAttributes(nft.raw?.metadata?.attributes);
       return {
         tokenId: nft.tokenId,
         name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
         description: normalizeNftText(nft.description, "", 10_000),
         image,
         nftContract: collectionAddress,
-        attributes: attributes && attributes.length > 0 ? attributes : undefined,
+        attributes,
       };
     }),
   );

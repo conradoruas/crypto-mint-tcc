@@ -53,7 +53,10 @@ describe("parseUploadProfileBody — nft branch", () => {
       trait_type: `t${i}`,
       value: "v",
     }));
-    const r = parseUploadProfileBody({ ...validNft, attributes: attrs }, SIGNER);
+    const r = parseUploadProfileBody(
+      { ...validNft, attributes: attrs },
+      SIGNER,
+    );
     expect(r.ok).toBe(false);
   });
 
@@ -69,10 +72,7 @@ describe("parseUploadProfileBody — nft branch", () => {
   });
 
   it("rejects empty attributes array (no items) — still accepted (optional)", () => {
-    const r = parseUploadProfileBody(
-      { ...validNft, attributes: [] },
-      SIGNER,
-    );
+    const r = parseUploadProfileBody({ ...validNft, attributes: [] }, SIGNER);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const c = r.data.content as { attributes?: unknown[] };
@@ -106,7 +106,15 @@ describe("parseUploadProfileBody — collection branch", () => {
     description: "A mage collection",
     trait_schema: {
       version: 1,
-      fields: [{ key: "class", label: "Class", type: "enum", required: true, options: ["Mage"] }],
+      fields: [
+        {
+          key: "class",
+          label: "Class",
+          type: "enum",
+          required: true,
+          options: ["Mage"],
+        },
+      ],
     },
   };
 
@@ -121,7 +129,9 @@ describe("parseUploadProfileBody — collection branch", () => {
   });
 
   it("accepts collection without trait_schema", () => {
-    const { trait_schema: _ts, ...withoutSchema } = validColl;
+    const withoutSchema = Object.fromEntries(
+      Object.entries(validColl).filter(([key]) => key !== "trait_schema"),
+    );
     const r = parseUploadProfileBody(withoutSchema, SIGNER);
     expect(r.ok).toBe(true);
   });
@@ -177,8 +187,20 @@ describe("parseUploadProfileBody — collection branch", () => {
         trait_schema: {
           version: 1,
           fields: [
-            { key: "class", label: "Class", type: "enum", required: true, options: ["Mage"] },
-            { key: "Class", label: "Class Again", type: "enum", required: false, options: ["Warrior"] },
+            {
+              key: "class",
+              label: "Class",
+              type: "enum",
+              required: true,
+              options: ["Mage"],
+            },
+            {
+              key: "Class",
+              label: "Class Again",
+              type: "enum",
+              required: false,
+              options: ["Warrior"],
+            },
           ],
         },
       },
@@ -193,7 +215,15 @@ describe("parseUploadProfileBody — collection branch", () => {
         ...validColl,
         trait_schema: {
           version: 1,
-          fields: [{ key: "power", label: "Power", type: "number", required: false, min: "bad" }],
+          fields: [
+            {
+              key: "power",
+              label: "Power",
+              type: "number",
+              required: false,
+              min: "bad",
+            },
+          ],
         },
       },
       SIGNER,
@@ -228,7 +258,10 @@ describe("parseUploadProfileBody — user branch (regression)", () => {
 
   it("rejects address mismatch", () => {
     const r = parseUploadProfileBody(
-      { ...validUser, address: "0xcccccccccccccccccccccccccccccccccccccccc" as Address },
+      {
+        ...validUser,
+        address: "0xcccccccccccccccccccccccccccccccccccccccc" as Address,
+      },
       SIGNER,
     );
     expect(r.ok).toBe(false);

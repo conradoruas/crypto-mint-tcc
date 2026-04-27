@@ -123,7 +123,8 @@ export function useCollectionTraitSchema(collectionAddress: string | undefined) 
     enabled: shouldLoadContractSchema,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const json = await fetchIpfsJson<RawContractUri>(contractURI!);
+      if (!contractURI) return null;
+      const json = await fetchIpfsJson<RawContractUri>(contractURI);
       const fields = json?.trait_schema?.fields ?? [];
       if (fields.length === 0) return null;
       return {

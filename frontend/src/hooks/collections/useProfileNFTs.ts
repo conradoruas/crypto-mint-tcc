@@ -10,6 +10,29 @@ import { normalizeNftText, resolveNftImage } from "@/lib/nftMetadata";
 import { getSafeImageUrl } from "@/lib/resourceSecurity";
 import type { CollectionNFTItem, CreatedNFTItem } from "@/types/nft";
 import type { AlchemyNFT } from "@/types/alchemy";
+import type { NftAttribute } from "@/types/traits";
+
+function normalizeAttributes(
+  rawAttrs:
+    | Array<{
+        trait_type?: string;
+        value?: string | number | boolean;
+        display_type?: string;
+      }>
+    | undefined,
+): NftAttribute[] | undefined {
+  const attributes = rawAttrs?.flatMap((attr) =>
+    attr.trait_type && attr.value != null
+      ? [{
+          trait_type: attr.trait_type,
+          value: attr.value,
+          display_type: attr.display_type,
+        }]
+      : [],
+  );
+
+  return attributes && attributes.length > 0 ? attributes : undefined;
+}
 
 export function useProfileNFTs(
   ownerAddress: string | undefined,
@@ -41,14 +64,7 @@ export function useProfileNFTs(
       return Promise.all(
         (data.ownedNfts ?? []).map(async (nft: AlchemyNFT) => {
           const image = await resolveNftImage(nft.image, nft.tokenUri, { signal });
-          const rawAttrs = nft.raw?.metadata?.attributes;
-          const attributes = rawAttrs
-            ?.filter((a) => a.trait_type && a.value != null)
-            .map((a) => ({
-              trait_type: a.trait_type!,
-              value: a.value as string | number | boolean,
-              display_type: a.display_type,
-            }));
+          const attributes = normalizeAttributes(nft.raw?.metadata?.attributes);
           return {
             tokenId: nft.tokenId,
             name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
@@ -93,14 +109,7 @@ export function useCreatedNFTs(ownerAddress: string | undefined) {
           );
           const data = await res.json();
           return (data.nfts ?? []).map((nft: AlchemyNFT) => {
-            const rawAttrs = nft.raw?.metadata?.attributes;
-            const attributes = rawAttrs
-              ?.filter((a) => a.trait_type && a.value != null)
-              .map((a) => ({
-                trait_type: a.trait_type!,
-                value: a.value as string | number | boolean,
-                display_type: a.display_type,
-              }));
+            const attributes = normalizeAttributes(nft.raw?.metadata?.attributes);
             return {
               tokenId: nft.tokenId,
               name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
