@@ -40,6 +40,24 @@ export function CollectionNFTCard({
         <p className="text-on-surface-variant text-xs mt-1">
           #{nft.tokenId.padStart(3, "0")}
         </p>
+        {nft.attributes && nft.attributes.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {nft.attributes.slice(0, 3).map((attr) => (
+              <span
+                key={attr.trait_type}
+                className="px-1.5 py-0.5 rounded-sm bg-primary/5 border border-primary/10 text-[9px] font-bold text-primary/70 uppercase tracking-widest truncate max-w-[90px]"
+                title={`${attr.trait_type}: ${String(attr.value)}`}
+              >
+                {String(attr.value)}
+              </span>
+            ))}
+            {nft.attributes.length > 3 && (
+              <span className="px-1.5 py-0.5 rounded-sm bg-surface-container border border-outline-variant/10 text-[9px] text-on-surface-variant/60 uppercase tracking-widest">
+                +{nft.attributes.length - 3}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </Link>
   );
