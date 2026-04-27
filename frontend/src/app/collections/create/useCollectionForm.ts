@@ -2,6 +2,7 @@
 
 import { useReducer } from "react";
 import type { CreateCollectionErrors } from "@/lib/schemas";
+import type { NftAttribute, TraitSchema } from "@/types/traits";
 
 export interface NFTDraft {
   id: number;
@@ -9,6 +10,7 @@ export interface NFTDraft {
   description: string;
   file: File | null;
   previewUrl: string;
+  attributes?: NftAttribute[];
 }
 
 export interface CollectionFormState {
@@ -19,6 +21,8 @@ export interface CollectionFormState {
   symbol: string;
   description: string;
   mintPrice: string;
+  // Trait schema (optional — v2 factory only)
+  traitSchema?: TraitSchema;
   // NFT drafts
   nfts: NFTDraft[];
   currentPage: number;
@@ -46,11 +50,13 @@ export type CollectionFormAction =
   | { type: "SET_SYMBOL"; value: string }
   | { type: "SET_DESCRIPTION"; value: string }
   | { type: "SET_MINT_PRICE"; value: string }
+  | { type: "SET_TRAIT_SCHEMA"; schema: TraitSchema | undefined }
   | { type: "SET_NFTS"; nfts: NFTDraft[] }
   | { type: "ADD_NFT" }
   | { type: "REMOVE_NFT"; id: number }
   | { type: "UPDATE_NFT"; id: number; field: keyof Omit<NFTDraft, "previewUrl">; value: string | File | null }
   | { type: "SET_NFT_FILE"; id: number; file: File | null; previewUrl: string }
+  | { type: "SET_NFT_ATTRIBUTES"; id: number; attributes: NftAttribute[] }
   | { type: "SET_PAGE"; page: number }
   | { type: "SET_UPLOADING_COVER"; value: boolean }
   | { type: "SET_UPLOADING_NFTS"; value: boolean }
@@ -71,6 +77,7 @@ export const initialFormState: CollectionFormState = {
   symbol: "",
   description: "",
   mintPrice: "0.0001",
+  traitSchema: undefined,
   nfts: [],
   currentPage: 1,
   isUploadingCover: false,
@@ -102,6 +109,8 @@ export function collectionFormReducer(
       return { ...state, description: action.value };
     case "SET_MINT_PRICE":
       return { ...state, mintPrice: action.value };
+    case "SET_TRAIT_SCHEMA":
+      return { ...state, traitSchema: action.schema };
     case "SET_NFTS":
       return { ...state, nfts: action.nfts };
     case "ADD_NFT":
@@ -129,6 +138,13 @@ export function collectionFormReducer(
           n.id === action.id
             ? { ...n, file: action.file, previewUrl: action.previewUrl }
             : n,
+        ),
+      };
+    case "SET_NFT_ATTRIBUTES":
+      return {
+        ...state,
+        nfts: state.nfts.map((n) =>
+          n.id === action.id ? { ...n, attributes: action.attributes } : n,
         ),
       };
     case "SET_PAGE":

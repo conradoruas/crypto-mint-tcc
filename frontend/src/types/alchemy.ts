@@ -11,6 +11,15 @@ export interface AlchemyNFT {
     cachedUrl?: string;
     originalUrl?: string;
   };
+  raw?: {
+    metadata?: {
+      attributes?: Array<{
+        trait_type?: string;
+        value?: string | number | boolean;
+        display_type?: string;
+      }>;
+    };
+  };
 }
 
 /** Minimal metadata used across UI components */

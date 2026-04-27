@@ -5,6 +5,7 @@ import { useNowBucketed } from "../useNowBucketed";
 import { resolveExploreNftMetadata } from "./exploreMetadata";
 import { buildExploreQueryConfig } from "./exploreQuery";
 import type { ExploreVariant, GqlNFTsData, NFTItemWithMarket } from "./exploreTypes";
+import type { TraitFilters } from "@/types/traits";
 
 type UseExploreOrchestratorArgs = {
   variant: ExploreVariant;
@@ -14,6 +15,7 @@ type UseExploreOrchestratorArgs = {
   onlyListed?: boolean;
   search?: string;
   sort?: string;
+  traitFilters?: TraitFilters;
 };
 
 export function useExploreOrchestrator({
@@ -24,6 +26,7 @@ export function useExploreOrchestrator({
   onlyListed = false,
   search = "",
   sort = "default",
+  traitFilters = {},
 }: UseExploreOrchestratorArgs) {
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,9 +44,10 @@ export function useExploreOrchestrator({
         onlyListed,
         search,
         sort,
+        traitFilters,
         nowBucketed,
       }),
-    [collectionAddress, nowBucketed, onlyListed, page, pageSize, search, sort, variant],
+    [collectionAddress, nowBucketed, onlyListed, page, pageSize, search, sort, traitFilters, variant],
   );
 
   const { data, loading, refetch } = useQuery<GqlNFTsData>(queryConfig.query, {
@@ -63,9 +67,7 @@ export function useExploreOrchestrator({
       }
 
       const rawAll = data?.nfts ?? [];
-      const hasNextPage = queryConfig.trimExtraRecord
-        ? rawAll.length > queryConfig.pageSize
-        : rawAll.length === queryConfig.pageSize;
+
       const raw = queryConfig.trimExtraRecord
         ? rawAll.slice(0, queryConfig.pageSize)
         : rawAll;
@@ -79,10 +81,7 @@ export function useExploreOrchestrator({
         return;
       }
 
-      if (!cancelled) {
-        setHasMore(hasNextPage);
-        setIsLoading(true);
-      }
+      if (!cancelled) setIsLoading(true);
 
       const enriched = await resolveExploreNftMetadata(
         raw,
@@ -90,9 +89,7 @@ export function useExploreOrchestrator({
         collectionAddress,
       );
 
-      if (cancelled) {
-        return;
-      }
+      if (cancelled) return;
 
       const items =
         variant === "market" && sort === "offer_desc"
@@ -101,6 +98,11 @@ export function useExploreOrchestrator({
                 Number(right.topOffer ?? 0) - Number(left.topOffer ?? 0),
             )
           : enriched;
+
+      const hasNextPage = queryConfig.trimExtraRecord
+        ? rawAll.length > queryConfig.pageSize
+        : rawAll.length === queryConfig.pageSize;
+      setHasMore(hasNextPage);
 
       setNfts(items);
       setIsLoading(false);

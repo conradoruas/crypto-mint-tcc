@@ -9,7 +9,9 @@ import Footer from "@/components/Footer";
 import { WalletGuard } from "@/components/WalletGuard";
 import {
   FACTORY_ADDRESS,
+  FACTORY_V2_ADDRESS,
   NFT_COLLECTION_FACTORY_ABI,
+  NFT_COLLECTION_FACTORY_V2_ABI,
 } from "@/constants/contracts";
 import type { CreateCollectionErrors } from "@/lib/schemas";
 import { formatTransactionError } from "@/lib/txErrors";
@@ -59,13 +61,23 @@ export default function CreateCollectionPage() {
   const uriPublishing = usePublishCollectionUris();
   const seedFlow = useSeedCommitmentFlow(setError);
 
+  // Use the factory that was actually used for this deployment so we look up
+  // the correct collection address (v2 when FACTORY_V2_ADDRESS is set).
+  const activeFactoryAddress = deployment.isV2
+    ? (FACTORY_V2_ADDRESS ?? zeroAddress)
+    : (FACTORY_ADDRESS ?? zeroAddress);
+  const activeFactoryAbi = deployment.isV2
+    ? NFT_COLLECTION_FACTORY_V2_ABI
+    : NFT_COLLECTION_FACTORY_ABI;
+  const activeFactoryReady = deployment.isV2 ? !!FACTORY_V2_ADDRESS : !!FACTORY_ADDRESS;
+
   const { data: creatorCollectionIds } = useReadContract({
-    address: FACTORY_ADDRESS ?? zeroAddress,
-    abi: NFT_COLLECTION_FACTORY_ABI,
+    address: activeFactoryAddress,
+    abi: activeFactoryAbi,
     functionName: "getCreatorCollections",
     args: [address as `0x${string}`],
     query: {
-      enabled: !!FACTORY_ADDRESS && !!deployment.collectionCreated && !!address,
+      enabled: activeFactoryReady && !!deployment.collectionCreated && !!address,
       refetchInterval: 2_000,
     },
   });
@@ -77,11 +89,11 @@ export default function CreateCollectionPage() {
     : undefined;
 
   const { data: lastCollectionData } = useReadContract({
-    address: FACTORY_ADDRESS ?? zeroAddress,
-    abi: NFT_COLLECTION_FACTORY_ABI,
+    address: activeFactoryAddress,
+    abi: activeFactoryAbi,
     functionName: "getCollection",
     args: [lastIndex ?? BigInt(0)],
-    query: { enabled: !!FACTORY_ADDRESS && lastIndex !== undefined },
+    query: { enabled: activeFactoryReady && lastIndex !== undefined },
   });
 
   const deployedAddress =
@@ -108,7 +120,12 @@ export default function CreateCollectionPage() {
     try {
       await uriPublishing.publishUris({
         collectionAddress: deployedAddress,
-        drafts: form.nfts,
+        drafts: form.nfts.map((n) => ({
+          name: n.name,
+          description: n.description,
+          file: n.file,
+          attributes: n.attributes,
+        })),
       });
     } catch (cause) {
       setError(
@@ -229,6 +246,8 @@ export default function CreateCollectionPage() {
         onUpdateNFTField={drafts.updateNFTField}
         onSetNFTFile={drafts.setNFTFile}
         onSetPage={drafts.setPage}
+        onSetTraitSchema={drafts.setTraitSchema}
+        onSetNFTAttributes={drafts.setNFTAttributes}
         onBulkMetadataFileChange={drafts.handleBulkMetadataFileChange}
         onBulkImageFilesChange={drafts.handleBulkImageFilesChange}
         onParseBulkNFTs={drafts.parseBulkNFTs}

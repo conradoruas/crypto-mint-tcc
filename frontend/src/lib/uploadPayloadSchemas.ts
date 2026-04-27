@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { isAddress, type Address } from "viem";
+import { traitSchemaSchema } from "@/lib/traitSchema";
 
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/;
 
@@ -37,6 +38,32 @@ const nftBatchAddressSchema = z
   .string()
   .regex(/^nft-[a-zA-Z0-9_-]{1,120}$/, "Invalid metadata batch id");
 
+/** Collection-level contractURI address discriminator: `collection-0x<hex40>` */
+const collectionMetaAddressSchema = z
+  .string()
+  .regex(/^collection-0x[a-fA-F0-9]{40}$/, "Invalid collection metadata id");
+
+/** Loose per-attribute shape (exact schema validation happens client-side). */
+const nftAttributeInSchema = z.object({
+  trait_type: z.string().min(1).max(128),
+  value: z.union([z.string().max(500), z.number(), z.boolean()]),
+  display_type: z.string().max(64).optional(),
+  max_value: z.number().optional(),
+});
+
+/** Collection contractURI JSON shape (trait_schema passed through as-is). */
+const collectionMetadataInSchema = z
+  .object({
+    address: collectionMetaAddressSchema,
+    name: z.string().min(1).max(200),
+    description: z.string().max(2000).optional(),
+    image: z.string().min(1).max(500),
+    external_link: z.string().max(500).optional(),
+    banner_image: z.string().max(500).optional(),
+    trait_schema: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+
 const userProfileInSchema = z
   .object({
     address: z.string().refine((a): a is Address => isAddress(a), {
@@ -58,6 +85,7 @@ const nftMetadataInSchema = z
     name: z.string().min(1).max(500),
     description: z.string().max(10000).optional(),
     image: z.string().min(1).max(500),
+    attributes: z.array(nftAttributeInSchema).max(64).optional(),
   })
   .strict();
 
@@ -68,16 +96,34 @@ export type PinataUserProfileContent = {
   updatedAt: number;
 };
 
+export type NftAttributeItem = {
+  trait_type: string;
+  value: string | number | boolean;
+  display_type?: string;
+  max_value?: number;
+};
+
 export type PinataNftMetadataContent = {
   address: string;
   name: string;
   description: string;
   image: string;
+  attributes?: NftAttributeItem[];
+};
+
+export type PinataCollectionMetadataContent = {
+  name: string;
+  description?: string;
+  image: string;
+  external_link?: string;
+  banner_image?: string;
+  trait_schema?: z.infer<typeof traitSchemaSchema>;
 };
 
 export type ParsedUploadProfile =
-  | { kind: "user"; content: PinataUserProfileContent; pinataFileName: string }
-  | { kind: "nft"; content: PinataNftMetadataContent; pinataFileName: string };
+  | { kind: "user";       content: PinataUserProfileContent;      pinataFileName: string }
+  | { kind: "nft";        content: PinataNftMetadataContent;       pinataFileName: string }
+  | { kind: "collection"; content: PinataCollectionMetadataContent; pinataFileName: string };
 
 /**
  * Validates JSON body and returns only server-built Pinata payloads.
@@ -135,6 +181,63 @@ export function parseUploadProfileBody(
     };
   }
 
+  // Collection contractURI branch: address starts with "collection-0x"
+  if (addrRaw.startsWith("collection-")) {
+    const coll = collectionMetadataInSchema.safeParse(raw);
+    if (!coll.success) return { ok: false, error: coll.error };
+
+    const name = trimMax(coll.data.name, 200);
+    const description = coll.data.description
+      ? trimMax(coll.data.description, 2000)
+      : undefined;
+    const image = trimMax(coll.data.image, 500);
+    if (!isSafeAssetUri(image)) {
+      return { ok: false, error: { message: "Invalid image URI." } };
+    }
+    const externalLink = coll.data.external_link
+      ? trimMax(coll.data.external_link, 500)
+      : undefined;
+    if (externalLink && !isSafeAssetUri(externalLink)) {
+      return { ok: false, error: { message: "Invalid external_link URI." } };
+    }
+    const bannerImage = coll.data.banner_image
+      ? trimMax(coll.data.banner_image, 500)
+      : undefined;
+    if (bannerImage && !isSafeAssetUri(bannerImage)) {
+      return { ok: false, error: { message: "Invalid banner_image URI." } };
+    }
+
+    const parsedSchema = coll.data.trait_schema
+      ? traitSchemaSchema.safeParse(coll.data.trait_schema)
+      : null;
+    if (parsedSchema && !parsedSchema.success) {
+      return { ok: false, error: parsedSchema.error };
+    }
+
+    const content: PinataCollectionMetadataContent = {
+      name,
+      image,
+      ...(description && { description }),
+      ...(externalLink && { external_link: externalLink }),
+      ...(bannerImage && { banner_image: bannerImage }),
+      ...(parsedSchema?.success
+        ? {
+            trait_schema: parsedSchema.data,
+          }
+        : {}),
+    };
+
+    const safeAddr = addrRaw.replace("collection-0x", "").slice(0, 8);
+    return {
+      ok: true,
+      data: {
+        kind: "collection",
+        content,
+        pinataFileName: `collection_${safeAddr}.json`,
+      },
+    };
+  }
+
   const nft = nftMetadataInSchema.safeParse(raw);
   if (!nft.success) return { ok: false, error: nft.error };
 
@@ -145,11 +248,22 @@ export function parseUploadProfileBody(
     return { ok: false, error: { message: "Invalid image URI." } };
   }
 
+  // Pass attributes through (server does shape-only validation; schema validation is client-side)
+  const attributes: NftAttributeItem[] | undefined = nft.data.attributes?.map(
+    (a) => ({
+      trait_type: a.trait_type,
+      value: a.value,
+      ...(a.display_type && { display_type: a.display_type }),
+      ...(a.max_value !== undefined && { max_value: a.max_value }),
+    })
+  );
+
   const content: PinataNftMetadataContent = {
     address: nft.data.address,
     name,
     description,
     image,
+    ...(attributes && attributes.length > 0 && { attributes }),
   };
 
   const safeId = nft.data.address.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);

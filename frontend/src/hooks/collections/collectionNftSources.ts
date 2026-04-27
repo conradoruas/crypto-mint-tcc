@@ -10,30 +10,64 @@ import type { CollectionNFTItem } from "@/types/nft";
 
 export const COLLECTION_NFT_PAGE_SIZE = 20;
 
+import type { NftAttribute } from "@/types/traits";
+
 type GqlNFT = { tokenId: string; tokenUri?: string };
 
-async function resolveTokenMeta(tokenUri: string) {
+type TokenMeta = {
+  name: string;
+  description: string;
+  image: string;
+  attributes?: NftAttribute[];
+};
+
+function normalizeAttributes(
+  rawAttrs:
+    | Array<{
+        trait_type?: string;
+        value?: string | number | boolean;
+        display_type?: string;
+      }>
+    | undefined,
+): NftAttribute[] | undefined {
+  const attributes = rawAttrs
+    ?.flatMap((attr) =>
+      attr.trait_type && attr.value != null
+        ? [{
+            trait_type: attr.trait_type,
+            value: attr.value,
+            display_type: attr.display_type,
+          }]
+        : [],
+    );
+
+  return attributes && attributes.length > 0 ? attributes : undefined;
+}
+
+async function resolveTokenMeta(tokenUri: string): Promise<TokenMeta | null> {
   const json = await fetchIpfsJson<{
     name?: string;
     description?: string;
     image?: string;
+    attributes?: Array<{ trait_type?: string; value?: string | number | boolean; display_type?: string }>;
   }>(tokenUri);
 
-  if (!json) {
-    return null;
-  }
+  if (!json) return null;
+
+  const attributes = normalizeAttributes(json.attributes);
 
   return {
     name: normalizeNftText(json.name, "", 500),
     description: normalizeNftText(json.description, "", 10_000),
     image: getSafeImageUrl(json.image ?? "") ?? "",
+    attributes,
   };
 }
 
 function mapCollectionNft(
   collectionAddress: string,
   tokenId: string,
-  meta?: { name: string; description: string; image: string } | null,
+  meta?: TokenMeta | null,
 ): CollectionNFTItem {
   return {
     tokenId,
@@ -41,6 +75,7 @@ function mapCollectionNft(
     description: meta?.description ?? "",
     image: meta?.image ?? "",
     nftContract: collectionAddress,
+    attributes: meta?.attributes,
   };
 }
 
@@ -100,13 +135,14 @@ export async function fetchCollectionNftsFromAlchemy(
   const items: CollectionNFTItem[] = await Promise.all(
     (data.nfts ?? []).map(async (nft: AlchemyNFT) => {
       const image = await resolveNftImage(nft.image, nft.tokenUri);
-
+      const attributes = normalizeAttributes(nft.raw?.metadata?.attributes);
       return {
         tokenId: nft.tokenId,
         name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
         description: normalizeNftText(nft.description, "", 10_000),
         image,
         nftContract: collectionAddress,
+        attributes,
       };
     }),
   );

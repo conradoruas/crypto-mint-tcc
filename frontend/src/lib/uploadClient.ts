@@ -70,17 +70,52 @@ export async function uploadNftMetadata(
     description: string;
     imageUri: string;
     addressSuffix?: string;
+    attributes?: Array<{
+      trait_type: string;
+      value: string | number | boolean;
+      display_type?: string;
+      max_value?: number;
+    }>;
   },
   authHeaders: UploadAuthHeadersFn,
 ): Promise<string> {
-  return uploadJsonMetadata(
-    UPLOAD_API_PATHS.profile,
-    {
-      name: params.name,
-      description: params.description || "",
-      image: params.imageUri,
-      address: params.addressSuffix ?? `nft-${Date.now()}`,
-    },
-    authHeaders,
-  );
+  const body: Record<string, unknown> = {
+    name: params.name,
+    description: params.description || "",
+    image: params.imageUri,
+    address: params.addressSuffix ?? `nft-${Date.now()}`,
+  };
+  if (params.attributes && params.attributes.length > 0) {
+    body.attributes = params.attributes;
+  }
+  return uploadJsonMetadata(UPLOAD_API_PATHS.profile, body, authHeaders);
+}
+
+/**
+ * Pins the collection-level contractURI JSON (name, image, trait_schema, etc.)
+ * to IPFS and returns the resulting `ipfs://...` URI.
+ * The URI is stored immutably on-chain in NFTCollectionV2 as `contractURI`.
+ */
+export async function uploadCollectionContractMetadata(
+  params: {
+    collectionAddress: `0x${string}`;
+    name: string;
+    image: string;
+    description?: string;
+    externalLink?: string;
+    bannerImage?: string;
+    traitSchema?: Record<string, unknown>;
+  },
+  authHeaders: UploadAuthHeadersFn,
+): Promise<string> {
+  const body: Record<string, unknown> = {
+    address: `collection-${params.collectionAddress}`,
+    name: params.name,
+    image: params.image,
+  };
+  if (params.description) body.description = params.description;
+  if (params.externalLink) body.external_link = params.externalLink;
+  if (params.bannerImage) body.banner_image = params.bannerImage;
+  if (params.traitSchema) body.trait_schema = params.traitSchema;
+  return uploadJsonMetadata(UPLOAD_API_PATHS.profile, body, authHeaders);
 }

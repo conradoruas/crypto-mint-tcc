@@ -2,11 +2,19 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useConnection, useSignMessage } from "wagmi";
-import { createUploadAuthHeaders, uploadImageFile } from "@/lib/uploadClient";
+import {
+  createUploadAuthHeaders,
+  uploadImageFile,
+  uploadCollectionContractMetadata,
+} from "@/lib/uploadClient";
 import { createCollectionSchema, getZodErrors } from "@/lib/schemas";
 import type { CreateCollectionErrors } from "@/lib/schemas";
 import { formatTransactionError } from "@/lib/txErrors";
+import { attributesForSchema, traitSchemaSchema } from "@/lib/traitSchema";
 import { useCreateCollection } from "@/hooks/collections";
+import { useCreateCollectionV2 } from "@/hooks/collections/useCreateCollectionV2";
+import { FACTORY_V2_ADDRESS } from "@/constants/contracts";
+import type { TraitSchema } from "@/types/traits";
 import type { CollectionFormState } from "./useCollectionForm";
 
 type UseCollectionDeploymentFlowArgs = {
@@ -33,7 +41,11 @@ export function useCollectionDeploymentFlow({
     [getAuthHeaders],
   );
 
-  const deployment = useCreateCollection();
+  const deploymentV1 = useCreateCollection();
+  const deploymentV2 = useCreateCollectionV2();
+
+  const useV2 = !!FACTORY_V2_ADDRESS;
+  const deployment = useV2 ? deploymentV2 : deploymentV1;
 
   const createCollection = useCallback(async () => {
     setError(null);
@@ -70,17 +82,83 @@ export function useCollectionDeploymentFlow({
       return;
     }
 
+    let validatedTraitSchema: TraitSchema | undefined;
+    if (form.traitSchema) {
+      if (!useV2) {
+        setError("Trait schemas require the V2 collection factory configuration.");
+        return;
+      }
+      const parsedSchema = traitSchemaSchema.safeParse(form.traitSchema);
+      if (!parsedSchema.success) {
+        setError(parsedSchema.error.issues[0]?.message ?? "Trait schema is invalid.");
+        return;
+      }
+      validatedTraitSchema = parsedSchema.data;
+
+      const validateAttributes = attributesForSchema(validatedTraitSchema);
+      for (const nft of form.nfts) {
+        const parsedAttributes = validateAttributes.safeParse(nft.attributes ?? []);
+        if (!parsedAttributes.success) {
+          setError(
+            `NFT "${nft.name}" has invalid traits: ${parsedAttributes.error.issues[0]?.message ?? "Invalid attribute set."}`,
+          );
+          return;
+        }
+      }
+    } else if (form.nfts.some((nft) => (nft.attributes?.length ?? 0) > 0)) {
+      setError("Define a trait schema before assigning NFT traits.");
+      return;
+    }
+
     try {
       setIsUploadingCover(true);
       const coverUri = await uploadCoverImage(form.coverFile);
-      await deployment.createCollection({
-        name: form.name,
-        symbol: form.symbol.toUpperCase(),
-        description: form.description,
-        image: coverUri,
-        maxSupply: form.nfts.length,
-        mintPrice: form.mintPrice,
-      });
+
+      if (useV2 && address) {
+        // Pin the contractURI JSON (with trait schema) before deploying
+        let contractUri = "";
+        if (validatedTraitSchema) {
+          try {
+            contractUri = await uploadCollectionContractMetadata(
+              {
+                collectionAddress: address,
+                name: form.name,
+                image: coverUri,
+                description: form.description || undefined,
+                traitSchema: validatedTraitSchema as unknown as Record<string, unknown>,
+              },
+              getAuthHeaders,
+            );
+          } catch (error) {
+            setError(
+              formatTransactionError(
+                error,
+                "Could not upload collection trait schema metadata. Fix the upload error and try again.",
+              ),
+            );
+            return;
+          }
+        }
+
+        await deploymentV2.createCollection({
+          name: form.name,
+          symbol: form.symbol.toUpperCase(),
+          description: form.description,
+          image: coverUri,
+          maxSupply: form.nfts.length,
+          mintPrice: form.mintPrice,
+          contractURI: contractUri,
+        });
+      } else {
+        await deploymentV1.createCollection({
+          name: form.name,
+          symbol: form.symbol.toUpperCase(),
+          description: form.description,
+          image: coverUri,
+          maxSupply: form.nfts.length,
+          mintPrice: form.mintPrice,
+        });
+      }
     } catch (error) {
       setError(
         formatTransactionError(
@@ -92,17 +170,22 @@ export function useCollectionDeploymentFlow({
       setIsUploadingCover(false);
     }
   }, [
-    deployment,
+    address,
+    deploymentV1,
+    deploymentV2,
     form.coverFile,
     form.description,
     form.mintPrice,
     form.name,
     form.nfts,
     form.symbol,
+    form.traitSchema,
+    getAuthHeaders,
     isConnected,
     setError,
     setFieldErrors,
     uploadCoverImage,
+    useV2,
   ]);
 
   return {
@@ -112,5 +195,6 @@ export function useCollectionDeploymentFlow({
     isConfirmingCreate: deployment.isConfirming,
     collectionCreated: deployment.isSuccess,
     createHash: deployment.hash,
+    isV2: useV2,
   };
 }

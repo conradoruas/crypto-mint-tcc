@@ -1,3 +1,5 @@
+import type { NftAttribute } from "./traits";
+
 // ─── Base NFT ─────────────────────────────────────────────────────────────────
 
 export interface NFTItem {
@@ -7,6 +9,7 @@ export interface NFTItem {
   image: string;
   nftContract: string;
   collectionName?: string;
+  attributes?: NftAttribute[];
 }
 
 // ─── NFT with market data (explore / listings) ────────────────────────────────

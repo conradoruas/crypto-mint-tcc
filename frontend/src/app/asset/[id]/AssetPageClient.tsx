@@ -18,6 +18,7 @@ import { shortAddr } from "@/lib/utils";
 import { PriceHistory } from "@/components/asset/PriceHistory";
 import { ListingPanel } from "@/components/asset/ListingPanel";
 import { OfferPanel } from "@/components/asset/OfferPanel";
+import { AttributesGrid } from "@/components/asset/AttributesGrid";
 import { NFTCardSkeleton } from "@/components/ui";
 import { useAssetPageCoordinator } from "./useAssetPageCoordinator";
 
@@ -232,6 +233,11 @@ export default function AssetPageClient({
               onCancelOffer={actions.handleCancelOffer}
             />
           )}
+
+          {/* Attributes / Traits */}
+          <div className="bg-surface-container-low border border-outline-variant/10 p-6 rounded-sm">
+            <AttributesGrid nftContract={nftContract} tokenId={tokenId} />
+          </div>
 
           {/* Price History */}
           <div className="bg-surface-container-low border border-outline-variant/10 p-6 space-y-4 rounded-sm">

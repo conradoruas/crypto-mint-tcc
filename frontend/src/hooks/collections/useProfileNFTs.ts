@@ -10,6 +10,29 @@ import { normalizeNftText, resolveNftImage } from "@/lib/nftMetadata";
 import { getSafeImageUrl } from "@/lib/resourceSecurity";
 import type { CollectionNFTItem, CreatedNFTItem } from "@/types/nft";
 import type { AlchemyNFT } from "@/types/alchemy";
+import type { NftAttribute } from "@/types/traits";
+
+function normalizeAttributes(
+  rawAttrs:
+    | Array<{
+        trait_type?: string;
+        value?: string | number | boolean;
+        display_type?: string;
+      }>
+    | undefined,
+): NftAttribute[] | undefined {
+  const attributes = rawAttrs?.flatMap((attr) =>
+    attr.trait_type && attr.value != null
+      ? [{
+          trait_type: attr.trait_type,
+          value: attr.value,
+          display_type: attr.display_type,
+        }]
+      : [],
+  );
+
+  return attributes && attributes.length > 0 ? attributes : undefined;
+}
 
 export function useProfileNFTs(
   ownerAddress: string | undefined,
@@ -41,6 +64,7 @@ export function useProfileNFTs(
       return Promise.all(
         (data.ownedNfts ?? []).map(async (nft: AlchemyNFT) => {
           const image = await resolveNftImage(nft.image, nft.tokenUri, { signal });
+          const attributes = normalizeAttributes(nft.raw?.metadata?.attributes);
           return {
             tokenId: nft.tokenId,
             name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
@@ -48,6 +72,7 @@ export function useProfileNFTs(
             image,
             nftContract: nft.contract?.address ?? collectionAddress ?? "",
             collectionName: normalizeNftText(nft.collection?.name, "", 200),
+            attributes: attributes && attributes.length > 0 ? attributes : undefined,
           } satisfies CollectionNFTItem;
         }),
       );
@@ -83,14 +108,18 @@ export function useCreatedNFTs(ownerAddress: string | undefined) {
             { signal },
           );
           const data = await res.json();
-          return (data.nfts ?? []).map((nft: AlchemyNFT) => ({
-            tokenId: nft.tokenId,
-            name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
-            description: normalizeNftText(nft.description, "", 10_000),
-            image: getSafeImageUrl(nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "") ?? "",
-            nftContract: col.contractAddress,
-            collectionName: normalizeNftText(col.name, "", 200),
-          })) satisfies CreatedNFTItem[];
+          return (data.nfts ?? []).map((nft: AlchemyNFT) => {
+            const attributes = normalizeAttributes(nft.raw?.metadata?.attributes);
+            return {
+              tokenId: nft.tokenId,
+              name: normalizeNftText(nft.name, `NFT #${nft.tokenId}`, 500),
+              description: normalizeNftText(nft.description, "", 10_000),
+              image: getSafeImageUrl(nft.image?.cachedUrl ?? nft.image?.originalUrl ?? "") ?? "",
+              nftContract: col.contractAddress,
+              collectionName: normalizeNftText(col.name, "", 200),
+              attributes: attributes && attributes.length > 0 ? attributes : undefined,
+            };
+          }) satisfies CreatedNFTItem[];
         }),
       );
       return results.flat();

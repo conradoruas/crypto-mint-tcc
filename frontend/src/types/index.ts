@@ -19,3 +19,18 @@ export type {
   CreatedNFTItem,
   FavoriteRef,
 } from "./nft";
+export type {
+  TraitFieldType,
+  TraitFieldString,
+  TraitFieldNumber,
+  TraitFieldEnum,
+  TraitFieldBoolean,
+  TraitFieldDate,
+  TraitField,
+  TraitSchema,
+  NftAttribute,
+  TraitOptionData,
+  TraitDefinitionData,
+  TraitFilterValue,
+  TraitFilters,
+} from "./traits";

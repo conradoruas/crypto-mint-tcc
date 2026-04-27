@@ -125,6 +125,25 @@ export function NFTCard({
                 </div>
               ))}
           </div>
+
+          {nft.attributes && nft.attributes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {nft.attributes.slice(0, 3).map((attr) => (
+                <span
+                  key={attr.trait_type}
+                  className="px-2 py-0.5 rounded-sm bg-primary/5 border border-primary/10 text-[10px] font-bold text-primary/80 uppercase tracking-widest truncate max-w-[120px]"
+                  title={`${attr.trait_type}: ${String(attr.value)}`}
+                >
+                  {String(attr.value)}
+                </span>
+              ))}
+              {nft.attributes.length > 3 && (
+                <span className="px-2 py-0.5 rounded-sm bg-surface-container border border-outline-variant/10 text-[10px] text-on-surface-variant/60 uppercase tracking-widest">
+                  +{nft.attributes.length - 3}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </Link>
     </div>

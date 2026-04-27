@@ -4,6 +4,8 @@ import { X } from "lucide-react";
 import type { CollectionInfo } from "@/types/collection";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { SORT_LABELS, type SortOption } from "@/hooks/marketplace/filterModel";
+import { DynamicTraitFilters } from "@/components/explore/DynamicTraitFilters";
+import type { TraitSchema, TraitFilters, TraitFilterValue, TraitOptionData } from "@/types/traits";
 
 interface FilterSidebarProps {
   hasActiveFilters: boolean;
@@ -12,13 +14,20 @@ interface FilterSidebarProps {
   setOnlyListed: (v: boolean) => void;
   onlyFavorites: boolean;
   setOnlyFavorites: (v: boolean) => void;
-  setPage: (v: number) => void;
   sort: SortOption;
   setSort: (v: SortOption) => void;
   isLoadingCollections: boolean;
   collections: CollectionInfo[];
   selectedCollection: string;
   setSelectedCollection: (v: string) => void;
+  // Trait filter props (optional — only shown when a v2 collection with schema is selected)
+  traitSchema?: TraitSchema | null;
+  traitOptionData?: Record<string, TraitOptionData[]>;
+  traitFilters?: TraitFilters;
+  onSetTraitFilter?: (key: string, value: TraitFilterValue | undefined) => void;
+  onClearTraitFilters?: () => void;
+  traitFilterStatus?: string | null;
+  traitFiltersDisabled?: boolean;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
@@ -30,13 +39,19 @@ function FilterContent({
   setOnlyListed,
   onlyFavorites,
   setOnlyFavorites,
-  setPage,
   sort,
   setSort,
   isLoadingCollections,
   collections,
   selectedCollection,
   setSelectedCollection,
+  traitSchema,
+  traitOptionData,
+  traitFilters,
+  onSetTraitFilter,
+  onClearTraitFilters,
+  traitFilterStatus,
+  traitFiltersDisabled,
   onMobileClose,
 }: Omit<FilterSidebarProps, "mobileOpen"> & { onMobileClose?: () => void }) {
   return (
@@ -73,11 +88,7 @@ function FilterContent({
         </h3>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => {
-              setOnlyListed(false);
-              setOnlyFavorites(false);
-              setPage(1);
-            }}
+            onClick={() => setOnlyFavorites(false)}
             className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
               !onlyListed && !onlyFavorites
                 ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -87,11 +98,7 @@ function FilterContent({
             All
           </button>
           <button
-            onClick={() => {
-              setOnlyListed(true);
-              setOnlyFavorites(false);
-              setPage(1);
-            }}
+            onClick={() => setOnlyListed(true)}
             className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
               onlyListed
                 ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -101,11 +108,7 @@ function FilterContent({
             Buy Now
           </button>
           <button
-            onClick={() => {
-              setOnlyFavorites(!onlyFavorites);
-              setOnlyListed(false);
-              setPage(1);
-            }}
+            onClick={() => setOnlyFavorites(!onlyFavorites)}
             className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
               onlyFavorites
                 ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -126,10 +129,7 @@ function FilterContent({
           {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
             <button
               key={key}
-              onClick={() => {
-                setSort(key);
-                setPage(1);
-              }}
+              onClick={() => setSort(key)}
               className={`w-full text-left px-3 py-2 rounded-sm text-sm transition-all ${
                 sort === key
                   ? "bg-primary/10 text-primary border border-primary/20"
@@ -158,10 +158,7 @@ function FilterContent({
                   type="radio"
                   name="collection"
                   checked={selectedCollection === c.contractAddress}
-                  onChange={() => {
-                    setSelectedCollection(c.contractAddress);
-                    setPage(1);
-                  }}
+                  onChange={() => setSelectedCollection(c.contractAddress)}
                   className="accent-primary"
                 />
                 <span className="text-sm text-on-surface-variant group-hover:text-on-surface transition-colors">
@@ -170,6 +167,30 @@ function FilterContent({
               </label>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Dynamic trait filters — only when a v2 collection with a schema is selected */}
+      {traitSchema && traitFilters && onSetTraitFilter && onClearTraitFilters && (
+        <DynamicTraitFilters
+          schema={traitSchema}
+          optionData={traitOptionData ?? {}}
+          traitFilters={traitFilters}
+          onSetTraitFilter={onSetTraitFilter}
+          onClearTraitFilters={onClearTraitFilters}
+          disabled={!!traitFiltersDisabled}
+          disabledMessage={traitFilterStatus}
+        />
+      )}
+
+      {!traitSchema && traitFilterStatus && (
+        <section className="space-y-3">
+          <h3 className="font-headline text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+            Traits
+          </h3>
+          <p className="text-xs leading-relaxed text-on-surface-variant/80">
+            {traitFilterStatus}
+          </p>
         </section>
       )}
     </div>

@@ -3,23 +3,55 @@ import { type QueryClient } from "@tanstack/react-query";
 import { fetchIpfsJson } from "@/lib/ipfs";
 import { normalizeNftText } from "@/lib/nftMetadata";
 import { getSafeImageUrl } from "@/lib/resourceSecurity";
+import type { NftAttribute } from "@/types/traits";
 import type { GqlNFT, NFTItemWithMarket } from "./exploreTypes";
 
-type IpfsMeta = { name: string; description: string; image: string };
+type IpfsMeta = {
+  name: string;
+  description: string;
+  image: string;
+  attributes?: NftAttribute[];
+};
+
+function normalizeAttributes(
+  rawAttrs:
+    | Array<{
+        trait_type?: string;
+        value?: string | number | boolean;
+        display_type?: string;
+      }>
+    | undefined,
+): NftAttribute[] | undefined {
+  const attributes = rawAttrs?.flatMap((attr) =>
+    attr.trait_type && attr.value != null
+      ? [{
+          trait_type: attr.trait_type,
+          value: attr.value,
+          display_type: attr.display_type,
+        }]
+      : [],
+  );
+
+  return attributes && attributes.length > 0 ? attributes : undefined;
+}
 
 async function fetchTokenMeta(tokenUri: string): Promise<IpfsMeta | null> {
   const json = await fetchIpfsJson<{
     name?: string;
     description?: string;
     image?: string;
+    attributes?: Array<{ trait_type?: string; value?: string | number | boolean; display_type?: string }>;
   }>(tokenUri);
 
   if (!json) return null;
+
+  const attributes = normalizeAttributes(json.attributes);
 
   return {
     name: normalizeNftText(json.name, "", 500),
     description: normalizeNftText(json.description, "", 10_000),
     image: getSafeImageUrl(json.image ?? "") ?? "",
+    attributes,
   };
 }
 
@@ -48,6 +80,17 @@ export async function resolveExploreNftMetadata(
       (offer) => !offer.expiresAt || BigInt(offer.expiresAt) > BigInt(now),
     )?.amount;
 
+    // Prefer subgraph-indexed attributes; fall back to IPFS JSON when File DS hasn't run yet.
+    const subgraphAttrs = (nft.attributes ?? [])
+      .filter((a) => a.valueStr != null || a.valueNum != null)
+      .map((a) => ({
+        trait_type: a.traitType,
+        value: a.valueNum != null ? Number(a.valueNum) : (a.valueStr ?? ""),
+        display_type: a.displayType ?? undefined,
+      }));
+    const resolvedAttributes =
+      subgraphAttrs.length > 0 ? subgraphAttrs : (meta?.attributes ?? undefined);
+
     return {
       tokenId: nft.tokenId,
       name: meta?.name || `NFT #${nft.tokenId}`,
@@ -58,6 +101,7 @@ export async function resolveExploreNftMetadata(
       topOffer: topOfferRaw ? formatEther(BigInt(topOfferRaw)) : null,
       collectionName: nft.collection?.name ?? "",
       seller: activeListing?.seller ?? null,
+      attributes: resolvedAttributes,
     } satisfies NFTItemWithMarket;
   });
 }

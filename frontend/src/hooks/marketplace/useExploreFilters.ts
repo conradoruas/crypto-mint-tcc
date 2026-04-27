@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { SortOption } from "./filterModel";
+import type { TraitFilters, TraitFilterValue } from "@/types/traits";
 
 export interface ExploreFilters {
   selectedCollection: string;
@@ -9,6 +11,7 @@ export interface ExploreFilters {
   sort: SortOption;
   onlyListed: boolean;
   onlyFavorites: boolean;
+  traitFilters: TraitFilters;
   page: number;
 }
 
@@ -18,53 +21,192 @@ export interface ExploreFilterActions {
   setSort: (v: SortOption) => void;
   setOnlyListed: (v: boolean) => void;
   setOnlyFavorites: (v: boolean) => void;
-  /** Accepts a plain number or an updater function, matching React's setState signature. */
+  setTraitFilter: (key: string, value: TraitFilterValue | undefined) => void;
+  clearTraitFilters: () => void;
   setPage: (v: number | ((prev: number) => number)) => void;
   clearFilters: () => void;
 }
 
-const DEFAULT_FILTERS: ExploreFilters = {
-  selectedCollection: "",
-  search: "",
-  sort: "default",
-  onlyListed: false,
-  onlyFavorites: false,
-  page: 1,
-};
+const VALID_SORTS: SortOption[] = [
+  "default", "price_asc", "price_desc", "offer_desc",
+  "listed_first", "id_asc", "id_desc",
+];
 
-export function useExploreFilters(initialSearch = ""): ExploreFilters & ExploreFilterActions & {
+// ── URL codec ────────────────────────────────────────────────────────────────
+
+function encodeTraitFilters(tf: TraitFilters): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, val] of Object.entries(tf)) {
+    if (Array.isArray(val) && val.length > 0) {
+      out[`t.${key}`] = val.join(",");
+    } else if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+      const range = val as { min?: number; max?: number };
+      const parts = [range.min ?? "", range.max ?? ""].join(":");
+      if (parts !== ":") out[`t.${key}`] = parts;
+    } else if (typeof val === "boolean") {
+      out[`t.${key}`] = val ? "true" : "false";
+    }
+  }
+  return out;
+}
+
+function decodeTraitFilters(params: URLSearchParams): TraitFilters {
+  const tf: TraitFilters = {};
+  params.forEach((val, key) => {
+    if (!key.startsWith("t.")) return;
+    const traitKey = key.slice(2);
+    if (val === "true" || val === "false") {
+      tf[traitKey] = val === "true";
+    } else if (/^-?\d*(\.\d*)?:-?\d*(\.\d*)?$/.test(val)) {
+      const [minStr, maxStr] = val.split(":");
+      const range: { min?: number; max?: number } = {};
+      if (minStr) range.min = Number(minStr);
+      if (maxStr) range.max = Number(maxStr);
+      tf[traitKey] = range;
+    } else {
+      tf[traitKey] = val.split(",").filter(Boolean);
+    }
+  });
+  return tf;
+}
+
+function buildUrl(params: URLSearchParams): string {
+  const s = params.toString();
+  return s ? `?${s}` : "?";
+}
+
+// ── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useExploreFilters(): ExploreFilters & ExploreFilterActions & {
   hasActiveFilters: boolean;
 } {
-  const [selectedCollection, setSelectedCollectionRaw] = useState("");
-  const [search, setSearchRaw] = useState(initialSearch);
-  const [sort, setSortRaw] = useState<SortOption>("default");
-  const [onlyListed, setOnlyListedRaw] = useState(false);
-  const [onlyFavorites, setOnlyFavoritesRaw] = useState(false);
-  const [page, setPageRaw] = useState(1);
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
-  const setPage = (v: number | ((prev: number) => number)) => setPageRaw(v);
+  // Read current state from URL
+  const selectedCollection = searchParams.get("col") ?? "";
+  const search = searchParams.get("q") ?? "";
+  const sortRaw = searchParams.get("sort") ?? "default";
+  const sort: SortOption = VALID_SORTS.includes(sortRaw as SortOption)
+    ? (sortRaw as SortOption)
+    : "default";
+  const onlyListed = searchParams.get("listed") === "1";
+  const onlyFavorites = searchParams.get("fav") === "1";
+  const page = Math.max(1, Number(searchParams.get("p") ?? "1") || 1);
+  const traitFilters = useMemo(() => decodeTraitFilters(searchParams), [searchParams]);
 
-  const setSelectedCollection = (v: string) => { setSelectedCollectionRaw(v); setPageRaw(1); };
-  const setSearch = (v: string) => { setSearchRaw(v); setPageRaw(1); };
-  const setSort = (v: SortOption) => { setSortRaw(v); setPageRaw(1); };
-  const setOnlyListed = (v: boolean) => { setOnlyListedRaw(v); setPageRaw(1); };
-  const setOnlyFavorites = (v: boolean) => { setOnlyFavoritesRaw(v); setPageRaw(1); };
+  // Helper: update a single param and push to URL
+  const patch = useCallback(
+    (updates: Record<string, string | null>, resetPage = true) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(updates)) {
+        if (v === null || v === "") {
+          next.delete(k);
+        } else {
+          next.set(k, v);
+        }
+      }
+      if (resetPage) next.delete("p");
+      router.replace(buildUrl(next), { scroll: false });
+    },
+    [router, searchParams],
+  );
 
-  const clearFilters = () => {
-    setSearchRaw(DEFAULT_FILTERS.search);
-    setSortRaw(DEFAULT_FILTERS.sort);
-    setOnlyListedRaw(DEFAULT_FILTERS.onlyListed);
-    setOnlyFavoritesRaw(DEFAULT_FILTERS.onlyFavorites);
-    setSelectedCollectionRaw(DEFAULT_FILTERS.selectedCollection);
-    setPage(1);
-  };
+  const setSelectedCollection = useCallback(
+    (v: string) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (v) {
+        next.set("col", v);
+      } else {
+        next.delete("col");
+      }
+      for (const key of Array.from(next.keys())) {
+        if (key.startsWith("t.")) next.delete(key);
+      }
+      next.delete("p");
+      router.replace(buildUrl(next), { scroll: false });
+    },
+    [router, searchParams],
+  );
+
+  const setSearch = useCallback(
+    (v: string) => patch({ q: v || null }),
+    [patch],
+  );
+
+  const setSort = useCallback(
+    (v: SortOption) => patch({ sort: v === "default" ? null : v }),
+    [patch],
+  );
+
+  const setOnlyListed = useCallback(
+    (v: boolean) => patch({ listed: v ? "1" : null, fav: null }),
+    [patch],
+  );
+
+  const setOnlyFavorites = useCallback(
+    (v: boolean) => patch({ fav: v ? "1" : null, listed: null }),
+    [patch],
+  );
+
+  const setPage = useCallback(
+    (v: number | ((prev: number) => number)) => {
+      const next = typeof v === "function" ? v(page) : v;
+      patch({ p: next > 1 ? String(next) : null }, false);
+    },
+    [page, patch],
+  );
+
+  const setTraitFilter = useCallback(
+    (key: string, value: TraitFilterValue | undefined) => {
+      const next = new URLSearchParams(searchParams.toString());
+      const urlKey = `t.${key}`;
+      if (value === undefined) {
+        next.delete(urlKey);
+      } else if (Array.isArray(value)) {
+        if (value.length === 0) {
+          next.delete(urlKey);
+        } else {
+          next.set(urlKey, value.join(","));
+        }
+      } else if (typeof value === "boolean") {
+        next.set(urlKey, value ? "true" : "false");
+      } else {
+        const range = value as { min?: number; max?: number };
+        const s = [range.min ?? "", range.max ?? ""].join(":");
+        if (s === ":") {
+          next.delete(urlKey);
+        } else {
+          next.set(urlKey, s);
+        }
+      }
+      next.delete("p");
+      router.replace(buildUrl(next), { scroll: false });
+    },
+    [router, searchParams],
+  );
+
+  const clearTraitFilters = useCallback(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    for (const k of Array.from(next.keys())) {
+      if (k.startsWith("t.")) next.delete(k);
+    }
+    next.delete("p");
+    router.replace(buildUrl(next), { scroll: false });
+  }, [router, searchParams]);
+
+  const clearFilters = useCallback(() => {
+    const next = new URLSearchParams();
+    router.replace(buildUrl(next), { scroll: false });
+  }, [router]);
 
   const hasActiveFilters =
     search !== "" ||
     sort !== "default" ||
     onlyListed ||
     onlyFavorites ||
-    selectedCollection !== "";
+    selectedCollection !== "" ||
+    Object.keys(traitFilters).length > 0;
 
   return {
     selectedCollection,
@@ -72,14 +214,20 @@ export function useExploreFilters(initialSearch = ""): ExploreFilters & ExploreF
     sort,
     onlyListed,
     onlyFavorites,
+    traitFilters,
     page,
     setSelectedCollection,
     setSearch,
     setSort,
     setOnlyListed,
     setOnlyFavorites,
+    setTraitFilter,
+    clearTraitFilters,
     setPage,
     clearFilters,
     hasActiveFilters,
   };
 }
+
+// Keep backward-compat export (initialSearch ignored; q param takes precedence)
+export { encodeTraitFilters };

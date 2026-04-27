@@ -121,6 +121,12 @@ export const GET_NFTS_FOR_CONTRACT = gql`
       tokenId
       tokenUri
       owner
+      attributes {
+        traitType
+        valueStr
+        valueNum
+        displayType
+      }
       listing {
         id
         price
@@ -159,6 +165,12 @@ export const GET_ALL_NFTS = gql`
       tokenId
       tokenUri
       owner
+      attributes {
+        traitType
+        valueStr
+        valueNum
+        displayType
+      }
       collection {
         id
         contractAddress
@@ -180,7 +192,64 @@ export const GET_ALL_NFTS = gql`
   }
 `;
 
+export const GET_COLLECTION_TRAIT_SCHEMA = gql`
+  query GetCollectionTraitSchema($id: ID!) {
+    collection(id: $id) {
+      id
+      totalSupply
+      contractURI
+      traitSchemaCID
+      traitDefinitions(orderBy: position) {
+        id
+        key
+        label
+        type
+        required
+        minValue
+        maxValue
+        options(orderBy: count, orderDirection: desc, first: 200) {
+          value
+          count
+          frequency
+        }
+      }
+    }
+    attributes(first: 1, where: { collection: $id }) {
+      id
+    }
+  }
+`;
 
+
+
+export const GET_NFT_ATTRIBUTES = gql`
+  query GetNftAttributes($id: ID!) {
+    nft(id: $id) {
+      id
+      metadataResolved
+      attributes {
+        traitType
+        valueStr
+        valueNum
+        displayType
+      }
+      collection {
+        id
+        contractAddress
+        traitDefinitions(orderBy: position) {
+          key
+          label
+          type
+          options(orderBy: count, orderDirection: desc, first: 200) {
+            value
+            count
+            frequency
+          }
+        }
+      }
+    }
+  }
+`;
 
 export const GET_NFTS_FOR_OWNER = gql`
   query GetNFTsForOwner($owner: Bytes!, $first: Int!, $skip: Int!) {

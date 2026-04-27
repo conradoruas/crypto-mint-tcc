@@ -47,7 +47,10 @@ export default async function RootLayout({
       data-theme={initialTheme}
       suppressHydrationWarning
     >
-      <body className="antialiased min-h-screen bg-background text-on-surface">
+      <body
+        className="antialiased min-h-screen bg-background text-on-surface"
+        suppressHydrationWarning
+      >
         <ThemeProvider defaultTheme="dark" initialTheme={initialTheme}>
           <ApolloProvider>
             <Web3Provider>

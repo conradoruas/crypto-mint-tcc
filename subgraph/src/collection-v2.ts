@@ -5,12 +5,18 @@ import {
   MintSeedRevealed,
   Revealed,
   Withdrawn,
-} from "../generated/templates/NFTCollection/NFTCollection";
+} from "../generated/templates/NFTCollectionV2/NFTCollectionV2";
 import { NFT, Collection, Listing, CollectionWithdrawal, ActivityEvent } from "../generated/schema";
-import { BigInt } from "@graphprotocol/graph-ts";
-import { getOrCreateStats, getOrCreateCollectionStat, removeActiveListingAndRecalcFloor } from "./helpers";
+import { BigInt, DataSourceContext } from "@graphprotocol/graph-ts";
+import {
+  getOrCreateStats,
+  getOrCreateCollectionStat,
+  removeActiveListingAndRecalcFloor,
+} from "./helpers";
+import { extractIpfsCid } from "./factory-v2";
+import { TokenMetadata } from "../generated/templates";
 
-export function handleNFTMinted(event: NFTMinted): void {
+export function handleNFTMintedV2(event: NFTMinted): void {
   let collectionId = event.address.toHexString();
   let nftId = collectionId + "-" + event.params.tokenId.toString();
 
@@ -47,17 +53,18 @@ export function handleNFTMinted(event: NFTMinted): void {
   let stats = getOrCreateStats();
   stats.totalNFTs = stats.totalNFTs.plus(BigInt.fromI32(1));
   stats.save();
+
+  // Spawn TokenMetadata File Data Source for this token's IPFS JSON
+  let cid = extractIpfsCid(event.params.tokenUri);
+  if (cid.length > 0) {
+    let ctx = new DataSourceContext();
+    ctx.setString("nftId", nftId);
+    ctx.setString("collectionId", collectionId);
+    TokenMetadata.createWithContext(cid, ctx);
+  }
 }
 
-/**
- * Handles ERC-721 Transfer events to keep NFT ownership in sync.
- *
- * Skips mint transfers (from == 0x0) because handleNFTMinted already
- * creates the entity and sets the owner. For all other transfers
- * (marketplace sales, peer-to-peer, etc.) it updates the owner field.
- */
 export function handleTransfer(event: Transfer): void {
-  // Mint transfers are handled by handleNFTMinted — skip to avoid duplicate processing
   if (event.params.from.toHexString() == "0x0000000000000000000000000000000000000000") {
     return;
   }
@@ -65,8 +72,6 @@ export function handleTransfer(event: Transfer): void {
   let nftId = event.address.toHexString() + "-" + event.params.tokenId.toString();
   let nft = NFT.load(nftId);
   if (nft) {
-    // Deactivate stale listing — the NFT changed hands outside the marketplace
-    // (peer-to-peer transfer, other contract, etc.), so any active listing is invalid.
     if (nft.listing) {
       let listing = Listing.load(nft.listing!);
       if (listing && listing.active) {
@@ -87,12 +92,10 @@ export function handleTransfer(event: Transfer): void {
       }
       nft.listing = null;
     }
-
     nft.owner = event.params.to;
     nft.save();
   }
 
-  // Activity event for non-marketplace transfers
   let actId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
   let act = new ActivityEvent(actId);
   act.type = "transfer";
@@ -122,12 +125,22 @@ export function handleMintSeedRevealed(event: MintSeedRevealed): void {
   }
 }
 
-export function handleRevealed(event: Revealed): void {
-  let collection = Collection.load(event.address.toHexString());
-  if (collection) {
-    collection.revealed = true;
-    collection.save();
-  }
+/**
+ * Handles Revealed() on v2 collections.
+ * Rarity is intentionally not finalized here. Token metadata is indexed via
+ * asynchronous file data sources, so any on-chain reveal event can race ahead
+ * of the metadata handlers and produce order-dependent ranks. Until a
+ * deterministic indexed/post-processing pipeline exists, rarity fields stay
+ * unset and the frontend avoids rendering rarity badges and sorting.
+ */
+export function handleRevealedV2(event: Revealed): void {
+  let collectionId = event.address.toHexString();
+  let collection = Collection.load(collectionId);
+  if (!collection) return;
+
+  collection.revealed = true;
+  collection.rarityFinalized = false;
+  collection.save();
 }
 
 export function handleCollectionWithdrawn(event: Withdrawn): void {

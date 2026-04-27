@@ -8,12 +8,15 @@ import {
   validateImageFile,
   validateJsonFile,
 } from "@/lib/uploadPolicy";
+import { attributesForSchema } from "@/lib/traitSchema";
+import type { NftAttribute, TraitSchema } from "@/types/traits";
 import { useCollectionForm, type NFTDraft } from "./useCollectionForm";
 
 interface BulkMetadataItem {
   name?: string;
   description?: string;
   image?: string;
+  attributes?: unknown;
   [key: string]: unknown;
 }
 
@@ -217,6 +220,10 @@ export function useCreateCollectionDraftManager() {
         );
       }
 
+      const validateAttributes = form.traitSchema
+        ? attributesForSchema(form.traitSchema)
+        : null;
+
       const parsedNFTs = json.map((item: BulkMetadataItem, index: number) => {
         const nftName = String(item.name ?? "").trim();
         const nftDescription = String(item.description ?? "").trim();
@@ -244,12 +251,33 @@ export function useCreateCollectionDraftManager() {
           throw new Error(`Image '${imageFile.name}' is invalid: ${fileError}`);
         }
 
+        const rawAttributes = item.attributes;
+        if (rawAttributes !== undefined && !Array.isArray(rawAttributes)) {
+          throw new Error(`Entry ${index + 1} has malformed 'attributes'.`);
+        }
+
+        const attributes = (rawAttributes as NftAttribute[] | undefined) ?? [];
+        if (!form.traitSchema && attributes.length > 0) {
+          throw new Error(
+            `Entry ${index + 1} defines traits but the collection has no trait schema.`,
+          );
+        }
+        if (validateAttributes) {
+          const parsed = validateAttributes.safeParse(attributes);
+          if (!parsed.success) {
+            throw new Error(
+              `Entry ${index + 1} has invalid traits: ${parsed.error.issues[0]?.message ?? "Invalid attribute set."}`,
+            );
+          }
+        }
+
         return {
           id: Date.now() + index,
           name: nftName,
           description: nftDescription,
           file: imageFile,
           previewUrl: createObjectUrl(imageFile),
+          attributes: attributes.length > 0 ? attributes : undefined,
         } satisfies NFTDraft;
       });
 
@@ -266,7 +294,19 @@ export function useCreateCollectionDraftManager() {
     } finally {
       dispatch({ type: "SET_BULK_PROCESSING", value: false });
     }
-  }, [bulkImageFiles, bulkMetadataFile, dispatch]);
+  }, [bulkImageFiles, bulkMetadataFile, dispatch, form.traitSchema]);
+
+  const setTraitSchema = useCallback(
+    (schema: TraitSchema | undefined) =>
+      dispatch({ type: "SET_TRAIT_SCHEMA", schema }),
+    [dispatch],
+  );
+
+  const setNFTAttributes = useCallback(
+    (id: number, attributes: NftAttribute[]) =>
+      dispatch({ type: "SET_NFT_ATTRIBUTES", id, attributes }),
+    [dispatch],
+  );
 
   return {
     form,
@@ -278,6 +318,8 @@ export function useCreateCollectionDraftManager() {
     updateNFTField,
     setNFTFile,
     setCoverFile,
+    setTraitSchema,
+    setNFTAttributes,
     setPage: (page: number) => dispatch({ type: "SET_PAGE", page }),
     handleBulkMetadataFileChange,
     handleBulkImageFilesChange,

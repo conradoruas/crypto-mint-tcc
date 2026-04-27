@@ -11,5 +11,9 @@ export const FACTORY_ADDRESS = parseAddress(
 export const WALLETCONNECT_PROJECT_ID =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 
+export const FACTORY_V2_ADDRESS = parseAddress(
+  process.env.NEXT_PUBLIC_FACTORY_V2_CONTRACT_ADDRESS,
+);
+
 export const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 export const SUBGRAPH_ENABLED = !!SUBGRAPH_URL;

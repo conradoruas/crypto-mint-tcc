@@ -16,11 +16,19 @@ export type GqlOffer = {
   expiresAt?: string;
 };
 
+export type GqlAttribute = {
+  traitType: string;
+  valueStr?: string | null;
+  valueNum?: string | null;
+  displayType?: string | null;
+};
+
 export type GqlNFT = {
   id: string;
   tokenId: string;
   tokenUri?: string;
   owner: string;
+  attributes?: GqlAttribute[];
   collection?: {
     id: string;
     contractAddress: string;

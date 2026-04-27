@@ -4,10 +4,10 @@ import { Navbar } from "@/components/navbar";
 import { useCollections } from "@/hooks/collections";
 import { useExploreAllNFTs } from "@/hooks/marketplace";
 import { useExploreFilters } from "@/hooks/marketplace/useExploreFilters";
+import { useCollectionTraitSchema } from "@/hooks/marketplace/useCollectionTraitSchema";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers, Heart } from "lucide-react";
-import { useState, useMemo, Suspense, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useMemo, Suspense } from "react";
 import Footer from "@/components/Footer";
 import { useConnection } from "wagmi";
 import { useUserFavorites } from "@/hooks/user";
@@ -18,7 +18,6 @@ import { FilterSidebar } from "@/components/marketplace/FilterSidebar";
 const PAGE_SIZE = 8;
 
 function ExploreContent() {
-  const searchParams = useSearchParams();
   const { address } = useConnection();
   const { collections, isLoading: isLoadingCollections } = useCollections();
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
@@ -29,22 +28,34 @@ function ExploreContent() {
     sort,
     onlyListed,
     onlyFavorites,
+    traitFilters,
     page,
     setSelectedCollection,
     setSearch,
     setSort,
     setOnlyListed,
     setOnlyFavorites,
+    setTraitFilter,
+    clearTraitFilters,
     setPage,
     clearFilters,
     hasActiveFilters,
-  } = useExploreFilters(searchParams.get("q") ?? "");
+  } = useExploreFilters();
+
+  const {
+    schema: traitSchema,
+    optionData: traitOptionData,
+    isSubgraphIndexed,
+    indexingState: traitIndexingState,
+  } =
+    useCollectionTraitSchema(selectedCollection || undefined);
+
+  const subgraphTraitFilters = isSubgraphIndexed ? traitFilters : {};
 
   const {
     nfts,
     isLoading: isLoadingNFTs,
     hasMore,
-    refetch: refetchExploreNfts,
   } = useExploreAllNFTs(
     selectedCollection || undefined,
     page,
@@ -52,6 +63,7 @@ function ExploreContent() {
     onlyListed,
     search,
     sort,
+    subgraphTraitFilters,
   );
 
   const { favorites } = useUserFavorites(address);
@@ -64,14 +76,6 @@ function ExploreContent() {
   );
 
   const isLoading = isLoadingCollections || isLoadingNFTs;
-
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void refetchExploreNfts();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [refetchExploreNfts]);
 
   const isFavoritesEmpty = onlyFavorites && favoriteSet.size === 0;
   const hasClientFilters = onlyFavorites;
@@ -97,13 +101,25 @@ function ExploreContent() {
           setOnlyListed={setOnlyListed}
           onlyFavorites={onlyFavorites}
           setOnlyFavorites={setOnlyFavorites}
-          setPage={setPage}
           sort={sort}
           setSort={setSort}
           isLoadingCollections={isLoadingCollections}
           collections={collections}
           selectedCollection={selectedCollection}
           setSelectedCollection={setSelectedCollection}
+          traitSchema={traitSchema}
+          traitOptionData={traitOptionData}
+          traitFilters={traitFilters}
+          onSetTraitFilter={setTraitFilter}
+          onClearTraitFilters={clearTraitFilters}
+          traitFiltersDisabled={traitIndexingState === "pending"}
+          traitFilterStatus={
+            traitIndexingState === "pending"
+              ? "Trait filters will appear after subgraph indexing finishes for this collection."
+              : traitIndexingState === "unavailable" && selectedCollection
+                ? "This collection does not define indexed trait filters."
+                : null
+          }
           mobileOpen={isMobileFilterOpen}
           onMobileClose={() => setIsMobileFilterOpen(false)}
         />
