@@ -11,7 +11,7 @@ dataSources:
       startBlock: 10647287
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.7
+      apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
         - Collection
@@ -33,7 +33,7 @@ dataSources:
       startBlock: 10647296
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.7
+      apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
         - Listing
@@ -183,6 +183,7 @@ templates:
       abis:
         - name: NFTCollectionFactoryV2
           file: ./abis/NFTCollectionFactoryV2.json
+      handler: handleCollectionContractURI
       file: ./src/collectionMetadata.ts
 
   # File Data Source: resolves tokenUri IPFS JSON → Attribute entities + rarity accumulation
@@ -198,4 +199,5 @@ templates:
       abis:
         - name: NFTCollectionV2
           file: ./abis/NFTCollectionV2.json
+      handler: handleTokenMetadata
       file: ./src/tokenMetadata.ts
