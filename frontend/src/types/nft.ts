@@ -10,9 +10,6 @@ export interface NFTItem {
   nftContract: string;
   collectionName?: string;
   attributes?: NftAttribute[];
-  rarityRank?: number;
-  rarityScore?: number;
-  rarityTier?: string;
 }
 
 // ─── NFT with market data (explore / listings) ────────────────────────────────

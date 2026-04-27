@@ -5,9 +5,7 @@ export type SortOption =
   | "offer_desc"
   | "listed_first"
   | "id_asc"
-  | "id_desc"
-  | "rarity_rank_asc"
-  | "rarity_rank_desc";
+  | "id_desc";
 
 export const SORT_LABELS: Record<SortOption, string> = {
   default: "Default",
@@ -17,6 +15,4 @@ export const SORT_LABELS: Record<SortOption, string> = {
   listed_first: "Listed First",
   id_asc: "ID Ascending",
   id_desc: "ID Descending",
-  rarity_rank_asc: "Rarest First",
-  rarity_rank_desc: "Most Common First",
 };

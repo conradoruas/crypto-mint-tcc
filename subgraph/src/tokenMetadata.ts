@@ -5,8 +5,8 @@ import { _safeOptionId } from "./collectionMetadata";
 /**
  * File Data Source handler for TokenMetadata.
  * Receives the raw bytes of a token's IPFS metadata JSON and parses the
- * `attributes` array into Attribute entities.  Also accumulates TraitOption
- * counts and updates the NFT's pre-computed rarityScore.
+ * `attributes` array into Attribute entities and accumulates TraitOption
+ * counts for discrete string/enum/boolean traits.
  *
  * Expected JSON shape (OpenSea ERC-721 metadata standard):
  * {
@@ -64,8 +64,6 @@ export function handleTokenMetadata(content: Bytes): void {
   let supply = col
     ? col.totalSupply.toBigDecimal()
     : BigDecimal.fromString("1");
-
-  let rarityScore = BigDecimal.fromString("0");
 
   for (let i = 0; i < attrsArr.length; i++) {
     let attrObj = attrsArr[i].toObject();
@@ -125,25 +123,17 @@ export function handleTokenMetadata(content: Bytes): void {
         }
       }
       opt.count = opt.count.plus(BigInt.fromI32(1));
-      // frequency = count / totalSupply (approximate; recomputed at reveal)
+      // frequency = count / current minted supply for discrete traits only
       if (supply.gt(BigDecimal.fromString("0"))) {
         opt.frequency = opt.count.toBigDecimal().div(supply);
       }
       opt.save();
 
-      // Rarity contribution: totalSupply / count (higher = rarer)
-      if (opt.count.gt(BigInt.fromI32(0)) && supply.gt(BigDecimal.fromString("0"))) {
-        let contrib = supply.div(opt.count.toBigDecimal());
-        rarityScore = rarityScore.plus(contrib);
-      }
     }
 
     attr.save();
   }
 
-  // Pre-accumulate rarityScore so handleRevealedV2 can use it directly
-  nft.rarityScore = rarityScore;
   nft.metadataResolved = true;
   nft.save();
 }
-

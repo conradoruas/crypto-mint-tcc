@@ -1,4 +1,4 @@
-import { json, Bytes, dataSource, log, BigInt, BigDecimal } from "@graphprotocol/graph-ts";
+import { json, Bytes, dataSource, log, BigInt, BigDecimal, ByteArray, crypto } from "@graphprotocol/graph-ts";
 import { Collection, TraitDefinition, TraitOption } from "../generated/schema";
 
 /**
@@ -38,10 +38,6 @@ export function handleCollectionContractURI(content: Bytes): void {
 
   let rootObj = tryValue.value.toObject();
   if (!rootObj) return;
-
-  // Store the CID so the frontend can identify which schema version is live
-  let cid = dataSource.address().toHexString();
-  collection.traitSchemaCID = cid;
 
   // Parse trait_schema.fields
   let schemaEntry = rootObj.get("trait_schema");
@@ -140,7 +136,6 @@ export function handleCollectionContractURI(content: Bytes): void {
 
 /** Builds a safe ID for a TraitOption that avoids special chars. */
 export function _safeOptionId(collectionId: string, key: string, value: string): string {
-  // Lowercase the value, replace non-alphanum with dash for URL safety
-  let safe = value.toLowerCase().replaceAll(" ", "-");
-  return collectionId + "-" + key.toLowerCase() + "-" + safe;
+  let digest = crypto.keccak256(ByteArray.fromUTF8(value)).toHexString();
+  return collectionId + "-" + key.toLowerCase() + "-" + digest;
 }

@@ -6,8 +6,8 @@ import {
   Revealed,
   Withdrawn,
 } from "../generated/templates/NFTCollectionV2/NFTCollectionV2";
-import { NFT, Collection, Listing, CollectionWithdrawal, ActivityEvent, Attribute, TraitOption, CollectionStat } from "../generated/schema";
-import { BigInt, BigDecimal, DataSourceContext } from "@graphprotocol/graph-ts";
+import { NFT, Collection, Listing, CollectionWithdrawal, ActivityEvent } from "../generated/schema";
+import { BigInt, DataSourceContext } from "@graphprotocol/graph-ts";
 import {
   getOrCreateStats,
   getOrCreateCollectionStat,
@@ -127,8 +127,11 @@ export function handleMintSeedRevealed(event: MintSeedRevealed): void {
 
 /**
  * Handles Revealed() on v2 collections.
- * Computes rarity scores and ranks for all minted NFTs once the supply is exhausted
- * and trait frequencies are final.
+ * Rarity is intentionally not finalized here. Token metadata is indexed via
+ * asynchronous file data sources, so any on-chain reveal event can race ahead
+ * of the metadata handlers and produce order-dependent ranks. Until a
+ * deterministic indexed/post-processing pipeline exists, rarity fields stay
+ * unset and the frontend avoids rendering rarity badges and sorting.
  */
 export function handleRevealedV2(event: Revealed): void {
   let collectionId = event.address.toHexString();
@@ -136,9 +139,8 @@ export function handleRevealedV2(event: Revealed): void {
   if (!collection) return;
 
   collection.revealed = true;
+  collection.rarityFinalized = false;
   collection.save();
-
-  _finalizeRarity(collectionId, collection.totalSupply, event.block.timestamp);
 }
 
 export function handleCollectionWithdrawn(event: Withdrawn): void {
@@ -151,126 +153,4 @@ export function handleCollectionWithdrawn(event: Withdrawn): void {
   rec.blockNumber = event.block.number;
   rec.txHash = event.transaction.hash;
   rec.save();
-}
-
-// ─── Rarity finalization ─────────────────────────────────────────────────────
-
-/**
- * Computes rarityScore and rarityRank for every NFT in a collection.
- *
- * Algorithm: statistical rarity — for each attribute of an NFT, its rarity
- * contribution is (totalSupply / traitOption.count).  rarityScore is the sum
- * of all per-trait contributions.  NFTs are then ranked by descending score.
- *
- * Only runs on v2 collections where tokenUri File DS has resolved attributes.
- * For very large collections (>10k) the O(N²) sort can be expensive — the plan
- * notes an off-chain fallback for that scenario.
- */
-function _finalizeRarity(
-  collectionId: string,
-  totalSupply: BigInt,
-  timestamp: BigInt
-): void {
-  if (totalSupply.equals(BigInt.fromI32(0))) return;
-
-  let supply = totalSupply.toBigDecimal();
-
-  // Update TraitOption frequencies first
-  // (count is already kept up-to-date by tokenMetadata.ts)
-  // We just need to recompute frequency = count / totalSupply
-  let collection = Collection.load(collectionId);
-  if (!collection) return;
-
-  // We can't iterate @derivedFrom relations in graph-ts — use IDs stored
-  // on TraitDefinition entities by loading them via getOrCreate patterns.
-  // Since we can't query arbitrary sets, rarity is approximated by iterating
-  // Attribute entries keyed by NFT.  The constraint is that graph-ts has no
-  // built-in "load all by field" query.
-  //
-  // Practical approach: iterate nftIds 0..(totalSupply-1), load each NFT,
-  // load its attributes, compute score, then sort.  O(N * traits).
-
-  let n = totalSupply.toI32();
-  let scores = new Array<BigDecimal>(n);
-  let nftIds = new Array<string>(n);
-
-  for (let i = 0; i < n; i++) {
-    let nftId = collectionId + "-" + i.toString();
-    nftIds[i] = nftId;
-    let nft = NFT.load(nftId);
-    if (!nft || !nft.metadataResolved) {
-      scores[i] = BigDecimal.fromString("0");
-      continue;
-    }
-
-    // Sum 1/frequency for each attribute
-    let score = BigDecimal.fromString("0");
-    // We can only access attributes by IDs formed as "<collectionId>-<tokenId>-<traitType>"
-    // but we don't know which traitTypes exist here without the TraitDefinition list.
-    // Alternative: use a dedicated score pre-accumulated in tokenMetadata.ts.
-    // See collection-v2.ts note: we store pre-accumulated score in nft.rarityScore.
-    // By the time Revealed() fires, all tokenMetadata File DS handlers should have run.
-    let preScore = nft.rarityScore;
-    score = preScore ? preScore : BigDecimal.fromString("0");
-    scores[i] = score;
-  }
-
-  // Rank by descending score (rank 1 = highest score = rarest)
-  // Simple insertion sort — O(N²) but fine for typical collection sizes
-  let indices = new Array<i32>(n);
-  for (let i = 0; i < n; i++) indices[i] = i;
-
-  for (let i = 1; i < n; i++) {
-    let key = indices[i];
-    let keyScore = scores[key];
-    let j = i - 1;
-    while (j >= 0 && scores[indices[j]].lt(keyScore)) {
-      indices[j + 1] = indices[j];
-      j--;
-    }
-    indices[j + 1] = key;
-  }
-
-  for (let rank = 0; rank < n; rank++) {
-    let idx = indices[rank];
-    let nft = NFT.load(nftIds[idx]);
-    if (!nft) continue;
-
-    nft.rarityRank = rank + 1;
-    let pct = BigDecimal.fromString((rank + 1).toString()).div(
-      BigDecimal.fromString(n.toString())
-    );
-
-    // Tier thresholds (percentile buckets)
-    let p01 = BigDecimal.fromString("0.01");
-    let p05 = BigDecimal.fromString("0.05");
-    let p20 = BigDecimal.fromString("0.20");
-    let p50 = BigDecimal.fromString("0.50");
-
-    if (pct.le(p01)) {
-      nft.rarityTier = "Mythic";
-    } else if (pct.le(p05)) {
-      nft.rarityTier = "Legendary";
-    } else if (pct.le(p20)) {
-      nft.rarityTier = "Epic";
-    } else if (pct.le(p50)) {
-      nft.rarityTier = "Rare";
-    } else {
-      nft.rarityTier = "Common";
-    }
-    nft.save();
-  }
-
-  // Mark collection rarity as finalized and record timestamp in CollectionStat
-  collection = Collection.load(collectionId);
-  if (collection) {
-    collection.rarityFinalized = true;
-    collection.save();
-  }
-
-  let colStats = CollectionStat.load(collectionId);
-  if (colStats) {
-    colStats.rarityComputedAt = timestamp;
-    colStats.save();
-  }
 }

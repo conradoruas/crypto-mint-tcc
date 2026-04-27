@@ -86,8 +86,6 @@ export async function resolveExploreNftMetadata(
       topOffer: topOfferRaw ? formatEther(BigInt(topOfferRaw)) : null,
       collectionName: nft.collection?.name ?? "",
       seller: activeListing?.seller ?? null,
-      rarityRank: nft.rarityRank ?? undefined,
-      rarityTier: nft.rarityTier ?? undefined,
       attributes: resolvedAttributes,
     } satisfies NFTItemWithMarket;
   });

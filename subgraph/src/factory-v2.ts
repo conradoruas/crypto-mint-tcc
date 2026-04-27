@@ -17,6 +17,7 @@ export function handleCollectionCreatedV2(event: CollectionCreated): void {
   collection.mintSeedRevealed = false;
   collection.revealed = false;
   collection.rarityFinalized = false;
+  let traitSchemaCID = "";
 
   // Fetch full metadata from the v2 factory contract
   let factory = NFTCollectionFactoryV2.bind(event.address);
@@ -30,6 +31,8 @@ export function handleCollectionCreatedV2(event: CollectionCreated): void {
     collection.maxSupply = info.value.maxSupply;
     collection.mintPrice = info.value.mintPrice;
     collection.contractURI = info.value.contractURI;
+    traitSchemaCID = extractIpfsCid(info.value.contractURI);
+    collection.traitSchemaCID = traitSchemaCID;
   } else {
     collection.name = event.params.name;
     collection.symbol = "";
@@ -38,6 +41,8 @@ export function handleCollectionCreatedV2(event: CollectionCreated): void {
     collection.maxSupply = BigInt.fromI32(0);
     collection.mintPrice = BigInt.fromI32(0);
     collection.contractURI = event.params.contractURI;
+    traitSchemaCID = extractIpfsCid(event.params.contractURI);
+    collection.traitSchemaCID = traitSchemaCID;
   }
 
   collection.save();
@@ -48,11 +53,11 @@ export function handleCollectionCreatedV2(event: CollectionCreated): void {
   // If a contractURI was provided, spawn the File Data Source to parse the trait schema
   let contractURI = collection.contractURI;
   if (contractURI && contractURI.length > 0) {
-    let cid = extractIpfsCid(contractURI);
-    if (cid.length > 0) {
+    if (traitSchemaCID.length > 0) {
       let ctx = new DataSourceContext();
       ctx.setString("collectionId", id);
-      CollectionContractURI.createWithContext(cid, ctx);
+      ctx.setString("traitSchemaCID", traitSchemaCID);
+      CollectionContractURI.createWithContext(traitSchemaCID, ctx);
     }
   }
 

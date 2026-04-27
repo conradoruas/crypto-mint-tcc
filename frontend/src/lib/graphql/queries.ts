@@ -121,8 +121,6 @@ export const GET_NFTS_FOR_CONTRACT = gql`
       tokenId
       tokenUri
       owner
-      rarityRank
-      rarityTier
       attributes {
         traitType
         valueStr
@@ -167,8 +165,6 @@ export const GET_ALL_NFTS = gql`
       tokenId
       tokenUri
       owner
-      rarityRank
-      rarityTier
       attributes {
         traitType
         valueStr
@@ -226,9 +222,6 @@ export const GET_NFT_ATTRIBUTES = gql`
   query GetNftAttributes($id: ID!) {
     nft(id: $id) {
       id
-      rarityRank
-      rarityScore
-      rarityTier
       metadataResolved
       attributes {
         traitType
@@ -241,6 +234,8 @@ export const GET_NFT_ATTRIBUTES = gql`
         contractAddress
         traitDefinitions(orderBy: position) {
           key
+          label
+          type
           options(orderBy: count, orderDirection: desc, first: 200) {
             value
             count

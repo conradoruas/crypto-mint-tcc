@@ -258,4 +258,27 @@ contract NFTCollectionV2Test is Test {
         assertEq(page2.length, 1);
         assertEq(page2[0].name, "C2");
     }
+
+    function test_onlyOwnerCanLoadTokenUris() public {
+        string[] memory uris = new string[](1);
+        uris[0] = "ipfs://QmNFT-extra";
+
+        vm.prank(stranger);
+        vm.expectRevert();
+        collection.appendTokenURIs(uris);
+    }
+
+    function test_onlyOwnerCanRevealSeed() public {
+        vm.prank(stranger);
+        vm.expectRevert();
+        collection.revealMintSeed(keccak256("test-seed-v2"));
+    }
+
+    function test_onlyOwnerCanWithdraw() public {
+        _mint(minter);
+
+        vm.prank(stranger);
+        vm.expectRevert();
+        collection.withdraw();
+    }
 }

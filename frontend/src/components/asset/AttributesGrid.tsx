@@ -20,9 +20,6 @@ interface GqlTraitOption {
 interface GqlNftAttributeData {
   nft: {
     id: string;
-    rarityRank: number | null;
-    rarityScore: string | null;
-    rarityTier: string | null;
     metadataResolved: boolean;
     attributes: GqlAttribute[];
     collection: {
@@ -30,6 +27,8 @@ interface GqlNftAttributeData {
       contractAddress: string;
       traitDefinitions: Array<{
         key: string;
+        label: string;
+        type: string;
         options: GqlTraitOption[];
       }>;
     } | null;
@@ -39,14 +38,6 @@ interface GqlNftAttributeData {
 type Props = {
   nftContract: string;
   tokenId: string;
-};
-
-const TIER_COLORS: Record<string, string> = {
-  Mythic: "bg-yellow-500/10 border-yellow-400/40 text-yellow-400",
-  Legendary: "bg-purple-500/10 border-purple-400/40 text-purple-400",
-  Epic: "bg-blue-500/10 border-blue-400/40 text-blue-400",
-  Rare: "bg-green-500/10 border-green-400/40 text-green-400",
-  Common: "bg-surface-container border-outline-variant/20 text-on-surface-variant",
 };
 
 export function AttributesGrid({ nftContract, tokenId }: Props) {
@@ -74,41 +65,41 @@ export function AttributesGrid({ nftContract, tokenId }: Props) {
 
   // Build frequency lookup: key → value → frequency
   const freqMap: Record<string, Record<string, number>> = {};
+  const traitMeta: Record<string, { label: string; type: string }> = {};
   for (const def of nftData.collection?.traitDefinitions ?? []) {
+    traitMeta[def.key] = { label: def.label, type: def.type };
     freqMap[def.key] = {};
     for (const opt of def.options) {
       freqMap[def.key][opt.value] = Number(opt.frequency);
     }
   }
 
-  const { rarityRank, rarityTier } = nftData;
-  const tierColor = rarityTier ? (TIER_COLORS[rarityTier] ?? TIER_COLORS.Common) : null;
-
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <h3 className="font-headline font-bold text-sm uppercase tracking-widest flex items-center gap-2">
-          <Layers size={14} className="text-primary" />
-          Traits
-        </h3>
-        {rarityRank !== null && rarityTier && (
-          <span
-            className={`text-[10px] font-headline font-black px-2 py-0.5 border uppercase tracking-widest rounded-sm ${tierColor}`}
-          >
-            {rarityTier} · #{rarityRank}
-          </span>
-        )}
-      </div>
+      <h3 className="font-headline font-bold text-sm uppercase tracking-widest flex items-center gap-2">
+        <Layers size={14} className="text-primary" />
+        Traits
+      </h3>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {nftData.attributes.map((attr) => {
+          const meta = traitMeta[attr.traitType];
+          const type = meta?.type ?? "string";
           const displayValue =
-            attr.valueStr !== null
-              ? attr.valueStr
-              : attr.valueNum !== null
-                ? attr.valueNum
-                : "—";
-          const freq = attr.valueStr !== null
+            type === "boolean"
+              ? attr.valueStr === "true"
+                ? "Yes"
+                : attr.valueStr === "false"
+                  ? "No"
+                  : "—"
+              : type === "date"
+                ? formatDateValue(attr.valueStr)
+                : attr.valueStr !== null
+                  ? attr.valueStr
+                  : attr.valueNum !== null
+                    ? attr.valueNum
+                    : "—";
+          const freq = type !== "number" && type !== "date" && attr.valueStr !== null
             ? (freqMap[attr.traitType]?.[attr.valueStr] ?? null)
             : null;
 
@@ -118,7 +109,7 @@ export function AttributesGrid({ nftContract, tokenId }: Props) {
               className="bg-primary/5 border border-primary/10 rounded-sm p-3 space-y-0.5"
             >
               <p className="text-[9px] font-headline font-bold uppercase tracking-widest text-primary/70 truncate">
-                {attr.traitType}
+                {meta?.label ?? attr.traitType}
               </p>
               <p className="text-sm font-semibold text-on-surface truncate">
                 {displayValue}
@@ -134,4 +125,11 @@ export function AttributesGrid({ nftContract, tokenId }: Props) {
       </div>
     </div>
   );
+}
+
+function formatDateValue(value: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString();
 }
