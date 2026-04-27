@@ -3,9 +3,11 @@ import { useQuery } from "@apollo/client/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNowBucketed } from "../useNowBucketed";
 import { resolveExploreNftMetadata } from "./exploreMetadata";
-import { buildExploreQueryConfig } from "./exploreQuery";
+import { buildExploreQueryConfig, matchesClientTraitFilters } from "./exploreQuery";
 import type { ExploreVariant, GqlNFTsData, NFTItemWithMarket } from "./exploreTypes";
 import type { TraitFilters } from "@/types/traits";
+
+const CLIENT_SIDE_FETCH_SIZE = 500;
 
 type UseExploreOrchestratorArgs = {
   variant: ExploreVariant;
@@ -16,6 +18,8 @@ type UseExploreOrchestratorArgs = {
   search?: string;
   sort?: string;
   traitFilters?: TraitFilters;
+  /** When set, skips subgraph attribute filtering and filters the resolved IPFS attributes client-side. */
+  clientSideTraitFilters?: TraitFilters;
 };
 
 export function useExploreOrchestrator({
@@ -27,6 +31,7 @@ export function useExploreOrchestrator({
   search = "",
   sort = "default",
   traitFilters = {},
+  clientSideTraitFilters,
 }: UseExploreOrchestratorArgs) {
   const [nfts, setNfts] = useState<NFTItemWithMarket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,23 +39,28 @@ export function useExploreOrchestrator({
   const queryClient = useQueryClient();
   const nowBucketed = useNowBucketed();
 
+  const hasClientFilters =
+    !!clientSideTraitFilters && Object.keys(clientSideTraitFilters).length > 0;
+
   const queryConfig = useMemo(
     () =>
       buildExploreQueryConfig({
         variant,
         collectionAddress,
-        page,
-        pageSize,
+        // In client-side mode: fetch page 1 of a large batch; subgraph does no trait filtering.
+        page: hasClientFilters ? 1 : page,
+        pageSize: hasClientFilters ? CLIENT_SIDE_FETCH_SIZE : pageSize,
         onlyListed,
         search,
         sort,
-        traitFilters,
+        // Skip subgraph trait filtering in client-side mode.
+        traitFilters: hasClientFilters ? {} : traitFilters,
         nowBucketed,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [collectionAddress, nowBucketed, onlyListed, page, pageSize, search, sort, variant,
-      // Stringify traitFilters to detect deep changes
-      JSON.stringify(traitFilters)],
+    [collectionAddress, nowBucketed, onlyListed, hasClientFilters, page, pageSize, search, sort, variant,
+      JSON.stringify(traitFilters),
+      JSON.stringify(clientSideTraitFilters)],
   );
 
   const { data, loading, refetch } = useQuery<GqlNFTsData>(queryConfig.query, {
@@ -70,12 +80,13 @@ export function useExploreOrchestrator({
       }
 
       const rawAll = data?.nfts ?? [];
-      const hasNextPage = queryConfig.trimExtraRecord
-        ? rawAll.length > queryConfig.pageSize
-        : rawAll.length === queryConfig.pageSize;
-      const raw = queryConfig.trimExtraRecord
-        ? rawAll.slice(0, queryConfig.pageSize)
-        : rawAll;
+
+      // In client-side mode we fetched a large batch — no server trim needed.
+      const raw = hasClientFilters
+        ? rawAll
+        : queryConfig.trimExtraRecord
+          ? rawAll.slice(0, queryConfig.pageSize)
+          : rawAll;
 
       if (!raw.length) {
         if (!cancelled) {
@@ -86,10 +97,7 @@ export function useExploreOrchestrator({
         return;
       }
 
-      if (!cancelled) {
-        setHasMore(hasNextPage);
-        setIsLoading(true);
-      }
+      if (!cancelled) setIsLoading(true);
 
       const enriched = await resolveExploreNftMetadata(
         raw,
@@ -97,17 +105,30 @@ export function useExploreOrchestrator({
         collectionAddress,
       );
 
-      if (cancelled) {
-        return;
-      }
+      if (cancelled) return;
 
-      const items =
+      let items =
         variant === "market" && sort === "offer_desc"
           ? [...enriched].sort(
               (left, right) =>
                 Number(right.topOffer ?? 0) - Number(left.topOffer ?? 0),
             )
           : enriched;
+
+      if (hasClientFilters) {
+        // Filter client-side, then slice for the current page.
+        const filtered = items.filter((nft) =>
+          matchesClientTraitFilters(nft, clientSideTraitFilters!),
+        );
+        const start = (page - 1) * pageSize;
+        setHasMore(filtered.length > start + pageSize);
+        items = filtered.slice(start, start + pageSize);
+      } else {
+        const hasNextPage = queryConfig.trimExtraRecord
+          ? rawAll.length > queryConfig.pageSize
+          : rawAll.length === queryConfig.pageSize;
+        setHasMore(hasNextPage);
+      }
 
       setNfts(items);
       setIsLoading(false);
@@ -119,8 +140,12 @@ export function useExploreOrchestrator({
     };
   }, [
     collectionAddress,
+    clientSideTraitFilters,
     data,
+    hasClientFilters,
     loading,
+    page,
+    pageSize,
     queryClient,
     queryConfig.pageSize,
     queryConfig.trimExtraRecord,

@@ -26,6 +26,7 @@ export function useExploreAllNFTs(
   search: string = "",
   sort: string = "default",
   traitFilters: TraitFilters = {},
+  clientSideTraitFilters?: TraitFilters,
 ) {
   return useExploreOrchestrator({
     variant: "market",
@@ -36,5 +37,6 @@ export function useExploreAllNFTs(
     search,
     sort,
     traitFilters,
+    clientSideTraitFilters,
   });
 }

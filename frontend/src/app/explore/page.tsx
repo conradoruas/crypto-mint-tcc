@@ -7,7 +7,7 @@ import { useExploreFilters } from "@/hooks/marketplace/useExploreFilters";
 import { useCollectionTraitSchema } from "@/hooks/marketplace/useCollectionTraitSchema";
 import Link from "next/link";
 import { Search, SlidersHorizontal, X, Layers, Heart } from "lucide-react";
-import { useState, useMemo, Suspense, useEffect } from "react";
+import { useState, useMemo, Suspense } from "react";
 import Footer from "@/components/Footer";
 import { useConnection } from "wagmi";
 import { useUserFavorites } from "@/hooks/user";
@@ -42,14 +42,19 @@ function ExploreContent() {
     hasActiveFilters,
   } = useExploreFilters();
 
-  const { schema: traitSchema, optionData: traitOptionData } =
+  const { schema: traitSchema, optionData: traitOptionData, isSubgraphIndexed } =
     useCollectionTraitSchema(selectedCollection || undefined);
+
+  // When the subgraph hasn't indexed Attribute entities yet (IPFS fallback mode),
+  // skip the subgraph `attributes_` WHERE clause and filter resolved NFTs client-side.
+  const hasActiveTraitFilters = Object.keys(traitFilters).length > 0;
+  const subgraphTraitFilters = isSubgraphIndexed ? traitFilters : {};
+  const clientFilters = !isSubgraphIndexed && hasActiveTraitFilters ? traitFilters : undefined;
 
   const {
     nfts,
     isLoading: isLoadingNFTs,
     hasMore,
-    refetch: refetchExploreNfts,
   } = useExploreAllNFTs(
     selectedCollection || undefined,
     page,
@@ -57,7 +62,8 @@ function ExploreContent() {
     onlyListed,
     search,
     sort,
-    traitFilters,
+    subgraphTraitFilters,
+    clientFilters,
   );
 
   const { favorites } = useUserFavorites(address);
@@ -70,14 +76,6 @@ function ExploreContent() {
   );
 
   const isLoading = isLoadingCollections || isLoadingNFTs;
-
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void refetchExploreNfts();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [refetchExploreNfts]);
 
   const isFavoritesEmpty = onlyFavorites && favoriteSet.size === 0;
   const hasClientFilters = onlyFavorites;

@@ -1,6 +1,30 @@
 import { GET_ALL_NFTS, GET_NFTS_FOR_CONTRACT } from "@/lib/graphql/queries";
-import type { ExploreVariant } from "./exploreTypes";
+import type { ExploreVariant, NFTItemWithMarket } from "./exploreTypes";
 import type { TraitFilters } from "@/types/traits";
+
+/** Client-side trait filter — used when subgraph Attribute entities aren't indexed yet. */
+export function matchesClientTraitFilters(
+  nft: NFTItemWithMarket,
+  filters: TraitFilters,
+): boolean {
+  const attrs = nft.attributes ?? [];
+  for (const [key, val] of Object.entries(filters)) {
+    const attr = attrs.find((a) => a.trait_type === key);
+    if (!attr) return false;
+    if (Array.isArray(val)) {
+      if (val.length === 0) continue;
+      if (!val.map((v) => v.toLowerCase()).includes(String(attr.value).toLowerCase())) return false;
+    } else if (typeof val === "boolean") {
+      if (String(attr.value) !== (val ? "true" : "false")) return false;
+    } else if (typeof val === "object" && val !== null) {
+      const numVal = Number(attr.value);
+      const range = val as { min?: number; max?: number };
+      if (range.min !== undefined && numVal < range.min) return false;
+      if (range.max !== undefined && numVal > range.max) return false;
+    }
+  }
+  return true;
+}
 
 type BuildExploreQueryArgs = {
   variant: ExploreVariant;
