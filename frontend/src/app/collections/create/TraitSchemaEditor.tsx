@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Plus, Trash2, ChevronDown, ChevronUp, Tags } from "lucide-react";
 import type { TraitField, TraitSchema } from "@/types/traits";
 
@@ -135,10 +135,20 @@ function FieldRow({
   onUpdateOptions: (raw: string) => void;
   onRemove: () => void;
 }) {
-  const optionsRaw =
+  const committedOptionsRaw =
     field.type === "enum" && (field as { options?: string[] }).options
       ? (field as { options: string[] }).options.join(", ")
       : "";
+
+  // Local state lets the user type freely (including commas); we only
+  // parse and propagate to parent state on blur.
+  const [optionsRaw, setOptionsRaw] = useState(committedOptionsRaw);
+
+  // Sync if options are changed externally (e.g. field type switch resets them).
+  useEffect(() => {
+    setOptionsRaw(committedOptionsRaw);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [field.type]);
 
   return (
     <div className="bg-surface-container-lowest border border-outline-variant/10 p-4 rounded-sm space-y-3">
@@ -218,7 +228,8 @@ function FieldRow({
             className={inputClass}
             placeholder="Mage, Warrior, Rogue"
             value={optionsRaw}
-            onChange={(e) => onUpdateOptions(e.target.value)}
+            onChange={(e) => setOptionsRaw(e.target.value)}
+            onBlur={() => onUpdateOptions(optionsRaw)}
           />
         </div>
       )}
