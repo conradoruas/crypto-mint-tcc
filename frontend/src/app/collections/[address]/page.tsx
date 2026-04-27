@@ -17,7 +17,10 @@ import {
 import Footer from "@/components/Footer";
 import { CollectionNFTCard } from "@/components/marketplace/CollectionNFTCard";
 import { shortAddr } from "@/lib/utils";
-import { buildEtherscanAddressUrl, buildEtherscanTxUrl } from "@/lib/externalLinks";
+import {
+  buildEtherscanAddressUrl,
+  buildEtherscanTxUrl,
+} from "@/lib/externalLinks";
 import { MintModal } from "./MintModal";
 import { CollectionOwnerPanels } from "./CollectionOwnerPanels";
 import { useCollectionPageCoordinator } from "./useCollectionPageCoordinator";
@@ -141,7 +144,7 @@ export default function CollectionPage() {
                     )}
                   {isSoldOut && (
                     <div className="px-6 py-3 text-sm font-bold bg-surface-container border border-outline-variant/20 text-on-surface-variant/40">
-                      Supply Esgotado
+                      Supply Sold Out
                     </div>
                   )}
                 </div>
@@ -152,22 +155,20 @@ export default function CollectionPage() {
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8 mb-8">
             {[
-              { label: "Mintados", value: totalSupply },
+              { label: "Minted", value: totalSupply },
               {
-                label: "Supply Máximo",
+                label: "Max Supply",
                 value: details.maxSupply?.toString() ?? "—",
               },
               {
-                label: "Preço de Mint",
+                label: "Mint Price",
                 value: details.mintPriceEth
                   ? `${details.mintPriceEth} ETH`
                   : "—",
               },
               {
-                label: "Criador",
-                value: details.owner
-                  ? shortAddr(details.owner)
-                  : "—",
+                label: "Owner",
+                value: details.owner ? shortAddr(details.owner) : "—",
                 showOwner: !!isOwner,
               },
             ].map((s) => (
@@ -194,8 +195,8 @@ export default function CollectionPage() {
           {details.maxSupply && details.maxSupply > 0 && (
             <div className="mb-10">
               <div className="flex justify-between text-[10px] text-on-surface-variant mb-2">
-                <span>{totalSupply} mintados</span>
-                <span>{supplyPercent}% do supply</span>
+                <span>{totalSupply} minted</span>
+                <span>{supplyPercent}% of supply</span>
               </div>
               <div className="h-1 bg-surface-container-high overflow-hidden">
                 <div
