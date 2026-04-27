@@ -14,41 +14,50 @@ type BuildExploreQueryArgs = {
   nowBucketed: number;
 };
 
-// Trait filter dimensions → The Graph `and` clauses on `attributes_`
-// Each dimension produces one `attributes_some { traitType, valueStr_in | valueNum_gte/lte }` clause.
-// Multiple dimensions are AND-ed via the top-level `and` array (graph-node ≥ 0.31 / specVersion 0.0.8+).
-function buildTraitAndClauses(traitFilters: TraitFilters): Record<string, unknown>[] {
-  const clauses: Record<string, unknown>[] = [];
-  const keys = Object.keys(traitFilters);
-  if (keys.length === 0) return clauses;
+type TraitWhere = {
+  attributes_?: Record<string, unknown>;
+};
 
-  // Cap at 10 dimensions to bound query size
-  for (const key of keys.slice(0, 10)) {
-    const val = traitFilters[key];
-    if (Array.isArray(val)) {
-      if (val.length === 0) continue;
-      clauses.push({
-        attributes_: {
-          traitType: key,
-          valueStr_in: val.slice(0, 20),
-        },
-      });
-    } else if (typeof val === "boolean") {
-      clauses.push({
-        attributes_: {
-          traitType: key,
-          valueStr: val ? "true" : "false",
-        },
-      });
-    } else if (typeof val === "object" && val !== null) {
-      const range = val as { min?: number; max?: number };
-      const rangeFilter: Record<string, string> = { traitType: key };
-      if (range.min !== undefined) rangeFilter.valueNum_gte = String(range.min);
-      if (range.max !== undefined) rangeFilter.valueNum_lte = String(range.max);
-      clauses.push({ attributes_: rangeFilter });
-    }
+// The live Studio endpoint accepts a single nested `attributes_` object filter for
+// the collection Explore flow. For now we apply the first active dimension only;
+// this keeps results correct instead of emitting an invalid `and` filter payload.
+function buildTraitWhere(traitFilters: TraitFilters): TraitWhere {
+  const keys = Object.keys(traitFilters);
+  if (keys.length === 0) return {};
+
+  const key = keys[0];
+  const val = traitFilters[key];
+
+  if (Array.isArray(val)) {
+    if (val.length === 0) return {};
+    return {
+      attributes_: {
+        traitType: key,
+        valueStr_in: val.slice(0, 20),
+      },
+    };
   }
-  return clauses;
+
+  if (typeof val === "boolean") {
+    return {
+      attributes_: {
+        traitType: key,
+        valueStr: val ? "true" : "false",
+      },
+    };
+  }
+
+  if (typeof val === "object" && val !== null) {
+    const range = val as { min?: number; max?: number };
+    const rangeFilter: Record<string, string> = { traitType: key };
+    if (range.min !== undefined) rangeFilter.valueNum_gte = String(range.min);
+    if (range.max !== undefined) rangeFilter.valueNum_lte = String(range.max);
+    return {
+      attributes_: rangeFilter,
+    };
+  }
+
+  return {};
 }
 
 export function buildExploreQueryConfig({
@@ -63,15 +72,13 @@ export function buildExploreQueryConfig({
   nowBucketed,
 }: BuildExploreQueryArgs) {
   const skip = (page - 1) * pageSize;
-  const traitClauses = buildTraitAndClauses(traitFilters);
+  const traitWhere = buildTraitWhere(traitFilters);
 
   if (variant === "collection") {
     const where: Record<string, unknown> = {
       collection: collectionAddress?.toLowerCase(),
+      ...traitWhere,
     };
-    if (traitClauses.length > 0) {
-      where.and = traitClauses;
-    }
     return {
       query: GET_NFTS_FOR_CONTRACT,
       skip: !collectionAddress,
@@ -92,6 +99,7 @@ export function buildExploreQueryConfig({
   if (collectionAddress) {
     where.collection = collectionAddress.toLowerCase();
   }
+  Object.assign(where, traitWhere);
   if (onlyListed) {
     where.listing_ = { active: true };
   }
@@ -124,19 +132,13 @@ export function buildExploreQueryConfig({
       break;
   }
 
-  // Merge trait AND clauses with the base where
-  const finalWhere =
-    traitClauses.length > 0
-      ? { ...where, and: [...(where.and ? (where.and as unknown[]) : []), ...traitClauses] }
-      : where;
-
   return {
     query: collectionAddress ? GET_NFTS_FOR_CONTRACT : GET_ALL_NFTS,
     skip: false,
     variables: {
       first: pageSize + 1,
       skip,
-      where: finalWhere,
+      where,
       orderBy,
       orderDirection,
       now: nowBucketed,

@@ -1,5 +1,5 @@
 import { json, Bytes, dataSource, log, BigInt, BigDecimal, ByteArray, crypto } from "@graphprotocol/graph-ts";
-import { Collection, TraitDefinition, TraitOption } from "../generated/schema";
+import { TraitDefinition, TraitOption } from "../generated/schema";
 
 /**
  * File Data Source handler for CollectionContractURI.
@@ -23,12 +23,6 @@ export function handleCollectionContractURI(content: Bytes): void {
   let ctx = dataSource.context();
   let collectionId = ctx.getString("collectionId");
 
-  let collection = Collection.load(collectionId);
-  if (!collection) {
-    log.warning("CollectionContractURI: collection not found for id {}", [collectionId]);
-    return;
-  }
-
   // Parse JSON defensively
   let tryValue = json.try_fromBytes(content);
   if (tryValue.isError) {
@@ -42,25 +36,21 @@ export function handleCollectionContractURI(content: Bytes): void {
   // Parse trait_schema.fields
   let schemaEntry = rootObj.get("trait_schema");
   if (!schemaEntry || schemaEntry.isNull()) {
-    collection.save();
     return;
   }
 
   let schemaObj = schemaEntry.toObject();
   if (!schemaObj) {
-    collection.save();
     return;
   }
 
   let fieldsEntry = schemaObj.get("fields");
   if (!fieldsEntry || fieldsEntry.isNull()) {
-    collection.save();
     return;
   }
 
   let fieldsArr = fieldsEntry.toArray();
   if (!fieldsArr) {
-    collection.save();
     return;
   }
 
@@ -130,8 +120,6 @@ export function handleCollectionContractURI(content: Bytes): void {
       }
     }
   }
-
-  collection.save();
 }
 
 /** Builds a safe ID for a TraitOption that avoids special chars. */

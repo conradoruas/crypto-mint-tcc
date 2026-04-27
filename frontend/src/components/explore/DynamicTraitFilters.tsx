@@ -14,6 +14,8 @@ type Props = {
   traitFilters: TraitFilters;
   onSetTraitFilter: (key: string, value: TraitFilterValue | undefined) => void;
   onClearTraitFilters: () => void;
+  disabled?: boolean;
+  disabledMessage?: string | null;
 };
 
 export function DynamicTraitFilters({
@@ -22,6 +24,8 @@ export function DynamicTraitFilters({
   traitFilters,
   onSetTraitFilter,
   onClearTraitFilters,
+  disabled = false,
+  disabledMessage,
 }: Props) {
   const hasActive = Object.keys(traitFilters).length > 0;
 
@@ -34,12 +38,19 @@ export function DynamicTraitFilters({
         {hasActive && (
           <button
             onClick={onClearTraitFilters}
+            disabled={disabled}
             className="text-[10px] text-primary hover:text-primary/70 uppercase tracking-widest transition-colors"
           >
             Clear
           </button>
         )}
       </div>
+
+      {disabledMessage && (
+        <p className="text-xs leading-relaxed text-on-surface-variant/80">
+          {disabledMessage}
+        </p>
+      )}
 
       <div className="space-y-5">
         {schema.fields.map((field) => (
@@ -48,6 +59,7 @@ export function DynamicTraitFilters({
             field={field}
             options={optionData[field.key] ?? []}
             value={traitFilters[field.key]}
+            disabled={disabled}
             onChange={(v) => onSetTraitFilter(field.key, v)}
           />
         ))}
@@ -60,11 +72,13 @@ function TraitFilterSection({
   field,
   options,
   value,
+  disabled,
   onChange,
 }: {
   field: TraitField;
   options: TraitOptionData[];
   value: TraitFilterValue | undefined;
+  disabled: boolean;
   onChange: (v: TraitFilterValue | undefined) => void;
 }) {
   return (
@@ -81,6 +95,7 @@ function TraitFilterSection({
               : field.options.map((v) => ({ value: v, count: 0, frequency: 0 }))
           }
           selected={Array.isArray(value) ? value : []}
+          disabled={disabled}
           onChange={onChange}
         />
       )}
@@ -90,6 +105,7 @@ function TraitFilterSection({
           min={(field as { min?: number }).min}
           max={(field as { max?: number }).max}
           value={typeof value === "object" && !Array.isArray(value) ? (value as { min?: number; max?: number }) : {}}
+          disabled={disabled}
           onChange={onChange}
         />
       )}
@@ -97,6 +113,7 @@ function TraitFilterSection({
       {field.type === "boolean" && (
         <BooleanFilter
           value={typeof value === "boolean" ? value : undefined}
+          disabled={disabled}
           onChange={onChange}
         />
       )}
@@ -104,6 +121,7 @@ function TraitFilterSection({
       {(field.type === "string" || field.type === "date") && (
         <TextFilter
           value={Array.isArray(value) && value.length > 0 ? value[0] : ""}
+          disabled={disabled}
           onChange={(v) => onChange(v ? [v] : undefined)}
         />
       )}
@@ -114,10 +132,12 @@ function TraitFilterSection({
 function EnumFilter({
   options,
   selected,
+  disabled,
   onChange,
 }: {
   options: TraitOptionData[];
   selected: string[];
+  disabled: boolean;
   onChange: (v: TraitFilterValue | undefined) => void;
 }) {
   const toggle = (val: string) => {
@@ -141,6 +161,7 @@ function EnumFilter({
                 type="checkbox"
                 className="accent-primary"
                 checked={active}
+                disabled={disabled}
                 onChange={() => toggle(opt.value)}
               />
               <span
@@ -169,11 +190,13 @@ function NumberRangeFilter({
   min: fieldMin,
   max: fieldMax,
   value,
+  disabled,
   onChange,
 }: {
   min?: number;
   max?: number;
   value: { min?: number; max?: number };
+  disabled: boolean;
   onChange: (v: TraitFilterValue | undefined) => void;
 }) {
   const update = (key: "min" | "max", raw: string) => {
@@ -199,6 +222,7 @@ function NumberRangeFilter({
         value={value.min ?? ""}
         min={fieldMin}
         max={fieldMax}
+        disabled={disabled}
         onChange={(e) => update("min", e.target.value)}
       />
       <input
@@ -208,6 +232,7 @@ function NumberRangeFilter({
         value={value.max ?? ""}
         min={fieldMin}
         max={fieldMax}
+        disabled={disabled}
         onChange={(e) => update("max", e.target.value)}
       />
     </div>
@@ -216,9 +241,11 @@ function NumberRangeFilter({
 
 function BooleanFilter({
   value,
+  disabled,
   onChange,
 }: {
   value: boolean | undefined;
+  disabled: boolean;
   onChange: (v: TraitFilterValue | undefined) => void;
 }) {
   return (
@@ -226,6 +253,7 @@ function BooleanFilter({
       {[true, false].map((b) => (
         <button
           key={String(b)}
+          disabled={disabled}
           onClick={() => onChange(value === b ? undefined : b)}
           className={`px-3 py-1 text-xs rounded-full border transition-all ${
             value === b
@@ -242,9 +270,11 @@ function BooleanFilter({
 
 function TextFilter({
   value,
+  disabled,
   onChange,
 }: {
   value: string;
+  disabled: boolean;
   onChange: (v: string) => void;
 }) {
   return (
@@ -253,6 +283,7 @@ function TextFilter({
       className="w-full bg-surface-container-lowest border border-outline-variant/20 text-on-surface px-2.5 py-1.5 rounded-sm text-xs focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40"
       placeholder="Filter..."
       value={value}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
     />
   );

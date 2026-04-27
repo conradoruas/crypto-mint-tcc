@@ -112,6 +112,7 @@ function ExploreContent() {
           traitFilters={traitFilters}
           onSetTraitFilter={setTraitFilter}
           onClearTraitFilters={clearTraitFilters}
+          traitFiltersDisabled={traitIndexingState === "pending"}
           traitFilterStatus={
             traitIndexingState === "pending"
               ? "Trait filters will appear after subgraph indexing finishes for this collection."

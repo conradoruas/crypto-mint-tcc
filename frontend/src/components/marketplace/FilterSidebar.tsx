@@ -27,6 +27,7 @@ interface FilterSidebarProps {
   onSetTraitFilter?: (key: string, value: TraitFilterValue | undefined) => void;
   onClearTraitFilters?: () => void;
   traitFilterStatus?: string | null;
+  traitFiltersDisabled?: boolean;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
@@ -50,6 +51,7 @@ function FilterContent({
   onSetTraitFilter,
   onClearTraitFilters,
   traitFilterStatus,
+  traitFiltersDisabled,
   onMobileClose,
 }: Omit<FilterSidebarProps, "mobileOpen"> & { onMobileClose?: () => void }) {
   return (
@@ -176,6 +178,8 @@ function FilterContent({
           traitFilters={traitFilters}
           onSetTraitFilter={onSetTraitFilter}
           onClearTraitFilters={onClearTraitFilters}
+          disabled={!!traitFiltersDisabled}
+          disabledMessage={traitFilterStatus}
         />
       )}
 

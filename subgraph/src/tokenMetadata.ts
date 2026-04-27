@@ -1,69 +1,36 @@
-import { json, Bytes, dataSource, log, BigInt, BigDecimal } from "@graphprotocol/graph-ts";
-import { NFT, Attribute, TraitOption, TraitDefinition, Collection } from "../generated/schema";
-import { _safeOptionId } from "./collectionMetadata";
+import { json, Bytes, dataSource, log, BigDecimal } from "@graphprotocol/graph-ts";
+import { Attribute } from "../generated/schema";
 
 /**
  * File Data Source handler for TokenMetadata.
- * Receives the raw bytes of a token's IPFS metadata JSON and parses the
- * `attributes` array into Attribute entities and accumulates TraitOption
- * counts for discrete string/enum/boolean traits.
  *
- * Expected JSON shape (OpenSea ERC-721 metadata standard):
- * {
- *   "name": "...",
- *   "description": "...",
- *   "image": "ipfs://...",
- *   "attributes": [
- *     { "trait_type": "class", "value": "Mage" },
- *     { "trait_type": "level", "value": 7, "display_type": "number" },
- *     ...
- *   ]
- * }
+ * Important Graph limitation:
+ * file/ipfs handlers cannot load or update chain-based entities, and they also
+ * cannot depend on entities created by other file data sources. This handler
+ * therefore writes only per-token Attribute entities and links them back to the
+ * chain-indexed NFT/Collection by ID.
  */
 export function handleTokenMetadata(content: Bytes): void {
   let ctx = dataSource.context();
   let nftId = ctx.getString("nftId");
   let collectionId = ctx.getString("collectionId");
 
-  let nft = NFT.load(nftId);
-  if (!nft) {
-    log.warning("TokenMetadata: NFT not found for id {}", [nftId]);
-    return;
-  }
-
   let tryValue = json.try_fromBytes(content);
   if (tryValue.isError) {
     log.warning("TokenMetadata: invalid JSON for NFT {}", [nftId]);
-    nft.metadataResolved = false;
-    nft.save();
     return;
   }
 
   let rootObj = tryValue.value.toObject();
-  if (!rootObj) {
-    nft.metadataResolved = false;
-    nft.save();
-    return;
-  }
+  if (!rootObj) return;
 
   let attrsEntry = rootObj.get("attributes");
-  if (!attrsEntry || attrsEntry.isNull()) {
-    nft.metadataResolved = true;
-    nft.save();
-    return;
-  }
+  if (!attrsEntry || attrsEntry.isNull()) return;
 
   let attrsArr = attrsEntry.toArray();
-  if (!attrsArr) {
-    nft.metadataResolved = true;
-    nft.save();
-    return;
-  }
+  if (!attrsArr) return;
 
-  let col = Collection.load(collectionId);
-  let supply = col
-    ? col.totalSupply.toBigDecimal()
-    : BigDecimal.fromString("1");
+  let tokenIdPart = nftId.split("-")[1];
 
   for (let i = 0; i < attrsArr.length; i++) {
     let attrObj = attrsArr[i].toObject();
@@ -79,61 +46,26 @@ export function handleTokenMetadata(content: Bytes): void {
       ? displayTypeEntry.toString()
       : null;
 
-    let attrId = collectionId + "-" + nftId.split("-")[1] + "-" + traitType;
+    let attrId = collectionId + "-" + tokenIdPart + "-" + traitType;
     let attr = Attribute.load(attrId);
     if (!attr) {
       attr = new Attribute(attrId);
     }
+
     attr.nft = nftId;
     attr.collection = collectionId;
     attr.traitType = traitType;
     attr.displayType = displayType;
 
-    // Determine whether value is string or number
-    let valueKind = valueEntry.kind;
     // JSONValueKind: 0=Null, 1=Bool, 2=Number, 3=String, 4=Array, 5=Object
-    if (valueKind == 2) {
-      // number
-      let num = valueEntry.toF64();
-      attr.valueNum = BigDecimal.fromString(num.toString());
+    if (valueEntry.kind == 2) {
+      attr.valueNum = BigDecimal.fromString(valueEntry.toF64().toString());
       attr.valueStr = null;
     } else {
-      // string or bool — store as string
-      let strVal = valueEntry.toString();
-      attr.valueStr = strVal;
+      attr.valueStr = valueEntry.toString();
       attr.valueNum = null;
-
-      // Accumulate TraitOption count for string/enum/boolean traits
-      let optId = _safeOptionId(collectionId, traitType, strVal);
-      let opt = TraitOption.load(optId);
-      if (!opt) {
-        // Unknown option (string/boolean not in enum schema) — create on the fly
-        let defId = collectionId + "-" + traitType.toLowerCase();
-        let def = TraitDefinition.load(defId);
-        opt = new TraitOption(optId);
-        opt.definition = defId;
-        opt.collection = collectionId;
-        opt.value = strVal;
-        opt.count = BigInt.fromI32(0);
-        opt.frequency = BigDecimal.fromString("0");
-        // Only save if the definition exists (don't create orphan options)
-        if (!def) {
-          attr.save();
-          continue;
-        }
-      }
-      opt.count = opt.count.plus(BigInt.fromI32(1));
-      // frequency = count / current minted supply for discrete traits only
-      if (supply.gt(BigDecimal.fromString("0"))) {
-        opt.frequency = opt.count.toBigDecimal().div(supply);
-      }
-      opt.save();
-
     }
 
     attr.save();
   }
-
-  nft.metadataResolved = true;
-  nft.save();
 }

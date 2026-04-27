@@ -196,6 +196,7 @@ export const GET_COLLECTION_TRAIT_SCHEMA = gql`
   query GetCollectionTraitSchema($id: ID!) {
     collection(id: $id) {
       id
+      totalSupply
       contractURI
       traitSchemaCID
       traitDefinitions(orderBy: position) {
@@ -212,6 +213,9 @@ export const GET_COLLECTION_TRAIT_SCHEMA = gql`
           frequency
         }
       }
+    }
+    attributes(first: 1, where: { collection: $id }) {
+      id
     }
   }
 `;
