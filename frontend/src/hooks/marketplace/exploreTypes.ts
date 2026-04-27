@@ -16,6 +16,13 @@ export type GqlOffer = {
   expiresAt?: string;
 };
 
+export type GqlAttribute = {
+  traitType: string;
+  valueStr?: string | null;
+  valueNum?: string | null;
+  displayType?: string | null;
+};
+
 export type GqlNFT = {
   id: string;
   tokenId: string;
@@ -24,6 +31,7 @@ export type GqlNFT = {
   rarityRank?: number | null;
   rarityScore?: string | null;
   rarityTier?: string | null;
+  attributes?: GqlAttribute[];
   collection?: {
     id: string;
     contractAddress: string;
