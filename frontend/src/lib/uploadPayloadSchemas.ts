@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { isAddress, type Address } from "viem";
+import { traitSchemaSchema } from "@/lib/traitSchema";
 
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/;
 
@@ -116,7 +117,7 @@ export type PinataCollectionMetadataContent = {
   image: string;
   external_link?: string;
   banner_image?: string;
-  trait_schema?: Record<string, unknown>;
+  trait_schema?: z.infer<typeof traitSchemaSchema>;
 };
 
 export type ParsedUploadProfile =
@@ -206,13 +207,24 @@ export function parseUploadProfileBody(
       return { ok: false, error: { message: "Invalid banner_image URI." } };
     }
 
+    const parsedSchema = coll.data.trait_schema
+      ? traitSchemaSchema.safeParse(coll.data.trait_schema)
+      : null;
+    if (parsedSchema && !parsedSchema.success) {
+      return { ok: false, error: parsedSchema.error };
+    }
+
     const content: PinataCollectionMetadataContent = {
       name,
       image,
       ...(description && { description }),
       ...(externalLink && { external_link: externalLink }),
       ...(bannerImage && { banner_image: bannerImage }),
-      ...(coll.data.trait_schema && { trait_schema: coll.data.trait_schema }),
+      ...(parsedSchema?.success
+        ? {
+            trait_schema: parsedSchema.data,
+          }
+        : {}),
     };
 
     const safeAddr = addrRaw.replace("collection-0x", "").slice(0, 8);

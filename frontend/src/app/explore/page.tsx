@@ -42,14 +42,15 @@ function ExploreContent() {
     hasActiveFilters,
   } = useExploreFilters();
 
-  const { schema: traitSchema, optionData: traitOptionData, isSubgraphIndexed } =
+  const {
+    schema: traitSchema,
+    optionData: traitOptionData,
+    isSubgraphIndexed,
+    indexingState: traitIndexingState,
+  } =
     useCollectionTraitSchema(selectedCollection || undefined);
 
-  // When the subgraph hasn't indexed Attribute entities yet (IPFS fallback mode),
-  // skip the subgraph `attributes_` WHERE clause and filter resolved NFTs client-side.
-  const hasActiveTraitFilters = Object.keys(traitFilters).length > 0;
   const subgraphTraitFilters = isSubgraphIndexed ? traitFilters : {};
-  const clientFilters = !isSubgraphIndexed && hasActiveTraitFilters ? traitFilters : undefined;
 
   const {
     nfts,
@@ -63,7 +64,6 @@ function ExploreContent() {
     search,
     sort,
     subgraphTraitFilters,
-    clientFilters,
   );
 
   const { favorites } = useUserFavorites(address);
@@ -112,6 +112,13 @@ function ExploreContent() {
           traitFilters={traitFilters}
           onSetTraitFilter={setTraitFilter}
           onClearTraitFilters={clearTraitFilters}
+          traitFilterStatus={
+            traitIndexingState === "pending"
+              ? "Trait filters will appear after subgraph indexing finishes for this collection."
+              : traitIndexingState === "unavailable" && selectedCollection
+                ? "This collection does not define indexed trait filters."
+                : null
+          }
           mobileOpen={isMobileFilterOpen}
           onMobileClose={() => setIsMobileFilterOpen(false)}
         />

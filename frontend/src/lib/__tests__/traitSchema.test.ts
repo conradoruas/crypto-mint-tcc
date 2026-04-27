@@ -234,13 +234,13 @@ describe("attributesForSchema", () => {
     expect(validator.safeParse(attrs).success).toBe(true);
   });
 
-  it("ignores unknown trait_type keys (not in schema)", () => {
+  it("rejects unknown trait_type keys (not in schema)", () => {
     const attrs: NftAttribute[] = [
       { trait_type: "class", value: "Mage" },
       { trait_type: "level", value: 1 },
       { trait_type: "unknown_key", value: "whatever" },
     ];
-    expect(validator.safeParse(attrs).success).toBe(true);
+    expect(validator.safeParse(attrs).success).toBe(false);
   });
 
   it("is case-insensitive on trait_type keys", () => {
@@ -249,5 +249,14 @@ describe("attributesForSchema", () => {
       { trait_type: "LEVEL", value: 5 },
     ];
     expect(validator.safeParse(attrs).success).toBe(true);
+  });
+
+  it("rejects duplicate attributes for the same trait", () => {
+    const attrs: NftAttribute[] = [
+      { trait_type: "class", value: "Mage" },
+      { trait_type: "Class", value: "Warrior" },
+      { trait_type: "level", value: 1 },
+    ];
+    expect(validator.safeParse(attrs).success).toBe(false);
   });
 });

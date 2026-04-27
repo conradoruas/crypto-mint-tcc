@@ -71,6 +71,10 @@ export const traitSchemaSchema = z
     }
   });
 
+export function normalizeTraitKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 // ─── Per-NFT attributes validator ────────────────────────────────────────
 
 const nftAttributeItemSchema = z.object({
@@ -88,13 +92,13 @@ export const nftAttributesSchema = z.array(nftAttributeItemSchema).max(64);
  * numeric bounds, enum membership, and ISO-8601 dates.
  */
 export function attributesForSchema(schema: TraitSchema): z.ZodType<NftAttribute[]> {
-  const fieldMap = new Map(schema.fields.map((f) => [f.key.toLowerCase(), f]));
+  const fieldMap = new Map(schema.fields.map((f) => [normalizeTraitKey(f.key), f]));
 
   return nftAttributesSchema.superRefine((attrs, ctx) => {
-    const present = new Set(attrs.map((a) => a.trait_type.toLowerCase()));
+    const present = new Set<string>();
 
     for (const field of schema.fields) {
-      if (field.required && !present.has(field.key.toLowerCase())) {
+      if (field.required && !attrs.some((a) => normalizeTraitKey(a.trait_type) === normalizeTraitKey(field.key))) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: `Required trait "${field.label}" is missing`,
@@ -105,8 +109,25 @@ export function attributesForSchema(schema: TraitSchema): z.ZodType<NftAttribute
 
     for (let i = 0; i < attrs.length; i++) {
       const attr = attrs[i];
-      const field = fieldMap.get(attr.trait_type.toLowerCase());
-      if (!field) continue;
+      const traitKey = normalizeTraitKey(attr.trait_type);
+      if (present.has(traitKey)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate trait "${attr.trait_type}"`,
+          path: [i, "trait_type"],
+        });
+      }
+      present.add(traitKey);
+
+      const field = fieldMap.get(traitKey);
+      if (!field) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Unknown trait "${attr.trait_type}"`,
+          path: [i, "trait_type"],
+        });
+        continue;
+      }
 
       const v = attr.value;
       const path = [i, "value"] as (string | number)[];

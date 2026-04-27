@@ -10,9 +10,11 @@ import {
 import { createCollectionSchema, getZodErrors } from "@/lib/schemas";
 import type { CreateCollectionErrors } from "@/lib/schemas";
 import { formatTransactionError } from "@/lib/txErrors";
+import { attributesForSchema, traitSchemaSchema } from "@/lib/traitSchema";
 import { useCreateCollection } from "@/hooks/collections";
 import { useCreateCollectionV2 } from "@/hooks/collections/useCreateCollectionV2";
 import { FACTORY_V2_ADDRESS } from "@/constants/contracts";
+import type { TraitSchema } from "@/types/traits";
 import type { CollectionFormState } from "./useCollectionForm";
 
 type UseCollectionDeploymentFlowArgs = {
@@ -80,6 +82,34 @@ export function useCollectionDeploymentFlow({
       return;
     }
 
+    let validatedTraitSchema: TraitSchema | undefined;
+    if (form.traitSchema) {
+      if (!useV2) {
+        setError("Trait schemas require the V2 collection factory configuration.");
+        return;
+      }
+      const parsedSchema = traitSchemaSchema.safeParse(form.traitSchema);
+      if (!parsedSchema.success) {
+        setError(parsedSchema.error.issues[0]?.message ?? "Trait schema is invalid.");
+        return;
+      }
+      validatedTraitSchema = parsedSchema.data;
+
+      const validateAttributes = attributesForSchema(validatedTraitSchema);
+      for (const nft of form.nfts) {
+        const parsedAttributes = validateAttributes.safeParse(nft.attributes ?? []);
+        if (!parsedAttributes.success) {
+          setError(
+            `NFT "${nft.name}" has invalid traits: ${parsedAttributes.error.issues[0]?.message ?? "Invalid attribute set."}`,
+          );
+          return;
+        }
+      }
+    } else if (form.nfts.some((nft) => (nft.attributes?.length ?? 0) > 0)) {
+      setError("Define a trait schema before assigning NFT traits.");
+      return;
+    }
+
     try {
       setIsUploadingCover(true);
       const coverUri = await uploadCoverImage(form.coverFile);
@@ -87,20 +117,27 @@ export function useCollectionDeploymentFlow({
       if (useV2 && address) {
         // Pin the contractURI JSON (with trait schema) before deploying
         let contractUri = "";
-        try {
-          contractUri = await uploadCollectionContractMetadata(
-            {
-              collectionAddress: address,
-              name: form.name,
-              image: coverUri,
-              description: form.description || undefined,
-              traitSchema: form.traitSchema as Record<string, unknown> | undefined,
-            },
-            getAuthHeaders,
-          );
-        } catch {
-          // If pinning fails, proceed with empty contractURI rather than blocking
-          contractUri = "";
+        if (validatedTraitSchema) {
+          try {
+            contractUri = await uploadCollectionContractMetadata(
+              {
+                collectionAddress: address,
+                name: form.name,
+                image: coverUri,
+                description: form.description || undefined,
+                traitSchema: validatedTraitSchema as unknown as Record<string, unknown>,
+              },
+              getAuthHeaders,
+            );
+          } catch (error) {
+            setError(
+              formatTransactionError(
+                error,
+                "Could not upload collection trait schema metadata. Fix the upload error and try again.",
+              ),
+            );
+            return;
+          }
         }
 
         await deploymentV2.createCollection({

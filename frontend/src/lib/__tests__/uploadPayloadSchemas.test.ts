@@ -170,6 +170,37 @@ describe("parseUploadProfileBody — collection branch", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("rejects collection metadata with duplicate trait keys", () => {
+    const r = parseUploadProfileBody(
+      {
+        ...validColl,
+        trait_schema: {
+          version: 1,
+          fields: [
+            { key: "class", label: "Class", type: "enum", required: true, options: ["Mage"] },
+            { key: "Class", label: "Class Again", type: "enum", required: false, options: ["Warrior"] },
+          ],
+        },
+      },
+      SIGNER,
+    );
+    expect(r.ok).toBe(false);
+  });
+
+  it("rejects collection metadata with malformed trait schema", () => {
+    const r = parseUploadProfileBody(
+      {
+        ...validColl,
+        trait_schema: {
+          version: 1,
+          fields: [{ key: "power", label: "Power", type: "number", required: false, min: "bad" }],
+        },
+      },
+      SIGNER,
+    );
+    expect(r.ok).toBe(false);
+  });
+
   it("produces a pinataFileName based on the collection address", () => {
     const r = parseUploadProfileBody(validColl, SIGNER);
     expect(r.ok).toBe(true);

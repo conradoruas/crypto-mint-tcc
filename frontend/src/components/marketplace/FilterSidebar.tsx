@@ -26,6 +26,7 @@ interface FilterSidebarProps {
   traitFilters?: TraitFilters;
   onSetTraitFilter?: (key: string, value: TraitFilterValue | undefined) => void;
   onClearTraitFilters?: () => void;
+  traitFilterStatus?: string | null;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
@@ -48,6 +49,7 @@ function FilterContent({
   traitFilters,
   onSetTraitFilter,
   onClearTraitFilters,
+  traitFilterStatus,
   onMobileClose,
 }: Omit<FilterSidebarProps, "mobileOpen"> & { onMobileClose?: () => void }) {
   return (
@@ -84,7 +86,7 @@ function FilterContent({
         </h3>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => setOnlyListed(false)}
+            onClick={() => setOnlyFavorites(false)}
             className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
               !onlyListed && !onlyFavorites
                 ? "bg-secondary-container text-on-secondary-container border-secondary/20"
@@ -175,6 +177,17 @@ function FilterContent({
           onSetTraitFilter={onSetTraitFilter}
           onClearTraitFilters={onClearTraitFilters}
         />
+      )}
+
+      {!traitSchema && traitFilterStatus && (
+        <section className="space-y-3">
+          <h3 className="font-headline text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+            Traits
+          </h3>
+          <p className="text-xs leading-relaxed text-on-surface-variant/80">
+            {traitFilterStatus}
+          </p>
+        </section>
       )}
     </div>
   );

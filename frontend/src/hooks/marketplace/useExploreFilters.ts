@@ -29,7 +29,7 @@ export interface ExploreFilterActions {
 
 const VALID_SORTS: SortOption[] = [
   "default", "price_asc", "price_desc", "offer_desc",
-  "listed_first", "id_asc", "id_desc", "rarity_rank_asc", "rarity_rank_desc",
+  "listed_first", "id_asc", "id_desc",
 ];
 
 // ── URL codec ────────────────────────────────────────────────────────────────
@@ -114,13 +114,16 @@ export function useExploreFilters(): ExploreFilters & ExploreFilterActions & {
 
   const setSelectedCollection = useCallback(
     (v: string) => {
-      // Clear trait filters when switching collections
-      const next = new URLSearchParams();
-      if (v) next.set("col", v);
-      const q = searchParams.get("q");
-      if (q) next.set("q", q);
-      const ls = searchParams.get("listed");
-      if (ls) next.set("listed", ls);
+      const next = new URLSearchParams(searchParams.toString());
+      if (v) {
+        next.set("col", v);
+      } else {
+        next.delete("col");
+      }
+      for (const key of Array.from(next.keys())) {
+        if (key.startsWith("t.")) next.delete(key);
+      }
+      next.delete("p");
       router.replace(buildUrl(next), { scroll: false });
     },
     [router, searchParams],
@@ -185,19 +188,17 @@ export function useExploreFilters(): ExploreFilters & ExploreFilterActions & {
 
   const clearTraitFilters = useCallback(() => {
     const next = new URLSearchParams(searchParams.toString());
-    next.forEach((_, k) => {
+    for (const k of Array.from(next.keys())) {
       if (k.startsWith("t.")) next.delete(k);
-    });
+    }
     next.delete("p");
     router.replace(buildUrl(next), { scroll: false });
   }, [router, searchParams]);
 
   const clearFilters = useCallback(() => {
-    const col = searchParams.get("col");
     const next = new URLSearchParams();
-    if (col) next.set("col", col);
     router.replace(buildUrl(next), { scroll: false });
-  }, [router, searchParams]);
+  }, [router]);
 
   const hasActiveFilters =
     search !== "" ||
