@@ -223,6 +223,36 @@ export const GET_COLLECTION_TRAIT_SCHEMA = gql`
 
 
 
+export const GET_NFT_ATTRIBUTES = gql`
+  query GetNftAttributes($id: ID!) {
+    nft(id: $id) {
+      id
+      rarityRank
+      rarityScore
+      rarityTier
+      metadataResolved
+      attributes {
+        traitType
+        valueStr
+        valueNum
+        displayType
+      }
+      collection {
+        id
+        contractAddress
+        traitDefinitions(orderBy: position) {
+          key
+          options(orderBy: count, orderDirection: desc, first: 200) {
+            value
+            count
+            frequency
+          }
+        }
+      }
+    }
+  }
+`;
+
 export const GET_NFTS_FOR_OWNER = gql`
   query GetNFTsForOwner($owner: Bytes!, $first: Int!, $skip: Int!) {
     nfts(

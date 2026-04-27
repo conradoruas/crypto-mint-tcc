@@ -21,6 +21,9 @@ export type GqlNFT = {
   tokenId: string;
   tokenUri?: string;
   owner: string;
+  rarityRank?: number | null;
+  rarityScore?: string | null;
+  rarityTier?: string | null;
   collection?: {
     id: string;
     contractAddress: string;

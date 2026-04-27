@@ -74,6 +74,11 @@ export function NFTCard({
                 Offer
               </div>
             )}
+            {nft.rarityRank !== undefined && nft.rarityTier && (
+              <div className="glass-panel px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-yellow-400 border border-yellow-400/20">
+                #{nft.rarityRank}
+              </div>
+            )}
           </div>
         </div>
 
