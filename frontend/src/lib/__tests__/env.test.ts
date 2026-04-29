@@ -20,18 +20,28 @@ describe("env.ts", () => {
 });
 
 describe("publicEnv.ts", () => {
-  it("exports SUBGRAPH_ENABLED=true when SUBGRAPH_URL is set", async () => {
+  it("exports SUBGRAPH_ENABLED=true when NEXT_PUBLIC_SUBGRAPH_ENABLED is set", async () => {
     vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_ADDRESS", "0x0000000000000000000000000000000000000001");
     vi.stubEnv("NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS", "0x0000000000000000000000000000000000000002");
-    vi.stubEnv("NEXT_PUBLIC_SUBGRAPH_URL", "http://localhost:8000/subgraph");
-    const { SUBGRAPH_ENABLED, SUBGRAPH_URL } = await import("@/lib/publicEnv");
+    vi.stubEnv("NEXT_PUBLIC_SUBGRAPH_ENABLED", "true");
+    vi.stubEnv("NEXT_PUBLIC_SUBGRAPH_URL", "");
+    const { SUBGRAPH_ENABLED } = await import("@/lib/publicEnv");
     expect(SUBGRAPH_ENABLED).toBe(true);
-    expect(SUBGRAPH_URL).toBe("http://localhost:8000/subgraph");
   });
 
-  it("exports SUBGRAPH_ENABLED=false when SUBGRAPH_URL is absent", async () => {
+  it("falls back to NEXT_PUBLIC_SUBGRAPH_URL for backward compatibility", async () => {
     vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_ADDRESS", "0x0000000000000000000000000000000000000001");
     vi.stubEnv("NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS", "0x0000000000000000000000000000000000000002");
+    vi.stubEnv("NEXT_PUBLIC_SUBGRAPH_ENABLED", "");
+    vi.stubEnv("NEXT_PUBLIC_SUBGRAPH_URL", "http://localhost:8000/subgraph");
+    const { SUBGRAPH_ENABLED } = await import("@/lib/publicEnv");
+    expect(SUBGRAPH_ENABLED).toBe(true);
+  });
+
+  it("exports SUBGRAPH_ENABLED=false when both signals are absent", async () => {
+    vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_ADDRESS", "0x0000000000000000000000000000000000000001");
+    vi.stubEnv("NEXT_PUBLIC_FACTORY_CONTRACT_ADDRESS", "0x0000000000000000000000000000000000000002");
+    vi.stubEnv("NEXT_PUBLIC_SUBGRAPH_ENABLED", "");
     vi.stubEnv("NEXT_PUBLIC_SUBGRAPH_URL", "");
     const { SUBGRAPH_ENABLED } = await import("@/lib/publicEnv");
     expect(SUBGRAPH_ENABLED).toBe(false);
