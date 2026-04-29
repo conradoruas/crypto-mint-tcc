@@ -6,6 +6,9 @@ import { GET_MARKETPLACE_STATS } from "@/lib/graphql/queries";
 import { POLL_STATS_MS } from "@/constants/polling";
 import type { MarketplaceStats } from "@/types/marketplace";
 import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
+import { useSubgraphState } from "@/lib/subgraphState";
+import type { SubgraphState } from "@/lib/subgraphErrors";
+import { useRefetchOnWindowFocus } from "@/hooks/useRefetchOnWindowFocus";
 
 export type { MarketplaceStats };
 
@@ -19,11 +22,23 @@ type GqlStatsData = {
   } | null;
 };
 
-export function useMarketplaceStats(): MarketplaceStats {
-  const { data: gqlData, loading: gqlLoading } = useQuery<GqlStatsData>(
-    GET_MARKETPLACE_STATS,
-    { skip: !SUBGRAPH_ENABLED, pollInterval: POLL_STATS_MS },
-  );
+export interface MarketplaceStatsResult extends MarketplaceStats {
+  subgraphState: SubgraphState;
+}
+
+export function useMarketplaceStats(): MarketplaceStatsResult {
+  const subgraphState = useSubgraphState();
+
+  const {
+    data: gqlData,
+    loading: gqlLoading,
+    refetch,
+  } = useQuery<GqlStatsData>(GET_MARKETPLACE_STATS, {
+    skip: !SUBGRAPH_ENABLED,
+    pollInterval: POLL_STATS_MS,
+  });
+
+  useRefetchOnWindowFocus(refetch, { enabled: SUBGRAPH_ENABLED });
 
   const s = gqlData?.marketplaceStats;
   return {
@@ -34,5 +49,6 @@ export function useMarketplaceStats(): MarketplaceStats {
       ? parseFloat(formatEther(BigInt(s.totalVolume))).toFixed(4)
       : "0",
     isLoading: gqlLoading,
+    subgraphState,
   };
 }

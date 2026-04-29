@@ -16,13 +16,23 @@ import {
 import type { CollectionInfo } from "@/types/collection";
 export type { CollectionInfo };
 import { parseAddress } from "@/lib/schemas";
+import { useSubgraphState } from "@/lib/subgraphState";
+import { useRefetchOnWindowFocus } from "@/hooks/useRefetchOnWindowFocus";
 
 
 /**
  * Hook to fetch collections created via the factory, with Subgraph/RPC fallback.
- * Supports pagination for the Subgraph path.
+ *
+ * Source selection:
+ *   - SUBGRAPH_ENABLED && subgraphState !== 'down'  → GraphQL (paginated)
+ *   - otherwise                                     → factory.getAllCollections() + multicall totalSupply
+ *
+ * The 'down' switch lets us keep serving the collections grid even when the
+ * subgraph is fully rate-limited and has no cached fallback to offer.
  */
 export function useCollections(page: number = 1, pageSize: number = 100) {
+  const subgraphState = useSubgraphState();
+  const useSubgraph = SUBGRAPH_ENABLED && subgraphState !== "down";
   const skip = (page - 1) * pageSize;
 
   // ── GraphQL path ──
@@ -45,12 +55,13 @@ export function useCollections(page: number = 1, pageSize: number = 100) {
     loading: gqlLoading,
     refetch: gqlRefetch,
   } = useQuery<GqlCollectionsData>(GET_COLLECTIONS, {
-    skip: !SUBGRAPH_ENABLED,
+    skip: !useSubgraph,
     variables: { first: pageSize, skip },
   });
 
   // ── RPC path ──
-  // (Note: RPC getAllCollections usually returns all, pagination not natively supported in this fallback)
+  // (Note: RPC getAllCollections returns all collections; pagination is applied
+  //  client-side below.)
   const {
     data: raw,
     isLoading: rpcLoading,
@@ -59,7 +70,7 @@ export function useCollections(page: number = 1, pageSize: number = 100) {
     address: FACTORY_ADDRESS,
     abi: NFT_COLLECTION_FACTORY_ABI,
     functionName: "getAllCollections",
-    query: { enabled: !!FACTORY_ADDRESS && !SUBGRAPH_ENABLED },
+    query: { enabled: !!FACTORY_ADDRESS && !useSubgraph },
   });
 
   const rawCollections = useMemo(
@@ -79,7 +90,7 @@ export function useCollections(page: number = 1, pageSize: number = 100) {
 
   const { data: suppliesData, isLoading: isLoadingSupply } = useReadContracts({
     contracts: supplyContracts,
-    query: { enabled: !SUBGRAPH_ENABLED && rawCollections.length > 0 },
+    query: { enabled: !useSubgraph && rawCollections.length > 0 },
   });
 
   const rpcCollections = useMemo(() => {
@@ -90,7 +101,7 @@ export function useCollections(page: number = 1, pageSize: number = 100) {
   }, [rawCollections, suppliesData]);
 
   const collections = useMemo(() => {
-    if (SUBGRAPH_ENABLED) {
+    if (useSubgraph) {
       return (gqlData?.collections ?? []).flatMap((c) => {
         const contractAddress = parseAddress(c.contractAddress);
         const creator = parseAddress(c.creator);
@@ -110,12 +121,19 @@ export function useCollections(page: number = 1, pageSize: number = 100) {
       });
     }
     return rpcCollections;
-  }, [gqlData?.collections, rpcCollections]);
+  }, [useSubgraph, gqlData?.collections, rpcCollections]);
+
+  const refetch = useSubgraph
+    ? (gqlRefetch as () => void)
+    : (rpcRefetch as () => void);
+
+  useRefetchOnWindowFocus(refetch);
 
   return {
     collections,
-    isLoading: SUBGRAPH_ENABLED ? gqlLoading : rpcLoading || isLoadingSupply,
-    refetch: (SUBGRAPH_ENABLED ? gqlRefetch : rpcRefetch) as () => void,
+    isLoading: useSubgraph ? gqlLoading : rpcLoading || isLoadingSupply,
+    refetch,
+    subgraphState,
   };
 }
 
@@ -126,6 +144,8 @@ export function useCollections(page: number = 1, pageSize: number = 100) {
  */
 export function useCreatorCollections() {
   const { address } = useConnection();
+  const subgraphState = useSubgraphState();
+  const useSubgraph = SUBGRAPH_ENABLED && subgraphState !== "down";
 
   type GqlCollection = {
     contractAddress: string;
@@ -146,7 +166,7 @@ export function useCreatorCollections() {
     loading: gqlLoading,
     refetch: gqlRefetch,
   } = useQuery<GqlCollectionsData>(GET_COLLECTIONS_BY_CREATOR, {
-    skip: !SUBGRAPH_ENABLED || !address,
+    skip: !useSubgraph || !address,
     variables: { creator: address?.toLowerCase() ?? "", first: 100, skip: 0 },
   });
 
@@ -182,13 +202,19 @@ export function useCreatorCollections() {
     [gqlData?.collections],
   );
 
-  if (SUBGRAPH_ENABLED) {
+  if (useSubgraph) {
     return {
       collections: gqlCollections,
       isLoading: gqlLoading,
       refetch: gqlRefetch as () => void,
+      subgraphState,
     };
   }
 
-  return { collections: rpcMyCollections, isLoading: rpcLoading, refetch: () => {} };
+  return {
+    collections: rpcMyCollections,
+    isLoading: rpcLoading,
+    refetch: () => {},
+    subgraphState,
+  };
 }
