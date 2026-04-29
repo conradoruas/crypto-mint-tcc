@@ -86,8 +86,14 @@ function makeFakeFetcher(
   responder: (call: FetchCall) => Promise<Response> | Response,
 ) {
   const calls: FetchCall[] = [];
-  const fn = vi.fn(async (url: string, init: RequestInit) => {
-    const call: FetchCall = { url, init };
+  const fn: typeof fetch = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    const call: FetchCall = { url, init: init ?? {} };
     calls.push(call);
     return await responder(call);
   });
