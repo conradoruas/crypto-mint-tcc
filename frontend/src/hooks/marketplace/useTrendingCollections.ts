@@ -1,10 +1,11 @@
 "use client";
 import { SUBGRAPH_ENABLED } from "@/lib/publicEnv";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { formatEther } from "viem";
 import { useQuery } from "@apollo/client/react";
 import { useQuery as useRqQuery } from "@tanstack/react-query";
+import { useReadContract } from "wagmi";
 import {
   GET_COLLECTION_STATS_RANKED,
   GET_TOP_OFFERS_BY_COLLECTION,
@@ -12,7 +13,14 @@ import {
 import { POLL_TRENDING_MS } from "@/constants/polling";
 import { useNowBucketed } from "../useNowBucketed";
 import { logger } from "@/lib/logger";
-import type { TrendingCollection } from "@/types/collection";
+import {
+  FACTORY_ADDRESS,
+  NFT_COLLECTION_FACTORY_ABI,
+} from "@/constants/contracts";
+import { useSubgraphState } from "@/lib/subgraphState";
+import type { SubgraphState } from "@/lib/subgraphErrors";
+import { useRefetchOnWindowFocus } from "@/hooks/useRefetchOnWindowFocus";
+import type { TrendingCollection, CollectionInfo } from "@/types/collection";
 
 export type { TrendingCollection };
 
@@ -41,6 +49,12 @@ type GqlCollectionStatsData = {
   collectionStats: GqlCollectionStats[];
 };
 
+export interface TrendingCollectionsResult {
+  trending: TrendingCollection[];
+  isLoading: boolean;
+  subgraphState: SubgraphState;
+}
+
 // ─────────────────────────────────────────────
 // Hook principal
 // ─────────────────────────────────────────────
@@ -48,20 +62,27 @@ type GqlCollectionStatsData = {
 /**
  * Fetches trending collections ranked by 24h volume.
  *
- * Previous implementation scanned up to 1200 entities (activityEvents +
- * listings + offers) and aggregated on the client. Now the subgraph
- * maintains `CollectionStat.volume24h` with day-based resets and we
- * query a single pre-sorted entity list.
+ * Subgraph path (primary): pre-computed CollectionStat entities sorted by
+ * volume24h with 14-day floor history.
+ *
+ * RPC fallback (when subgraphState is 'down'): "Recent collections" from
+ * factory.getAllCollections(), sorted by createdAt desc, with stats fields
+ * blanked. The user sees a meaningful list instead of an empty state.
  */
-export function useTrendingCollections(limit = 10) {
+export function useTrendingCollections(limit = 10): TrendingCollectionsResult {
+  const subgraphState = useSubgraphState();
+  const isDown = subgraphState === "down";
+  const useSubgraph = SUBGRAPH_ENABLED && !isDown;
+
   const nowBucketed = useNowBucketed();
 
   const {
     data,
     loading: gqlLoading,
     error,
+    refetch: refetchStats,
   } = useQuery<GqlCollectionStatsData>(GET_COLLECTION_STATS_RANKED, {
-    skip: !SUBGRAPH_ENABLED,
+    skip: !useSubgraph,
     variables: { first: limit },
     pollInterval: POLL_TRENDING_MS,
     fetchPolicy: "cache-and-network",
@@ -71,24 +92,30 @@ export function useTrendingCollections(limit = 10) {
   if (error) logger.error("[useTrendingCollections] GQL Error", error);
 
   type GqlTopOffer = { nftContract: string; amount: string };
-  const { data: offersData } = useQuery<{ offers: GqlTopOffer[] }>(
-    GET_TOP_OFFERS_BY_COLLECTION,
-    {
-      skip: !SUBGRAPH_ENABLED,
-      variables: { now: nowBucketed },
-      pollInterval: POLL_TRENDING_MS,
-      fetchPolicy: "cache-and-network",
-      nextFetchPolicy: "cache-first",
-    },
-  );
+  const { data: offersData, refetch: refetchOffers } = useQuery<{
+    offers: GqlTopOffer[];
+  }>(GET_TOP_OFFERS_BY_COLLECTION, {
+    skip: !useSubgraph,
+    variables: { now: nowBucketed },
+    pollInterval: POLL_TRENDING_MS,
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+  });
 
-  // Contract addresses change only when the stats list changes — stable key.
+  const refetchAll = useCallback(() => {
+    refetchStats();
+    refetchOffers();
+  }, [refetchStats, refetchOffers]);
+
+  useRefetchOnWindowFocus(refetchAll, { enabled: useSubgraph });
+
+  // ─── Subgraph-derived trending ───
+
   const contractAddresses = useMemo(
     () => (data?.collectionStats ?? []).map((s) => s.collection.contractAddress),
     [data],
   );
 
-  // Owner counts are non-critical; failures leave owners at 0.
   const { data: ownerCountMap = {} } = useRqQuery<Record<string, number>>({
     queryKey: ["owner-counts", contractAddresses],
     queryFn: async ({ signal }) => {
@@ -100,13 +127,13 @@ export function useTrendingCollections(limit = 10) {
       });
       return res.json() as Promise<Record<string, number>>;
     },
-    enabled: SUBGRAPH_ENABLED && contractAddresses.length > 0,
+    enabled: useSubgraph && contractAddresses.length > 0,
     staleTime: 5 * 60_000,
     throwOnError: false,
   });
 
-  const trending = useMemo<TrendingCollection[]>(() => {
-    if (!SUBGRAPH_ENABLED || !data) return [];
+  const subgraphTrending = useMemo<TrendingCollection[]>(() => {
+    if (!useSubgraph || !data) return [];
 
     const stats = data.collectionStats ?? [];
 
@@ -154,7 +181,43 @@ export function useTrendingCollections(limit = 10) {
           .filter((v) => v > 0),
       } as TrendingCollection;
     });
-  }, [data, offersData, ownerCountMap]);
+  }, [useSubgraph, data, offersData, ownerCountMap]);
 
-  return { trending, isLoading: gqlLoading };
+  // ─── RPC thin fallback (subgraph down) ───
+
+  const { data: rpcAllCollections, isLoading: rpcLoading } = useReadContract({
+    address: FACTORY_ADDRESS,
+    abi: NFT_COLLECTION_FACTORY_ABI,
+    functionName: "getAllCollections",
+    query: { enabled: isDown && !!FACTORY_ADDRESS },
+  });
+
+  const rpcTrending = useMemo<TrendingCollection[]>(() => {
+    if (!isDown) return [];
+    const list = (rpcAllCollections as CollectionInfo[] | undefined) ?? [];
+    return list
+      .slice()
+      .sort((a, b) => Number(b.createdAt - a.createdAt))
+      .slice(0, limit)
+      .map((c) => ({
+        contractAddress: c.contractAddress,
+        name: c.name,
+        symbol: c.symbol ?? "",
+        image: c.image ?? "",
+        floorPrice: null,
+        floorChange24h: null,
+        topOffer: null,
+        sales24h: 0,
+        owners: 0,
+        listedPct: null,
+        volume24h: "0",
+        floorHistory: [],
+      }));
+  }, [isDown, rpcAllCollections, limit]);
+
+  return {
+    trending: isDown ? rpcTrending : subgraphTrending,
+    isLoading: isDown ? rpcLoading : gqlLoading,
+    subgraphState,
+  };
 }
